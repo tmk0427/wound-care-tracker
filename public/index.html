@@ -1316,8 +1316,8 @@
             });
         }
 
-        // Enhanced table rendering with bulletproof admin column control
-        function renderTrackingTable(patient, trackingData) {
+        // Enhanced table rendering with new "All Wound Dx" column and freezing
+        async function renderTrackingTable(patient, trackingData) {
             console.log('🗃️ Rendering table for patient:', patient.name);
             
             const container = document.getElementById('trackingContent');
@@ -1343,6 +1343,17 @@
                 tableWillShow: finalAdminStatus ? 'ADMIN_COLUMNS' : 'USER_COLUMNS_ONLY'
             });
             
+            // Load wound dx data for this patient
+            let woundDxData = {};
+            try {
+                const woundDxResponse = await apiCall(`/patients/${patient.id}/wound-dx`);
+                woundDxResponse.forEach(item => {
+                    woundDxData[item.supply_id] = item.wound_dx;
+                });
+            } catch (error) {
+                console.log('No wound dx data found or error loading:', error);
+            }
+            
             // Group tracking data by supply
             const trackingBySupply = {};
             trackingData.forEach(item => {
@@ -1352,13 +1363,18 @@
                 trackingBySupply[item.code].days[item.day_of_month] = item.quantity;
             });
 
-            // Calculate base width based on CONFIRMED admin status
-            const baseColumns = finalAdminStatus ? 6 : 3;
-            const baseWidth = finalAdminStatus ? 700 : 400;
-            const dayWidth = 60;
-            const totalWidth = baseWidth + (daysInMonth * dayWidth);
+            // Calculate frozen columns width
+            let frozenWidth = 80 + 250 + 200; // AR Code + Description + All Wound Dx
+            if (finalAdminStatus) {
+                frozenWidth += 100 + 90 + 90 + 100; // HCPCS + Unit Cost + Total Units + Total Cost
+            } else {
+                frozenWidth += 90; // Just Total Units
+            }
 
-            // Build HTML with STRICT column control
+            const dayWidth = 60;
+            const scrollableWidth = daysInMonth * dayWidth;
+
+            // Build HTML with FROZEN COLUMNS
             let html = `
                 <div style="margin-bottom: 20px;">
                     <h3 style="color: #4a5568;">Patient: ${patient.name}</h3>
@@ -1378,51 +1394,43 @@
                     </div>
                 </div>
 
-                <div style="overflow: auto; max-height: 70vh; border: 1px solid #e2e8f0; border-radius: 10px; background: white;">
-                    <table style="width: 100%; min-width: ${totalWidth}px; border-collapse: collapse;">
-                        <thead style="position: sticky; top: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; z-index: 10;">
-                            <tr>
-                                <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); min-width: 80px; text-align: left;">AR Code</th>
-                                <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); min-width: 250px; text-align: left;">Item Description</th>
+                <div style="position: relative; max-height: 70vh; border: 1px solid #e2e8f0; border-radius: 10px; background: white; overflow: hidden;">
+                    <!-- Frozen columns table -->
+                    <div style="position: absolute; left: 0; top: 0; z-index: 20; background: white; width: ${frozenWidth}px; height: 100%; overflow: hidden; border-right: 2px solid #667eea;">
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <thead style="position: sticky; top: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; z-index: 30;">
+                                <tr>
+                                    <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 80px; text-align: left;">AR Code</th>
+                                    <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 250px; text-align: left;">Item Description</th>
+                                    <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 200px; text-align: left; background: #4f46e5;">All Wound Dx</th>
             `;
 
-            // CRITICAL: Only add admin columns if CONFIRMED admin
+            // Add admin columns to frozen section
             if (finalAdminStatus) {
-                console.log('✅ Adding ADMIN columns to table header');
                 html += `
-                                <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); min-width: 100px; text-align: left;">HCPCS Code</th>
-                                <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); min-width: 90px; text-align: left;">Unit Cost</th>
-                `;
-            } else {
-                console.log('❌ SKIPPING admin columns - User is NOT admin');
-            }
-
-            html += `
-                                <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); min-width: 90px; text-align: left;">Total Units</th>
-            `;
-
-            // CRITICAL: Only add total cost column if CONFIRMED admin
-            if (finalAdminStatus) {
-                console.log('✅ Adding Total Cost column to table header');
-                html += `
-                                <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); min-width: 100px; text-align: left;">Total Cost</th>
+                                    <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 100px; text-align: left;">HCPCS Code</th>
+                                    <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 90px; text-align: left;">Unit Cost</th>
                 `;
             }
 
-            // Add day headers
-            for (let day = 1; day <= daysInMonth; day++) {
-                html += `<th style="padding: 8px; border: 1px solid rgba(255,255,255,0.2); width: 60px; text-align: center;">${day}</th>`;
+            html += `
+                                    <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 90px; text-align: left;">Total Units</th>
+            `;
+
+            if (finalAdminStatus) {
+                html += `
+                                    <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 100px; text-align: left;">Total Cost</th>
+                `;
             }
 
             html += `
-                            </tr>
-                        </thead>
-                        <tbody id="trackingTableBody">
+                                </tr>
+                            </thead>
+                            <tbody id="frozenTableBody">
             `;
 
-            // Build table rows with STRICT column control
+            // Build frozen column rows
             appData.supplies.forEach((supply, index) => {
-                // Only calculate cost for CONFIRMED admin users
                 let supplyCost = 0;
                 if (finalAdminStatus && supply.cost !== null && supply.cost !== undefined) {
                     const costValue = Number(supply.cost);
@@ -1432,7 +1440,6 @@
                 const trackingInfo = trackingBySupply[supply.code];
                 let totalUnits = 0;
 
-                // Calculate total units
                 for (let day = 1; day <= daysInMonth; day++) {
                     totalUnits += parseInt((trackingInfo?.days[day]) || 0);
                 }
@@ -1440,51 +1447,93 @@
                 const totalCost = finalAdminStatus ? totalUnits * supplyCost : 0;
                 const isCustomSupply = supply.is_custom;
                 const rowBg = isCustomSupply ? '#f0f4ff' : (index % 2 === 0 ? 'white' : '#fafafa');
+                const woundDx = woundDxData[supply.id] || '';
 
                 html += `
                     <tr class="supply-row ${isCustomSupply ? 'custom-supply' : ''}" 
                         data-description="${supply.description.toLowerCase()}" 
                         data-code="${supply.code}" 
                         data-supply-id="${supply.id}"
-                        style="background: ${rowBg};">
+                        style="background: ${rowBg}; height: 53px;">
                         
-                        <td style="padding: 12px; border: 1px solid #e2e8f0;">
+                        <td style="padding: 12px; border: 1px solid #e2e8f0; width: 80px;">
                             <strong>${supply.code}</strong>
                             ${isCustomSupply ? '<span style="color: #667eea; font-size: 11px; margin-left: 5px;">CUSTOM</span>' : ''}
                         </td>
                         
-                        <td style="padding: 12px; border: 1px solid #e2e8f0;">${supply.description}</td>
+                        <td style="padding: 12px; border: 1px solid #e2e8f0; width: 250px;">${supply.description}</td>
+                        
+                        <td style="padding: 6px; border: 1px solid #e2e8f0; width: 200px; background: #f8faff;">
+                            <input type="text" value="${woundDx}" placeholder="Enter wound diagnosis..."
+                                   style="width: 100%; padding: 4px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 14px; background: white;"
+                                   onchange="updateWoundDx(${patient.id}, ${supply.id}, this.value, this)">
+                        </td>
                 `;
 
-                // CRITICAL: Only add admin columns if CONFIRMED admin
                 if (finalAdminStatus) {
-                    console.log(`✅ Adding admin cells for supply ${supply.code}`);
                     html += `
-                        <td style="padding: 12px; border: 1px solid #e2e8f0;">${supply.hcpcs || ''}</td>
-                        <td style="padding: 12px; border: 1px solid #e2e8f0; color: #38a169; font-weight: 600;">${supplyCost.toFixed(2)}</td>
+                        <td style="padding: 12px; border: 1px solid #e2e8f0; width: 100px;">${supply.hcpcs || ''}</td>
+                        <td style="padding: 12px; border: 1px solid #e2e8f0; width: 90px; color: #38a169; font-weight: 600;">${supplyCost.toFixed(2)}</td>
                     `;
                 }
 
                 html += `
-                        <td style="padding: 12px; border: 1px solid #e2e8f0;" class="total-units-${supply.id}">
+                        <td style="padding: 12px; border: 1px solid #e2e8f0; width: 90px;" class="total-units-${supply.id}">
                             <strong>${totalUnits}</strong>
                         </td>
                 `;
 
-                // CRITICAL: Only add total cost column if CONFIRMED admin
                 if (finalAdminStatus) {
                     html += `
-                        <td style="padding: 12px; border: 1px solid #e2e8f0; color: #38a169; font-weight: 600;" class="total-cost-${supply.id}">
+                        <td style="padding: 12px; border: 1px solid #e2e8f0; width: 100px; color: #38a169; font-weight: 600;" class="total-cost-${supply.id}">
                             <strong>${totalCost.toFixed(2)}</strong>
                         </td>
                     `;
                 }
 
+                html += '</tr>';
+            });
+
+            html += `
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Scrollable days table -->
+                    <div style="margin-left: ${frozenWidth}px; overflow-x: auto; max-height: 70vh;">
+                        <table style="width: ${scrollableWidth}px; border-collapse: collapse;">
+                            <thead style="position: sticky; top: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; z-index: 10;">
+                                <tr>
+            `;
+
+            // Add day headers
+            for (let day = 1; day <= daysInMonth; day++) {
+                html += `<th style="padding: 8px; border: 1px solid rgba(255,255,255,0.2); width: 60px; text-align: center;">Day ${day}</th>`;
+            }
+
+            html += `
+                                </tr>
+                            </thead>
+                            <tbody id="scrollableTableBody">
+            `;
+
+            // Build scrollable day columns
+            appData.supplies.forEach((supply, index) => {
+                const trackingInfo = trackingBySupply[supply.code];
+                const isCustomSupply = supply.is_custom;
+                const rowBg = isCustomSupply ? '#f0f4ff' : (index % 2 === 0 ? 'white' : '#fafafa');
+
+                html += `
+                    <tr class="supply-row ${isCustomSupply ? 'custom-supply' : ''}" 
+                        data-supply-id="${supply.id}"
+                        style="background: ${rowBg}; height: 53px;">
+                `;
+
                 // Add quantity input cells for each day
                 for (let day = 1; day <= daysInMonth; day++) {
                     const value = (trackingInfo?.days[day]) || '';
                     html += `
-                        <td style="padding: 6px; border: 1px solid #e2e8f0; text-align: center;">
+                        <td style="padding: 6px; border: 1px solid #e2e8f0; text-align: center; width: 60px;">
                             <input type="number" min="0" 
                                    style="width: 50px; padding: 4px; border: 1px solid #e2e8f0; border-radius: 4px; text-align: center; font-size: 14px;" 
                                    value="${value}" placeholder="0"
@@ -1497,39 +1546,49 @@
             });
 
             html += `
-                        </tbody>
-                    </table>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
                 
                 <div style="margin-top: 10px; padding: 10px; background: ${finalAdminStatus ? '#f0fff4' : '#f0f4ff'}; border-radius: 5px; font-size: 12px; color: #4a5568;">
-                    <strong>🔍 CONFIRMED Access Level:</strong> ${finalAdminStatus ? '✅ ADMIN - Full access with cost information' : '❌ USER - Supply tracking only'} | 
-                    <strong>Columns Rendered:</strong> ${finalAdminStatus ? 'AR Code, Description, HCPCS, Unit Cost, Total Units, Total Cost + Days (' + (baseColumns + daysInMonth) + ' total)' : 'AR Code, Description, Total Units + Days (' + (baseColumns + daysInMonth) + ' total)'} |
-                    <strong>User Role:</strong> ${user?.role || 'Unknown'} | <strong>Email:</strong> ${user?.email || 'Unknown'}
+                    <strong>🔍 Access Level:</strong> ${finalAdminStatus ? '✅ ADMIN - Full access with cost information' : '👤 USER - Supply tracking only'} | 
+                    <strong>New Feature:</strong> ✨ All Wound Dx column added with frozen column scrolling |
+                    <strong>Days:</strong> ${daysInMonth} days in ${monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                 </div>
             `;
 
             container.innerHTML = html;
             
-            console.log('✅ Table rendered with', finalAdminStatus ? 'ADMIN' : 'USER', 'permissions');
+            console.log('✅ Enhanced table rendered with frozen columns and Wound Dx');
         }
 
         function filterSupplies(searchTerm) {
-            const rows = document.querySelectorAll('.supply-row');
+            // Get rows from both frozen and scrollable tables
+            const frozenRows = document.querySelectorAll('#frozenTableBody .supply-row');
+            const scrollableRows = document.querySelectorAll('#scrollableTableBody .supply-row');
             const term = searchTerm.toLowerCase().trim();
             let visibleCount = 0;
 
-            rows.forEach((row, index) => {
-                const description = row.getAttribute('data-description');
-                const code = row.getAttribute('data-code');
+            // Filter both tables simultaneously
+            frozenRows.forEach((frozenRow, index) => {
+                const scrollableRow = scrollableRows[index];
+                if (!scrollableRow) return;
+
+                const description = frozenRow.getAttribute('data-description');
+                const code = frozenRow.getAttribute('data-code');
                 const shouldShow = !term || 
                     (description && description.includes(term)) || 
-                    (code && code.includes(term));
+                    (code && code.toLowerCase().includes(term));
                 
-                row.style.display = shouldShow ? '' : 'none';
+                // Apply filter to both tables
+                frozenRow.style.display = shouldShow ? '' : 'none';
+                scrollableRow.style.display = shouldShow ? '' : 'none';
                 
                 if (shouldShow) visibleCount++;
             });
 
+            // Update search info
             const searchInfo = document.getElementById('searchResultsInfo');
             if (searchInfo) {
                 if (term) {
@@ -1540,6 +1599,44 @@
                 } else {
                     searchInfo.textContent = `Showing ${appData.supplies.length} supplies`;
                 }
+            }
+        }
+
+        async function updateWoundDx(patientId, supplyId, value, inputElement) {
+            try {
+                inputElement.style.borderColor = '#4299e1';
+                inputElement.style.backgroundColor = '#ebf8ff';
+
+                await apiCall(`/patients/${patientId}/wound-dx`, {
+                    method: 'POST',
+                    body: {
+                        supplyId: supplyId,
+                        woundDx: value
+                    }
+                });
+
+                inputElement.style.borderColor = '#38a169';
+                inputElement.style.backgroundColor = '#f0fff4';
+                
+                showTrackingStatus('✅ Wound Dx saved successfully');
+
+                setTimeout(() => {
+                    inputElement.style.borderColor = '';
+                    inputElement.style.backgroundColor = 'white';
+                }, 1000);
+
+            } catch (error) {
+                console.error('Failed to update wound dx:', error);
+                
+                inputElement.style.borderColor = '#e53e3e';
+                inputElement.style.backgroundColor = '#fed7d7';
+                
+                showTrackingStatus('❌ Failed to save wound dx: ' + error.message, true);
+                
+                setTimeout(() => {
+                    inputElement.style.borderColor = '';
+                    inputElement.style.backgroundColor = 'white';
+                }, 3000);
             }
         }
 
