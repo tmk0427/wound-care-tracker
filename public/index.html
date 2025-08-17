@@ -1599,9 +1599,9 @@
                 for (let day = 1; day <= daysInMonth; day++) {
                     const value = (trackingInfo?.days[day]) || '';
                     html += `
-                        <td style="padding: 6px; border: 1px solid #e2e8f0; text-align: center; width: 60px;">
+                        <td style="padding: 12px 6px; border: 1px solid #e2e8f0; text-align: center; width: 60px; vertical-align: middle;">
                             <input type="number" min="0" 
-                                   style="width: 50px; padding: 4px; border: 1px solid #e2e8f0; border-radius: 4px; text-align: center; font-size: 14px;" 
+                                   style="width: 50px; padding: 4px; border: 1px solid #e2e8f0; border-radius: 4px; text-align: center; font-size: 14px; box-sizing: border-box;" 
                                    value="${value}" placeholder="0"
                                    onchange="updateQuantity(${patient.id}, ${supply.id}, ${day}, this.value, this)">
                         </td>
