@@ -1184,6 +1184,72 @@
         </div>
     </div>
 
+    <!-- Batch Supply Import Modal -->
+    <div id="batchSupplyModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <h2>📦 Batch Import Supply Items</h2>
+            
+            <!-- Import Method Tabs -->
+            <div class="auth-tabs" style="margin-bottom: 20px;">
+                <button class="auth-tab active" onclick="showBatchImportMethod('excel', this)">📁 Excel Upload</button>
+                <button class="auth-tab" onclick="showBatchImportMethod('paste', this)">📋 Copy & Paste</button>
+            </div>
+
+            <!-- Excel Upload Method -->
+            <div id="batchExcelMethod">
+                <div class="file-upload-area" id="batchSupplyUploadArea">
+                    <div style="font-size: 48px; margin-bottom: 20px;">📦</div>
+                    <h3 style="color: #4299e1; margin-bottom: 10px;">Drag & Drop Excel File Here</h3>
+                    <p style="color: #718096; margin-bottom: 20px;">Upload supply items with AR Code, Description, HCPCS Code, Unit Cost</p>
+                    <input type="file" id="batchSupplyFileInput" accept=".xlsx,.xls" onchange="handleBatchSupplyFile(this.files[0])">
+                    <button class="upload-button" onclick="document.getElementById('batchSupplyFileInput').click()">
+                        Choose Excel File
+                    </button>
+                </div>
+                
+                <div style="display: flex; gap: 15px; margin: 20px 0; flex-wrap: wrap;">
+                    <button class="btn btn-secondary" onclick="downloadSupplyTemplate()">📥 Download Template</button>
+                </div>
+
+                <div style="background: #ebf8ff; padding: 15px; border-radius: 8px; border-left: 4px solid #4299e1;">
+                    <h4 style="color: #2b6cb0; margin-bottom: 10px;">Required Excel Columns:</h4>
+                    <ul style="color: #2b6cb0; margin-left: 20px;">
+                        <li><strong>AR Code</strong> - Numeric AR code (e.g., "700")</li>
+                        <li><strong>Item Description</strong> - Full item description</li>
+                        <li><strong>HCPCS Code</strong> - HCPCS code (e.g., "A6251")</li>
+                        <li><strong>Unit Cost</strong> - Cost per unit in dollars (e.g., "1.50")</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Copy & Paste Method -->
+            <div id="batchPasteMethod" class="hidden">
+                <div style="background: #f7fafc; padding: 20px; border-radius: 10px; border: 2px dashed #e2e8f0;">
+                    <h4 style="color: #4a5568; margin-bottom: 15px;">📋 Paste Supply Data</h4>
+                    <p style="color: #718096; margin-bottom: 15px;">
+                        Paste tab-separated data from Excel/Google Sheets. Format: AR Code, Item Description, HCPCS Code, Unit Cost
+                    </p>
+                    <textarea id="batchSupplyPasteArea" 
+                              placeholder="700&#9;Gauze Pad 4x4&#9;A6251&#9;1.50&#10;701&#9;Medical Tape&#9;A6260&#9;2.25&#10;702&#9;Bandage Roll&#9;A6448&#9;3.75"
+                              style="width: 100%; height: 200px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; font-family: monospace; font-size: 14px;"
+                              onchange="parsePastedSupplyData()"></textarea>
+                    <button class="btn btn-secondary" onclick="parsePastedSupplyData()" style="margin-top: 10px;">📊 Parse Data</button>
+                </div>
+            </div>
+
+            <div class="progress-bar" id="batchSupplyProgress" style="display: none;">
+                <div class="progress-fill" id="batchSupplyProgressFill" style="width: 0%;"></div>
+            </div>
+
+            <div id="batchSupplyResults" class="import-results" style="display: none;"></div>
+
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                <button class="btn btn-secondary" onclick="closeBatchSupplyModal()">Close</button>
+                <button class="btn btn-primary" onclick="processBatchSupplyImport()" id="processBatchSupplyBtn" disabled>Import Supply Items</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Tracking Status Notification -->
     <div id="trackingStatus" class="tracking-status">
         <span id="trackingStatusText">Saved successfully!</span>
@@ -3003,7 +3069,10 @@
                                 <input type="number" id="adminNewUnitCost" placeholder="0.00" min="0" step="0.01" autocomplete="off">
                             </div>
                         </div>
-                        <button class="btn btn-success" type="button" onclick="adminAddSupply()" id="addSupplyBtn">Add New Supply Item</button>
+                        <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                            <button class="btn btn-success" type="button" onclick="adminAddSupply()" id="addSupplyBtn">Add New Supply Item</button>
+                            <button class="btn btn-primary" type="button" onclick="showBatchSupplyModal()" id="batchSupplyBtn">📤 Add Batch Supply Items</button>
+                        </div>
                     </div>
                     <h4>Edit Existing Supply Costs</h4>
                     <input type="text" id="adminSupplySearch" placeholder="Search supplies..." class="search-box" onkeyup="adminFilterSupplies(this.value)" autocomplete="off">
@@ -3018,7 +3087,9 @@
                                     <th style="width: 140px;">Actions</th>
                                 </tr>
                             </thead>
-                            <tbody id="adminSupplyTableBody">Loading supplies...</tbody>
+                            <tbody id="adminSupplyTableBody">
+                                <!-- Supply data will be populated here -->
+                            </tbody>
                         </table>
                     </div>
                 </div>
@@ -3283,8 +3354,8 @@
 
             tbody.innerHTML = '';
 
-            if (appData.supplies.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #718096;">No supplies in system. Add your first supply above.</td></tr>';
+            if (!appData.supplies || appData.supplies.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #718096; padding: 40px;">No supplies in system. Add your first supply above or use batch import.</td></tr>';
                 return;
             }
 
@@ -3308,7 +3379,10 @@
                                onchange="adminUpdateSupply(${supply.id}, 'cost', this.value)">
                     </td>
                     <td>
-                        ${supply.is_custom ? `<button class="btn btn-danger btn-sm" onclick="adminDeleteSupply(${supply.id})">Delete</button>` : '<span style="color: #718096; font-size: 12px;">System Item</span>'}
+                        <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                            ${supply.is_custom ? `<button class="btn btn-danger btn-sm" onclick="adminDeleteSupply(${supply.id})" title="Delete Custom Item">🗑️</button>` : ''}
+                            <button class="btn btn-warning btn-sm" onclick="adminRemoveSupply(${supply.id})" title="Remove Item">❌</button>
+                        </div>
                     </td>
                 `;
                 tbody.appendChild(row);
@@ -3364,6 +3438,344 @@
                 } catch (error) {
                     alert('Failed to delete supply: ' + error.message);
                 }
+            }
+        }
+
+        async function adminRemoveSupply(supplyId) {
+            if (confirm('Are you sure you want to remove this supply item? This action cannot be undone and will affect any existing tracking data.')) {
+                try {
+                    await apiCall(`/supplies/${supplyId}`, { method: 'DELETE' });
+                    await loadAllData();
+                    adminRefreshSupplies();
+                    showTrackingStatus('✅ Supply removed successfully');
+                } catch (error) {
+                    alert('Failed to remove supply: ' + error.message);
+                }
+            }
+        }
+
+        // Batch Supply Import Functions
+        let batchSupplyData = null;
+
+        function showBatchSupplyModal() {
+            document.getElementById('batchSupplyModal').style.display = 'flex';
+            setupBatchSupplyDragAndDrop();
+        }
+
+        function closeBatchSupplyModal() {
+            document.getElementById('batchSupplyModal').style.display = 'none';
+            document.getElementById('batchSupplyFileInput').value = '';
+            document.getElementById('batchSupplyPasteArea').value = '';
+            document.getElementById('batchSupplyResults').style.display = 'none';
+            document.getElementById('batchSupplyProgress').style.display = 'none';
+            document.getElementById('processBatchSupplyBtn').disabled = true;
+            batchSupplyData = null;
+        }
+
+        function showBatchImportMethod(method, element) {
+            // Update tabs
+            document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+            element.classList.add('active');
+
+            // Show/hide methods
+            if (method === 'excel') {
+                document.getElementById('batchExcelMethod').classList.remove('hidden');
+                document.getElementById('batchPasteMethod').classList.add('hidden');
+            } else {
+                document.getElementById('batchExcelMethod').classList.add('hidden');
+                document.getElementById('batchPasteMethod').classList.remove('hidden');
+            }
+        }
+
+        function downloadSupplyTemplate() {
+            const worksheet = XLSX.utils.aoa_to_sheet([
+                ['AR Code', 'Item Description', 'HCPCS Code', 'Unit Cost'],
+                [700, 'Gauze Pad 4x4', 'A6251', 1.50],
+                [701, 'Medical Tape 1 inch', 'A6260', 2.25],
+                [702, 'Bandage Roll 3 inch', 'A6448', 3.75],
+                [703, 'Antiseptic Wipes', 'A4649', 0.85]
+            ]);
+
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Supply Items');
+            
+            // Set column widths
+            worksheet['!cols'] = [
+                { width: 12 }, { width: 35 }, { width: 15 }, { width: 12 }
+            ];
+            
+            XLSX.writeFile(workbook, 'supply_items_template.xlsx');
+        }
+
+        function setupBatchSupplyDragAndDrop() {
+            const uploadArea = document.getElementById('batchSupplyUploadArea');
+            
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.classList.add('dragover');
+            });
+
+            uploadArea.addEventListener('dragleave', () => {
+                uploadArea.classList.remove('dragover');
+            });
+
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove('dragover');
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    handleBatchSupplyFile(files[0]);
+                }
+            });
+
+            uploadArea.addEventListener('click', () => {
+                document.getElementById('batchSupplyFileInput').click();
+            });
+        }
+
+        function handleBatchSupplyFile(file) {
+            if (!file) return;
+
+            if (!file.name.match(/\.(xlsx|xls)$/)) {
+                alert('Please select an Excel file (.xlsx or .xls)');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    batchSupplyData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+                    showBatchSupplyPreview(batchSupplyData, file.name, 'excel');
+                    document.getElementById('processBatchSupplyBtn').disabled = false;
+                } catch (error) {
+                    alert('Error reading Excel file: ' + error.message);
+                }
+            };
+
+            reader.readAsArrayBuffer(file);
+        }
+
+        function parsePastedSupplyData() {
+            const pasteArea = document.getElementById('batchSupplyPasteArea');
+            const text = pasteArea.value.trim();
+            
+            if (!text) {
+                alert('Please paste some data first');
+                return;
+            }
+
+            try {
+                // Parse tab-separated or comma-separated values
+                const lines = text.split('\n').filter(line => line.trim());
+                const data = [['AR Code', 'Item Description', 'HCPCS Code', 'Unit Cost']]; // Header
+                
+                lines.forEach(line => {
+                    // Try tab-separated first, then comma-separated
+                    let parts = line.split('\t');
+                    if (parts.length < 4) {
+                        parts = line.split(',');
+                    }
+                    
+                    if (parts.length >= 4) {
+                        data.push([
+                            parts[0].trim(),
+                            parts[1].trim(),
+                            parts[2].trim(),
+                            parts[3].trim()
+                        ]);
+                    }
+                });
+
+                if (data.length < 2) {
+                    alert('No valid data found. Please ensure data is tab-separated or comma-separated with 4 columns.');
+                    return;
+                }
+
+                batchSupplyData = data;
+                showBatchSupplyPreview(batchSupplyData, 'Pasted Data', 'paste');
+                document.getElementById('processBatchSupplyBtn').disabled = false;
+            } catch (error) {
+                alert('Error parsing pasted data: ' + error.message);
+            }
+        }
+
+        function showBatchSupplyPreview(data, fileName, method) {
+            const resultsDiv = document.getElementById('batchSupplyResults');
+            
+            if (data.length < 2) {
+                resultsDiv.innerHTML = '<p><strong>Error:</strong> Data must contain at least a header row and one data row.</p>';
+                resultsDiv.className = 'import-results error';
+                resultsDiv.style.display = 'block';
+                return;
+            }
+
+            const headers = data[0];
+            const dataRows = data.slice(1);
+
+            let html = `
+                <h4>📦 Supply Data Preview: ${fileName}</h4>
+                <p><strong>Items to import:</strong> ${dataRows.length}</p>
+                <p><strong>Columns found:</strong> ${headers.join(', ')}</p>
+                <div style="max-height: 150px; overflow-y: auto; margin-top: 10px;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                        <thead>
+                            <tr style="background: #f7fafc;">
+            `;
+
+            headers.forEach(header => {
+                html += `<th style="padding: 5px; border: 1px solid #e2e8f0;">${header}</th>`;
+            });
+
+            html += '</tr></thead><tbody>';
+
+            dataRows.slice(0, 5).forEach(row => {
+                html += '<tr>';
+                headers.forEach((header, index) => {
+                    html += `<td style="padding: 5px; border: 1px solid #e2e8f0;">${row[index] || ''}</td>`;
+                });
+                html += '</tr>';
+            });
+
+            if (dataRows.length > 5) {
+                html += `<tr><td colspan="${headers.length}" style="padding: 5px; text-align: center; font-style: italic;">... and ${dataRows.length - 5} more items</td></tr>`;
+            }
+
+            html += '</tbody></table></div>';
+
+            resultsDiv.innerHTML = html;
+            resultsDiv.className = 'import-results mixed';
+            resultsDiv.style.display = 'block';
+        }
+
+        async function processBatchSupplyImport() {
+            const processBtn = document.getElementById('processBatchSupplyBtn');
+            const progressBar = document.getElementById('batchSupplyProgress');
+            const progressFill = document.getElementById('batchSupplyProgressFill');
+            const resultsDiv = document.getElementById('batchSupplyResults');
+
+            if (!batchSupplyData || batchSupplyData.length < 2) {
+                alert('No supply data to process');
+                return;
+            }
+
+            try {
+                processBtn.disabled = true;
+                processBtn.innerHTML = '<span class="loading"></span>Processing...';
+                progressBar.style.display = 'block';
+                progressFill.style.width = '20%';
+
+                const headers = batchSupplyData[0];
+                const dataRows = batchSupplyData.slice(1);
+                
+                let successCount = 0;
+                let errorCount = 0;
+                const errors = [];
+                const successItems = [];
+
+                progressFill.style.width = '40%';
+
+                // Process each row
+                for (let i = 0; i < dataRows.length; i++) {
+                    const row = dataRows[i];
+                    
+                    try {
+                        const arCode = parseInt(row[0]);
+                        const description = row[1]?.trim();
+                        const hcpcsCode = row[2]?.trim();
+                        const unitCost = parseFloat(row[3]) || 0;
+
+                        if (!arCode || !description) {
+                            errors.push(`Row ${i + 2}: Missing AR Code or Description`);
+                            errorCount++;
+                            continue;
+                        }
+
+                        await apiCall('/supplies', {
+                            method: 'POST',
+                            body: { 
+                                code: arCode, 
+                                description, 
+                                hcpcs: hcpcsCode || '', 
+                                cost: unitCost 
+                            }
+                        });
+
+                        successItems.push(`${arCode} - ${description}`);
+                        successCount++;
+                    } catch (error) {
+                        errors.push(`Row ${i + 2}: ${error.message}`);
+                        errorCount++;
+                    }
+
+                    // Update progress
+                    const progress = 40 + ((i + 1) / dataRows.length) * 50;
+                    progressFill.style.width = `${progress}%`;
+                }
+
+                progressFill.style.width = '100%';
+
+                // Show results
+                let resultsHtml = `<h4>✅ Batch Import Complete</h4>`;
+                resultsHtml += `<p><strong>Successfully added:</strong> ${successCount} items</p>`;
+                resultsHtml += `<p><strong>Errors:</strong> ${errorCount} items</p>`;
+                
+                if (successItems.length > 0) {
+                    resultsHtml += '<h5 style="color: #38a169; margin-top: 15px;">Successfully Added:</h5><ul>';
+                    successItems.slice(0, 10).forEach(item => {
+                        resultsHtml += `<li style="color: #38a169; font-size: 12px;">${item}</li>`;
+                    });
+                    if (successItems.length > 10) {
+                        resultsHtml += `<li style="color: #38a169; font-size: 12px;"><em>... and ${successItems.length - 10} more</em></li>`;
+                    }
+                    resultsHtml += '</ul>';
+                }
+
+                if (errors.length > 0) {
+                    resultsHtml += '<h5 style="color: #e53e3e; margin-top: 15px;">Errors:</h5><ul>';
+                    errors.slice(0, 10).forEach(error => {
+                        resultsHtml += `<li style="color: #e53e3e; font-size: 12px;">${error}</li>`;
+                    });
+                    if (errors.length > 10) {
+                        resultsHtml += `<li style="color: #e53e3e; font-size: 12px;"><em>... and ${errors.length - 10} more errors</em></li>`;
+                    }
+                    resultsHtml += '</ul>';
+                }
+
+                resultsDiv.innerHTML = resultsHtml;
+                resultsDiv.className = errorCount === 0 ? 'import-results success' : 'import-results mixed';
+                resultsDiv.style.display = 'block';
+
+                // Refresh data
+                await loadAllData();
+                adminRefreshSupplies();
+                adminRefreshStats();
+
+                if (errorCount === 0) {
+                    showTrackingStatus(`✅ ${successCount} supply items imported successfully!`);
+                    setTimeout(() => {
+                        closeBatchSupplyModal();
+                    }, 3000);
+                } else {
+                    showTrackingStatus(`⚠️ ${successCount} imported, ${errorCount} failed`, true);
+                }
+
+            } catch (error) {
+                resultsDiv.innerHTML = `<h4>❌ Import Failed</h4><p style="color: #e53e3e;">${error.message}</p>`;
+                resultsDiv.className = 'import-results error';
+                resultsDiv.style.display = 'block';
+                showTrackingStatus('❌ Batch import failed: ' + error.message, true);
+            } finally {
+                processBtn.disabled = false;
+                processBtn.innerHTML = 'Import Supply Items';
+                setTimeout(() => {
+                    progressBar.style.display = 'none';
+                    progressFill.style.width = '0%';
+                }, 1000);
             }
         }
 
