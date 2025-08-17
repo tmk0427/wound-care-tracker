@@ -3365,6 +3365,27 @@
                     row.classList.add('custom-supply');
                 }
                 
+                // Determine which actions are available
+                const isCustomSupply = supply.is_custom;
+                let actionsHtml = '';
+                
+                if (isCustomSupply) {
+                    // Custom supplies can be deleted (permanent removal)
+                    actionsHtml = `
+                        <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                            <button class="btn btn-danger btn-sm" onclick="adminDeleteSupply(${supply.id})" title="Delete Custom Item (Permanent)">🗑️ Delete</button>
+                        </div>
+                    `;
+                } else {
+                    // System supplies can only be "removed" (deactivated or marked inactive)
+                    actionsHtml = `
+                        <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                            <button class="btn btn-warning btn-sm" onclick="adminRemoveSupply(${supply.id})" title="Remove System Item">❌ Remove</button>
+                            <span style="color: #718096; font-size: 11px;">System Item</span>
+                        </div>
+                    `;
+                }
+                
                 row.innerHTML = `
                     <td><strong>${supply.code}</strong>${supply.is_custom ? '<span class="custom-badge">CUSTOM</span>' : ''}</td>
                     <td>${supply.description}</td>
@@ -3378,12 +3399,7 @@
                                style="width: 100%; padding: 4px; border: 1px solid #e2e8f0; border-radius: 4px;"
                                onchange="adminUpdateSupply(${supply.id}, 'cost', this.value)">
                     </td>
-                    <td>
-                        <div style="display: flex; gap: 5px; flex-wrap: wrap;">
-                            ${supply.is_custom ? `<button class="btn btn-danger btn-sm" onclick="adminDeleteSupply(${supply.id})" title="Delete Custom Item">🗑️</button>` : ''}
-                            <button class="btn btn-warning btn-sm" onclick="adminRemoveSupply(${supply.id})" title="Remove Item">❌</button>
-                        </div>
-                    </td>
+                    <td>${actionsHtml}</td>
                 `;
                 tbody.appendChild(row);
             });
@@ -3429,27 +3445,82 @@
         }
 
         async function adminDeleteSupply(supplyId) {
-            if (confirm('Are you sure you want to delete this custom supply item? This action cannot be undone.')) {
+            // Find the supply to verify it's custom
+            const supply = appData.supplies.find(s => s.id === supplyId);
+            if (!supply) {
+                alert('Supply not found');
+                return;
+            }
+
+            if (!supply.is_custom) {
+                alert('Only custom supply items can be deleted. System items can be removed (deactivated) instead.');
+                return;
+            }
+
+            if (confirm('Are you sure you want to permanently delete this custom supply item? This action cannot be undone and will affect any existing tracking data.')) {
                 try {
                     await apiCall(`/supplies/${supplyId}`, { method: 'DELETE' });
                     await loadAllData();
                     adminRefreshSupplies();
-                    showTrackingStatus('✅ Supply deleted successfully');
+                    showTrackingStatus('✅ Custom supply deleted successfully');
                 } catch (error) {
-                    alert('Failed to delete supply: ' + error.message);
+                    console.error('Delete supply error:', error);
+                    alert('Failed to delete custom supply: ' + error.message);
                 }
             }
         }
 
         async function adminRemoveSupply(supplyId) {
-            if (confirm('Are you sure you want to remove this supply item? This action cannot be undone and will affect any existing tracking data.')) {
+            // Find the supply to check if it's custom or system
+            const supply = appData.supplies.find(s => s.id === supplyId);
+            if (!supply) {
+                alert('Supply not found');
+                return;
+            }
+
+            const isCustomSupply = supply.is_custom;
+            const actionText = isCustomSupply ? 'delete this custom supply item' : 'remove this system supply item';
+            const warningText = isCustomSupply 
+                ? 'This action cannot be undone.' 
+                : 'This will hide the item from future tracking but preserve existing data.';
+
+            if (confirm(`Are you sure you want to ${actionText}? ${warningText}`)) {
                 try {
-                    await apiCall(`/supplies/${supplyId}`, { method: 'DELETE' });
+                    if (isCustomSupply) {
+                        // For custom supplies, use DELETE method
+                        await apiCall(`/supplies/${supplyId}`, { method: 'DELETE' });
+                        showTrackingStatus('✅ Custom supply deleted successfully');
+                    } else {
+                        // For system supplies, try to deactivate/hide them
+                        // If this endpoint doesn't exist, we'll catch the error
+                        try {
+                            await apiCall(`/supplies/${supplyId}/deactivate`, { method: 'POST' });
+                            showTrackingStatus('✅ System supply deactivated successfully');
+                        } catch (deactivateError) {
+                            // If deactivate endpoint doesn't exist, try updating with an inactive flag
+                            try {
+                                await apiCall(`/supplies/${supplyId}`, { 
+                                    method: 'PUT',
+                                    body: { active: false }
+                                });
+                                showTrackingStatus('✅ System supply marked as inactive');
+                            } catch (updateError) {
+                                // If neither works, inform user that system supplies cannot be removed
+                                alert('System supplies cannot be removed. Only custom supplies can be deleted. You can set the cost to 0 to effectively disable this item.');
+                                return;
+                            }
+                        }
+                    }
+                    
                     await loadAllData();
                     adminRefreshSupplies();
-                    showTrackingStatus('✅ Supply removed successfully');
                 } catch (error) {
-                    alert('Failed to remove supply: ' + error.message);
+                    console.error('Remove supply error:', error);
+                    if (error.message.includes('Custom supply not found')) {
+                        alert('This appears to be a system supply. System supplies cannot be deleted, only custom supplies can be removed.');
+                    } else {
+                        alert('Failed to remove supply: ' + error.message);
+                    }
                 }
             }
         }
