@@ -17,29 +17,56 @@ const PORT = process.env.PORT || 3000;
 // Database connection
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
 });
 
-// Middleware
+// Trust Heroku proxy
+app.set('trust proxy', 1);
+
+// Enhanced middleware for production
 app.use(helmet({
-  contentSecurityPolicy: false // Allow inline scripts for our frontend
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'", "https:"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'none'"],
+    },
+  },
 }));
+
 app.use(compression());
-app.use(cors());
+
+// CORS configuration for production
+const corsOptions = {
+  origin: process.env.NODE_ENV === 'production' 
+    ? true // Allow all origins for now
+    : true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+};
+
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
-});
-app.use(limiter);
+// Temporarily disable rate limiting to fix Heroku issues
+// TODO: Re-enable with proper Heroku configuration later
+console.log('⚠️ Rate limiting temporarily disabled for Heroku compatibility');
 
 // Multer configuration for file uploads
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (file.mimetype.includes('spreadsheet') || file.mimetype.includes('excel') || 
         file.originalname.endsWith('.xlsx') || file.originalname.endsWith('.xls')) {
@@ -50,8 +77,22 @@ const upload = multer({
   }
 });
 
-// JWT Secret
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this-in-production';
+// JWT Secret with validation
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error('❌ JWT_SECRET environment variable is required');
+  process.exit(1);
+}
+
+// Health check endpoint
+app.get('/health', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.json({ status: 'OK', timestamp: new Date().toISOString() });
+  } catch (error) {
+    res.status(500).json({ status: 'ERROR', error: 'Database connection failed' });
+  }
+});
 
 // Authentication middleware
 const authenticateToken = (req, res, next) => {
@@ -756,10 +797,14 @@ app.get('/api/statistics', authenticateToken, requireAdmin, async (req, res) => 
 
 // ==================== STATIC FILES ====================
 
-// Serve static files (your frontend)
-app.use(express.static(path.join(__dirname, 'public')));
+// Serve static files from public directory
+app.use(express.static(path.join(__dirname, 'public'), {
+  maxAge: process.env.NODE_ENV === 'production' ? '1d' : '0',
+  etag: true,
+  lastModified: true
+}));
 
-// Catch all handler: send back React's index.html file for any non-API routes
+// Catch all handler: send back index.html file for any non-API routes
 app.get('*', (req, res) => {
   if (!req.url.startsWith('/api')) {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -768,7 +813,7 @@ app.get('*', (req, res) => {
   }
 });
 
-// Global error handler
+// Enhanced error handler
 app.use((error, req, res, next) => {
   console.error('Global error handler:', error);
   
@@ -780,7 +825,21 @@ app.use((error, req, res, next) => {
     return res.status(400).json({ error: 'Please upload only Excel files (.xlsx or .xls)' });
   }
 
-  res.status(500).json({ error: 'Something went wrong on the server' });
+  // Don't expose internal errors in production
+  const message = process.env.NODE_ENV === 'production' 
+    ? 'Something went wrong on the server'
+    : error.message;
+
+  res.status(500).json({ error: message });
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('🛑 SIGTERM received, shutting down gracefully...');
+  pool.end(() => {
+    console.log('✅ Database pool closed');
+    process.exit(0);
+  });
 });
 
 // Initialize database and start server
@@ -794,6 +853,10 @@ async function startServer() {
     app.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`📱 Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`🔗 App URL: ${process.env.NODE_ENV === 'production' ? 'https://terence-wound-care-tracker-0ee111d0e54a.herokuapp.com' : `http://localhost:${PORT}`}`);
+      console.log('🔑 Default Login Credentials:');
+      console.log('   Admin: admin@system.com / admin123');
+      console.log('   User:  user@demo.com / user123');
     });
 
   } catch (error) {
