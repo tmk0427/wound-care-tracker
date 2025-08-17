@@ -1025,6 +1025,24 @@
                 </div>
             </div>
 
+            <!-- User Access Info -->
+            <div id="userAccessInfo" style="background: #f7fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #667eea;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+                    <div>
+                        <strong style="color: #4a5568;">Your Access Level:</strong>
+                        <span id="userAccessLevel" style="color: #667eea;"></span>
+                    </div>
+                    <div>
+                        <strong style="color: #4a5568;">Assigned Facility:</strong>
+                        <span id="userFacilityInfo" style="color: #667eea;"></span>
+                    </div>
+                    <div>
+                        <strong style="color: #4a5568;">Available Patients:</strong>
+                        <span id="availablePatientsCount" style="color: #667eea;">0</span>
+                    </div>
+                </div>
+            </div>
+
             <div id="trackingContent">
                 <p style="text-align: center; color: #718096; font-size: 18px; margin-top: 100px;">
                     Please select a patient to begin tracking supplies
@@ -1962,10 +1980,15 @@
                     summaryMonth.value = currentYearMonth;
                 }
 
+                console.log('🚀 Initializing app for user:', currentUser.email);
+                
                 setupUserInterface();
                 await loadAllData();
                 await updatePendingUsersNotification();
                 populateSummaryFacilities();
+                updateUserAccessInfo();
+                
+                console.log('✅ App initialization complete');
             } catch (error) {
                 console.error('App initialization error:', error);
                 alert('Failed to initialize application. Please refresh the page.');
@@ -1974,9 +1997,28 @@
 
         async function loadAllData() {
             try {
+                console.log('🔄 Loading all data for user:', currentUser.email, 'Role:', currentUser.role);
+                
                 appData.facilities = await apiCall('/facilities');
                 appData.supplies = await apiCall('/supplies');
-                appData.patients = await apiCall('/patients');
+                
+                // Enhanced patient loading with facility filtering for users
+                console.log('📋 Loading patients...');
+                const allPatients = await apiCall('/patients');
+                
+                // Filter patients based on user permissions
+                if (currentUser.role === 'admin') {
+                    appData.patients = allPatients;
+                    console.log('👑 Admin user - showing all', allPatients.length, 'patients');
+                } else if (currentUser.facility_id) {
+                    appData.patients = allPatients.filter(function(patient) {
+                        return patient.facility_id === currentUser.facility_id;
+                    });
+                    console.log('👤 User filtered to facility', currentUser.facility_id, '- showing', appData.patients.length, 'of', allPatients.length, 'patients');
+                } else {
+                    appData.patients = [];
+                    console.log('⚠️ User has no facility assigned - showing 0 patients');
+                }
                 
                 if (appData.patients && Array.isArray(appData.patients)) {
                     appData.patients.sort(function(a, b) {
@@ -1992,6 +2034,8 @@
                 refreshPatientList();
                 refreshPatientSelect();
                 updateSummary();
+                
+                console.log('✅ Data loading complete');
             } catch (error) {
                 console.error('Failed to load data:', error);
                 showTrackingStatus('❌ Failed to load data: ' + error.message, true);
@@ -2118,6 +2162,33 @@
 
             if (tabName === 'tracking') {
                 refreshPatientSelect();
+                updateUserAccessInfo();
+            }
+        }
+
+        function updateUserAccessInfo() {
+            if (!currentUser) return;
+
+            const accessLevel = document.getElementById('userAccessLevel');
+            const facilityInfo = document.getElementById('userFacilityInfo');
+            const patientsCount = document.getElementById('availablePatientsCount');
+
+            if (accessLevel) {
+                accessLevel.textContent = currentUser.role === 'admin' ? 'Administrator (Full Access)' : 'User (Facility-Based Access)';
+            }
+
+            if (facilityInfo) {
+                if (currentUser.role === 'admin') {
+                    facilityInfo.textContent = 'All Facilities';
+                } else if (currentUser.facility_id && currentUser.facility_name) {
+                    facilityInfo.textContent = currentUser.facility_name;
+                } else {
+                    facilityInfo.innerHTML = '<span style="color: #e53e3e;">⚠️ No facility assigned</span>';
+                }
+            }
+
+            if (patientsCount) {
+                patientsCount.textContent = appData.patients ? appData.patients.length : 0;
             }
         }
 
@@ -2230,6 +2301,17 @@
             const select = document.getElementById('patientSelect');
             select.innerHTML = '<option value="">Select Patient</option>';
 
+            console.log('🔄 Refreshing patient select with', appData.patients.length, 'patients');
+
+            if (appData.patients.length === 0) {
+                if (currentUser.role !== 'admin' && !currentUser.facility_id) {
+                    select.innerHTML = '<option value="">No facility assigned - contact admin</option>';
+                } else {
+                    select.innerHTML = '<option value="">No patients available</option>';
+                }
+                return;
+            }
+
             appData.patients.forEach(function(patient) {
                 const option = document.createElement('option');
                 option.value = patient.id;
@@ -2256,6 +2338,7 @@
             const container = document.getElementById('trackingContent');
 
             console.log('Loading patient tracking for ID:', patientId);
+            console.log('Current user:', currentUser);
 
             if (!patientId) {
                 container.innerHTML = '<p style="text-align: center; color: #718096; font-size: 18px; margin-top: 100px;">Please select a patient to begin tracking supplies</p>';
@@ -2268,18 +2351,45 @@
                     throw new Error('Patient not found');
                 }
 
-                console.log('Found patient:', patient.name);
+                console.log('Found patient:', patient.name, 'Facility ID:', patient.facility_id);
+                console.log('User facility ID:', currentUser.facility_id);
 
+                // Check if user has access to this patient
+                if (currentUser.role !== 'admin' && currentUser.facility_id && patient.facility_id !== currentUser.facility_id) {
+                    throw new Error('You can only access patients from your assigned facility');
+                }
+
+                // Show loading state
+                container.innerHTML = '<p style="text-align: center; color: #667eea; font-size: 18px; margin-top: 100px;">Loading tracking data...</p>';
+
+                console.log('Making API call to /patients/' + patientId + '/tracking');
                 const trackingData = await apiCall('/patients/' + patientId + '/tracking');
                 appData.trackingData[patientId] = trackingData;
 
-                console.log('Tracking data loaded:', trackingData.length, 'records');
+                console.log('Tracking data loaded successfully:', trackingData.length, 'records');
 
                 await renderTrackingTable(patient, trackingData);
                 
             } catch (error) {
                 console.error('Failed to load tracking data:', error);
-                container.innerHTML = '<p style="text-align: center; color: #e53e3e; font-size: 18px; margin-top: 100px;">Failed to load tracking data: ' + error.message + '</p>';
+                
+                // Enhanced error handling with user-friendly messages
+                let errorMessage = 'Failed to load tracking data: ' + error.message;
+                
+                if (error.message.includes('Access denied') || error.message.includes('Unauthorized')) {
+                    errorMessage = '❌ Access Denied: You may not have permission to view this patient\'s data. Please contact your administrator if you believe this is an error.';
+                } else if (error.message.includes('facility')) {
+                    errorMessage = '❌ Facility Access: You can only view patients from your assigned facility.';
+                } else if (error.message.includes('Authentication required')) {
+                    errorMessage = '❌ Session Expired: Please log out and log back in.';
+                }
+                
+                container.innerHTML = '<div style="text-align: center; margin-top: 50px; padding: 20px; background: #fed7d7; border-radius: 10px; border-left: 4px solid #e53e3e;"><p style="color: #c53030; font-size: 16px; margin: 0;">' + errorMessage + '</p></div>';
+                
+                // If it's an access issue, also check if the user needs to be assigned to a facility
+                if (error.message.includes('Access denied') && !currentUser.facility_id) {
+                    container.innerHTML += '<div style="text-align: center; margin-top: 20px; padding: 15px; background: #fffaf0; border-radius: 8px; border-left: 4px solid #ed8936;"><p style="color: #9c4221; font-size: 14px; margin: 0;">💡 <strong>Tip:</strong> You may need to be assigned to a facility by an administrator before you can access patient tracking data.</p></div>';
+                }
             }
         }
 
