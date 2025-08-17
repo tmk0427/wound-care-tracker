@@ -2242,7 +2242,7 @@
 
                 console.log('Tracking data loaded:', trackingData.length, 'records');
 
-                renderTrackingTable(patient, trackingData);
+                await renderTrackingTable(patient, trackingData);
                 
             } catch (error) {
                 console.error('Failed to load tracking data:', error);
