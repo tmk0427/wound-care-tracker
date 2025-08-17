@@ -1462,30 +1462,30 @@
 
                 <div style="position: relative; max-height: 70vh; border: 1px solid #e2e8f0; border-radius: 10px; background: white; overflow: hidden;">
                     <!-- Frozen columns table -->
-                    <div style="position: absolute; left: 0; top: 0; z-index: 20; background: white; width: ${frozenWidth}px; height: 100%; overflow: hidden; border-right: 2px solid #667eea;">
+                    <div style="position: absolute; left: 0; top: 0; z-index: 20; background: white; width: ${frozenWidth}px; height: 100%; overflow-y: auto; border-right: 2px solid #667eea;">
                         <table style="width: 100%; border-collapse: collapse;">
                             <thead style="position: sticky; top: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; z-index: 30;">
                                 <tr>
-                                    <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 80px; text-align: left;">AR Code</th>
-                                    <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 250px; text-align: left;">Item Description</th>
-                                    <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 200px; text-align: left; background: #4f46e5;">All Wound Dx</th>
+                                    <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 80px; text-align: left; height: 45px; box-sizing: border-box;">AR Code</th>
+                                    <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 250px; text-align: left; height: 45px; box-sizing: border-box;">Item Description</th>
+                                    <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 200px; text-align: left; background: #4f46e5; height: 45px; box-sizing: border-box;">All Wound Dx</th>
             `;
 
             // Add admin columns to frozen section
             if (finalAdminStatus) {
                 html += `
-                                    <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 100px; text-align: left;">HCPCS Code</th>
-                                    <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 90px; text-align: left;">Unit Cost</th>
+                                    <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 100px; text-align: left; height: 45px; box-sizing: border-box;">HCPCS Code</th>
+                                    <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 90px; text-align: left; height: 45px; box-sizing: border-box;">Unit Cost</th>
                 `;
             }
 
             html += `
-                                    <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 90px; text-align: left;">Total Units</th>
+                                    <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 90px; text-align: left; height: 45px; box-sizing: border-box;">Total Units</th>
             `;
 
             if (finalAdminStatus) {
                 html += `
-                                    <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 100px; text-align: left;">Total Cost</th>
+                                    <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 100px; text-align: left; height: 45px; box-sizing: border-box;">Total Cost</th>
                 `;
             }
 
@@ -1520,16 +1520,16 @@
                         data-description="${supply.description.toLowerCase()}" 
                         data-code="${supply.code}" 
                         data-supply-id="${supply.id}"
-                        style="background: ${rowBg}; height: 53px;">
+                        style="background: ${rowBg};">
                         
-                        <td style="padding: 12px; border: 1px solid #e2e8f0; width: 80px;">
+                        <td style="padding: 12px; border: 1px solid #e2e8f0; width: 80px; height: 53px; box-sizing: border-box; vertical-align: middle;">
                             <strong>${supply.code}</strong>
                             ${isCustomSupply ? '<span style="color: #667eea; font-size: 11px; margin-left: 5px;">CUSTOM</span>' : ''}
                         </td>
                         
-                        <td style="padding: 12px; border: 1px solid #e2e8f0; width: 250px;">${supply.description}</td>
+                        <td style="padding: 12px; border: 1px solid #e2e8f0; width: 250px; height: 53px; box-sizing: border-box; vertical-align: middle;">${supply.description}</td>
                         
-                        <td style="padding: 12px; border: 1px solid #e2e8f0; width: 200px; background: #f8faff; vertical-align: middle;">
+                        <td style="padding: 12px; border: 1px solid #e2e8f0; width: 200px; background: #f8faff; height: 53px; box-sizing: border-box; vertical-align: middle;">
                             <input type="text" value="${woundDx}" placeholder="Enter wound diagnosis..."
                                    style="width: 100%; padding: 4px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 14px; background: white; box-sizing: border-box;"
                                    onchange="updateWoundDx(${patient.id}, ${supply.id}, this.value, this)">
@@ -1538,20 +1538,20 @@
 
                 if (finalAdminStatus) {
                     html += `
-                        <td style="padding: 12px; border: 1px solid #e2e8f0; width: 100px;">${supply.hcpcs || ''}</td>
-                        <td style="padding: 12px; border: 1px solid #e2e8f0; width: 90px; color: #38a169; font-weight: 600;">${supplyCost.toFixed(2)}</td>
+                        <td style="padding: 12px; border: 1px solid #e2e8f0; width: 100px; height: 53px; box-sizing: border-box; vertical-align: middle;">${supply.hcpcs || ''}</td>
+                        <td style="padding: 12px; border: 1px solid #e2e8f0; width: 90px; color: #38a169; font-weight: 600; height: 53px; box-sizing: border-box; vertical-align: middle;">${supplyCost.toFixed(2)}</td>
                     `;
                 }
 
                 html += `
-                        <td style="padding: 12px; border: 1px solid #e2e8f0; width: 90px;" class="total-units-${supply.id}">
+                        <td style="padding: 12px; border: 1px solid #e2e8f0; width: 90px; height: 53px; box-sizing: border-box; vertical-align: middle;" class="total-units-${supply.id}">
                             <strong>${totalUnits}</strong>
                         </td>
                 `;
 
                 if (finalAdminStatus) {
                     html += `
-                        <td style="padding: 12px; border: 1px solid #e2e8f0; width: 100px; color: #38a169; font-weight: 600;" class="total-cost-${supply.id}">
+                        <td style="padding: 12px; border: 1px solid #e2e8f0; width: 100px; color: #38a169; font-weight: 600; height: 53px; box-sizing: border-box; vertical-align: middle;" class="total-cost-${supply.id}">
                             <strong>${totalCost.toFixed(2)}</strong>
                         </td>
                     `;
@@ -1574,7 +1574,7 @@
 
             // Add day headers
             for (let day = 1; day <= daysInMonth; day++) {
-                html += `<th style="padding: 8px; border: 1px solid rgba(255,255,255,0.2); width: 60px; text-align: center;">Day ${day}</th>`;
+                html += `<th style="padding: 8px; border: 1px solid rgba(255,255,255,0.2); width: 60px; text-align: center; height: 45px; box-sizing: border-box;">Day ${day}</th>`;
             }
 
             html += `
@@ -1592,14 +1592,14 @@
                 html += `
                     <tr class="supply-row ${isCustomSupply ? 'custom-supply' : ''}" 
                         data-supply-id="${supply.id}"
-                        style="background: ${rowBg}; height: 53px;">
+                        style="background: ${rowBg};">
                 `;
 
                 // Add quantity input cells for each day
                 for (let day = 1; day <= daysInMonth; day++) {
                     const value = (trackingInfo?.days[day]) || '';
                     html += `
-                        <td style="padding: 12px 6px; border: 1px solid #e2e8f0; text-align: center; width: 60px; vertical-align: middle;">
+                        <td style="padding: 12px 6px; border: 1px solid #e2e8f0; text-align: center; width: 60px; height: 53px; box-sizing: border-box; vertical-align: middle;">
                             <input type="number" min="0" 
                                    style="width: 50px; padding: 4px; border: 1px solid #e2e8f0; border-radius: 4px; text-align: center; font-size: 14px; box-sizing: border-box;" 
                                    value="${value}" placeholder="0"
