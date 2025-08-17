@@ -33,15 +33,6 @@ const limiter = rateLimit({
     max: 100 // limit each IP to 100 requests per windowMs
 });
 
-// Content Security Policy - ALLOW INLINE SCRIPTS
-app.use((req, res, next) => {
-    res.setHeader(
-        'Content-Security-Policy',
-        "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; font-src 'self' https:; object-src 'none'; media-src 'self'; frame-src 'none';"
-    );
-    next();
-});
-
 // Middleware
 app.use(limiter);
 app.use(express.json({ limit: '10mb' }));
