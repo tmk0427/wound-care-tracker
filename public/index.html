@@ -1470,28 +1470,28 @@
                                     <th style="position: sticky; left: 330px; background: linear-gradient(135deg, #4f46e5 0%, #5b21b6 100%); padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 200px; text-align: left; z-index: 20;">All Wound Dx</th>`;
             `;
 
-            // Calculate sticky positions for admin columns
-            let currentStickyPos = 530; // After AR Code (80) + Description (250) + Wound Dx (200)
+            // Calculate base sticky position
+            let baseStickyPos = 530; // After AR Code (80) + Description (250) + Wound Dx (200)
             
             // Add admin columns to frozen section
             if (finalAdminStatus) {
                 html += `
-                                    <th style="position: sticky; left: ${currentStickyPos}px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 100px; text-align: left; z-index: 20;">HCPCS Code</th>
-                                    <th style="position: sticky; left: ${currentStickyPos + 100}px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 90px; text-align: left; z-index: 20;">Unit Cost</th>
+                                    <th style="position: sticky; left: ${baseStickyPos}px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 100px; text-align: left; z-index: 20;">HCPCS Code</th>
+                                    <th style="position: sticky; left: ${baseStickyPos + 100}px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 90px; text-align: left; z-index: 20;">Unit Cost</th>
                 `;
-                currentStickyPos += 190; // 100 + 90
+                baseStickyPos += 190; // 100 + 90
             }
 
             html += `
-                                    <th style="position: sticky; left: ${currentStickyPos}px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 90px; text-align: left; z-index: 20;">Total Units</th>
+                                    <th style="position: sticky; left: ${baseStickyPos}px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 90px; text-align: left; z-index: 20;">Total Units</th>
             `;
-            currentStickyPos += 90;
+            baseStickyPos += 90;
 
             if (finalAdminStatus) {
                 html += `
-                                    <th style="position: sticky; left: ${currentStickyPos}px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 100px; text-align: left; z-index: 20;">Total Cost</th>
+                                    <th style="position: sticky; left: ${baseStickyPos}px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 100px; text-align: left; z-index: 20;">Total Cost</th>
                 `;
-                currentStickyPos += 100;
+                baseStickyPos += 100;
             }
 
             // Add day headers (these will scroll horizontally)
@@ -1525,8 +1525,8 @@
                 const rowBg = isCustomSupply ? '#f0f4ff' : (index % 2 === 0 ? 'white' : '#fafafa');
                 const woundDx = woundDxData[supply.id] || '';
 
-                // Calculate sticky positions for this row
-                let currentStickyPos = 530;
+                // Calculate sticky positions for this row's admin columns
+                let rowStickyPos = 530;
 
                 html += `
                     <tr class="supply-row ${isCustomSupply ? 'custom-supply' : ''}" 
@@ -1551,22 +1551,22 @@
 
                 if (finalAdminStatus) {
                     html += `
-                        <td style="position: sticky; left: ${currentStickyPos}px; background: ${rowBg}; padding: 12px; border: 1px solid #e2e8f0; width: 100px; z-index: 10;">${supply.hcpcs || ''}</td>
-                        <td style="position: sticky; left: ${currentStickyPos + 100}px; background: ${rowBg}; padding: 12px; border: 1px solid #e2e8f0; width: 90px; color: #38a169; font-weight: 600; z-index: 10;">${supplyCost.toFixed(2)}</td>
+                        <td style="position: sticky; left: ${rowStickyPos}px; background: ${rowBg}; padding: 12px; border: 1px solid #e2e8f0; width: 100px; z-index: 10;">${supply.hcpcs || ''}</td>
+                        <td style="position: sticky; left: ${rowStickyPos + 100}px; background: ${rowBg}; padding: 12px; border: 1px solid #e2e8f0; width: 90px; color: #38a169; font-weight: 600; z-index: 10;">${supplyCost.toFixed(2)}</td>
                     `;
-                    currentStickyPos += 190;
+                    rowStickyPos += 190;
                 }
 
                 html += `
-                        <td style="position: sticky; left: ${currentStickyPos}px; background: ${rowBg}; padding: 12px; border: 1px solid #e2e8f0; width: 90px; z-index: 10;" class="total-units-${supply.id}">
+                        <td style="position: sticky; left: ${rowStickyPos}px; background: ${rowBg}; padding: 12px; border: 1px solid #e2e8f0; width: 90px; z-index: 10;" class="total-units-${supply.id}">
                             <strong>${totalUnits}</strong>
                         </td>
                 `;
-                currentStickyPos += 90;
+                rowStickyPos += 90;
 
                 if (finalAdminStatus) {
                     html += `
-                        <td style="position: sticky; left: ${currentStickyPos}px; background: ${rowBg}; padding: 12px; border: 1px solid #e2e8f0; width: 100px; color: #38a169; font-weight: 600; z-index: 10;" class="total-cost-${supply.id}">
+                        <td style="position: sticky; left: ${rowStickyPos}px; background: ${rowBg}; padding: 12px; border: 1px solid #e2e8f0; width: 100px; color: #38a169; font-weight: 600; z-index: 10;" class="total-cost-${supply.id}">
                             <strong>${totalCost.toFixed(2)}</strong>
                         </td>
                     `;
