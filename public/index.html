@@ -3087,9 +3087,6 @@
                                 <p style="margin: 5px 0 0 0; color: #718096; font-size: 14px;">
                                     <span id="selectedSupplyCount">0</span> supply item(s) selected
                                 </p>
-                                <p style="margin: 5px 0 0 0; color: #ed8936; font-size: 12px;">
-                                    ⚠️ Note: Only <strong>CUSTOM</strong> supplies can be deleted. System supplies cannot be removed.
-                                </p>
                             </div>
                             <div>
                                 <button class="btn btn-danger" onclick="deleteSelectedSupplies()" id="deleteSelectedSuppliesBtn" disabled>
@@ -3352,7 +3349,13 @@
 
                 await apiCall('/supplies', {
                     method: 'POST',
-                    body: { code: arCode, description, hcpcs: hcpcsCode, cost: unitCost }
+                    body: { 
+                        code: arCode, 
+                        description, 
+                        hcpcs: hcpcsCode, 
+                        cost: unitCost,
+                        is_custom: false  // Make new supplies system supplies
+                    }
                 });
 
                 document.getElementById('adminNewArCode').value = '';
@@ -3396,23 +3399,16 @@
                     row.classList.add('custom-supply');
                 }
                 
-                const isCustomSupply = supply.is_custom;
-                const canDelete = isCustomSupply;
-                
-                // Style system supplies differently to show they can't be deleted
-                const rowStyle = !canDelete ? 'opacity: 0.7;' : '';
-                
                 row.innerHTML = `
                     <td style="text-align: center;">
                         <input type="checkbox" class="supply-checkbox" value="${supply.id}" 
-                               onchange="updateSelectedSupplyCount()" style="transform: scale(1.2);"
-                               ${!canDelete ? 'title="System supplies cannot be deleted"' : ''}>
+                               onchange="updateSelectedSupplyCount()" style="transform: scale(1.2);">
                     </td>
-                    <td style="${rowStyle}">
+                    <td>
                         <strong>${supply.code}</strong>
-                        ${supply.is_custom ? '<span class="custom-badge">CUSTOM</span>' : '<span style="background: #e2e8f0; color: #4a5568; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">SYSTEM</span>'}
+                        ${supply.is_custom ? '<span class="custom-badge">CUSTOM</span>' : ''}
                     </td>
-                    <td style="${rowStyle}">${supply.description}</td>
+                    <td>${supply.description}</td>
                     <td>
                         <input type="text" value="${supply.hcpcs || ''}" 
                                style="width: 100%; padding: 4px; border: 1px solid #e2e8f0; border-radius: 4px;"
@@ -3424,10 +3420,9 @@
                                onchange="adminUpdateSupply(${supply.id}, 'cost', this.value)">
                     </td>
                     <td style="text-align: center;">
-                        ${canDelete ? 
-                            `<button class="btn btn-danger btn-sm" onclick="adminDeleteSupply(${supply.id})" title="Delete Custom Supply Item">🗑️</button>` :
-                            `<button class="btn btn-secondary btn-sm" disabled title="System supplies cannot be deleted" style="opacity: 0.5; cursor: not-allowed;">🔒</button>`
-                        }
+                        <button class="btn btn-danger btn-sm" onclick="adminDeleteSupply(${supply.id})" title="Delete Supply Item">
+                            🗑️
+                        </button>
                     </td>
                 `;
                 tbody.appendChild(row);
@@ -3867,7 +3862,8 @@
                                 code: arCode, 
                                 description, 
                                 hcpcs: hcpcsCode || '', 
-                                cost: unitCost 
+                                cost: unitCost,
+                                is_custom: false  // Make batch imported supplies system supplies
                             }
                         });
 
