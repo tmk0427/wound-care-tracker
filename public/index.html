@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wound Care RT Supply Tracker - Enhanced</title>
+    <title>EAS Wound Care RT Supply Tracker - Enhanced</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         * {
@@ -970,7 +970,7 @@
     <!-- Login/Register Screen -->
     <div id="loginContainer" class="login-container">
         <div class="auth-form">
-            <h1>???? Wound Care RT Supply Tracker</h1>
+            <h1>EAS Wound Care RT Supply Tracker</h1>
             
             <!-- Auth Tabs -->
             <div class="auth-tabs">
@@ -1024,7 +1024,7 @@
     <div id="mainApp" class="main-app">
         <div class="header">
             <div>
-                <h1>???? Wound Care RT Supply Tracker</h1>
+                <h1>EAS Wound Care RT Supply Tracker</h1>
                 <div class="header-info">
                     <div id="currentUserInfo"></div>
                 </div>
@@ -1064,12 +1064,12 @@
 
             <!-- Excel Import Section -->
             <div class="excel-import-section">
-                <h3 style="margin-bottom: 15px; color: #2b6cb0;">???? Bulk Import Patients from Excel</h3>
+                <h3 style="margin-bottom: 15px; color: #2b6cb0;">📊 Bulk Import Patients from Excel</h3>
                 <p style="color: #4299e1; margin-bottom: 20px;">Import multiple patients at once using an Excel file (.xlsx or .xls)</p>
                 
                 <div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
-                    <button class="btn btn-secondary" onclick="downloadExcelTemplate()">???? Download Template</button>
-                    <button class="btn btn-primary" onclick="showExcelImportModal()">???? Import Excel File</button>
+                    <button class="btn btn-secondary" onclick="downloadExcelTemplate()">📥 Download Template</button>
+                    <button class="btn btn-primary" onclick="showExcelImportModal()">📤 Import Excel File</button>
                 </div>
 
                 <div style="background: #ebf8ff; padding: 15px; border-radius: 8px; border-left: 4px solid #4299e1;">
@@ -1125,7 +1125,7 @@
                         </div>
                         <div>
                             <button class="btn btn-danger" onclick="removeSelectedPatients()" id="removeSelectedBtn" disabled>
-                                ??????? Remove Selected Patients
+                                🗑️ Remove Selected Patients
                             </button>
                         </div>
                     </div>
@@ -1160,7 +1160,7 @@
 
             <!-- Report Filters -->
             <div class="summary-filters">
-                <h3 style="margin-bottom: 15px; color: #4a5568;">???? Report Filters & Export Options</h3>
+                <h3 style="margin-bottom: 15px; color: #4a5568;">📊 Report Filters & Export Options</h3>
                 
                 <div class="filter-group">
                     <div class="form-group">
@@ -1177,10 +1177,10 @@
                 </div>
 
                 <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: center;">
-                    <button class="btn btn-primary" onclick="applySummaryFilters()">???? Apply Filters</button>
-                    <button class="btn btn-success" onclick="downloadUserReport()">???? Download My Report</button>
-                    <button class="btn btn-success admin-only-controls" onclick="downloadAdminReport()">???? Download Admin Report</button>
-                    <button class="btn btn-secondary" onclick="clearSummaryFilters()">???? Clear Filters</button>
+                    <button class="btn btn-primary" onclick="applySummaryFilters()">📈 Apply Filters</button>
+                    <button class="btn btn-success" onclick="downloadUserReport()">📊 Download My Report</button>
+                    <button class="btn btn-success admin-only-controls" onclick="downloadAdminReport()">📊 Download Admin Report</button>
+                    <button class="btn btn-secondary" onclick="clearSummaryFilters()">🔄 Clear Filters</button>
                 </div>
             </div>
 
@@ -1226,7 +1226,7 @@
 
         <!-- Admin Panel Tab -->
         <div id="adminTab" class="tab-content hidden">
-            <h2 style="margin-bottom: 30px; color: #4a5568;">???? Admin Panel</h2>
+            <h2 style="margin-bottom: 30px; color: #4a5568;">🔧 Admin Panel</h2>
 
             <!-- Loading message while JavaScript loads the full panel -->
             <div style="text-align: center; padding: 40px; color: #718096;">
@@ -1279,10 +1279,10 @@
     <!-- Excel Import Modal -->
     <div id="excelImportModal" class="modal">
         <div class="modal-content">
-            <h2>???? Import Patients from Excel</h2>
+            <h2>📊 Import Patients from Excel</h2>
             
             <div class="file-upload-area" id="fileUploadArea">
-                <div style="font-size: 48px; margin-bottom: 20px;">????</div>
+                <div style="font-size: 48px; margin-bottom: 20px;">📁</div>
                 <h3 style="color: #4299e1; margin-bottom: 10px;">Drag & Drop Excel File Here</h3>
                 <p style="color: #718096; margin-bottom: 20px;">or click to browse for file</p>
                 <input type="file" id="excelFileInput" accept=".xlsx,.xls" onchange="handleExcelFile(this.files[0])">
@@ -1369,11 +1369,11 @@
         function setupUserInterface() {
             const user = currentUser;
             if (!user) {
-                console.error('??? No current user found');
+                console.error('❌ No current user found');
                 return;
             }
             
-            console.log('?????? Setting up UI for user:', {
+            console.log('⚙️ Setting up UI for user:', {
                 name: user.name,
                 role: user.role,
                 facilityId: user.facilityId,
@@ -1384,7 +1384,7 @@
 
             document.getElementById('currentUserInfo').innerHTML = `
                 <div style="font-weight: 600;">${user.name || user.email}</div>
-                <div>${user.role === 'admin' ? 'System Administrator' : 'User'} ??? ${facilityName}</div>
+                <div>${user.role === 'admin' ? 'System Administrator' : 'User'} • ${facilityName}</div>
             `;
 
             const adminTabButton = document.getElementById('adminTabButton');
@@ -1399,7 +1399,7 @@
             const isReallyAdmin = user.role === 'admin' && user.email !== undefined;
             
             if (isReallyAdmin) {
-                console.log('???? CONFIRMED ADMIN - Setting up admin controls...');
+                console.log('🔧 CONFIRMED ADMIN - Setting up admin controls...');
                 
                 if (adminTabButton) {
                     adminTabButton.style.display = 'block';
@@ -1410,10 +1410,10 @@
                 facilitySelector.classList.remove('hidden');
                 summaryFacilityGroup.style.display = 'block';
                 
-                console.log('??? Admin controls enabled - Added show-admin class');
+                console.log('✅ Admin controls enabled - Added show-admin class');
                 
             } else {
-                console.log('???? CONFIRMED NON-ADMIN - Setting up user controls...');
+                console.log('👤 CONFIRMED NON-ADMIN - Setting up user controls...');
                 
                 if (adminTabButton) {
                     adminTabButton.style.display = 'none';
@@ -1424,11 +1424,11 @@
                 facilitySelector.classList.add('hidden');
                 summaryFacilityGroup.style.display = 'none';
                 
-                console.log('??? User controls enabled - Removed show-admin class');
+                console.log('✅ User controls enabled - Removed show-admin class');
             }
 
             // Debug current state
-            console.log('???? Final UI state:', {
+            console.log('🔍 Final UI state:', {
                 hasShowAdminClass: mainApp.classList.contains('show-admin'),
                 userRole: user.role,
                 userEmail: user.email,
@@ -1438,7 +1438,7 @@
 
         // Enhanced table rendering with bulletproof admin column control
         function renderTrackingTable(patient, trackingData) {
-            console.log('??????? Rendering table for patient:', patient.name);
+            console.log('🏗️ Rendering table for patient:', patient.name);
             
             const container = document.getElementById('trackingContent');
             const [year, month] = patient.month.split('-');
@@ -1453,7 +1453,7 @@
             // Double-check admin status
             const finalAdminStatus = isAdmin && mainAppHasAdminClass;
             
-            console.log('???? BULLETPROOF Admin Check:', {
+            console.log('🔍 BULLETPROOF Admin Check:', {
                 currentUser: user,
                 userRole: user?.role,
                 userEmail: user?.email,
@@ -1488,7 +1488,7 @@
                 <div class="tracker-search-section">
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
                         <div style="flex: 1; max-width: 400px;">
-                            <input type="text" placeholder="???? Search supplies by description or AR code..." 
+                            <input type="text" placeholder="🔍 Search supplies by description or AR code..." 
                                    class="search-box" id="supplySearchBox" onkeyup="filterSupplies(this.value)"
                                    style="margin: 0;">
                         </div>
@@ -1508,13 +1508,13 @@
 
             // CRITICAL: Only add admin columns if CONFIRMED admin
             if (finalAdminStatus) {
-                console.log('??? Adding ADMIN columns to table header');
+                console.log('✅ Adding ADMIN columns to table header');
                 html += `
                                 <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); min-width: 100px; text-align: left;">HCPCS Code</th>
                                 <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); min-width: 90px; text-align: left;">Unit Cost</th>
                 `;
             } else {
-                console.log('??? SKIPPING admin columns - User is NOT admin');
+                console.log('❌ SKIPPING admin columns - User is NOT admin');
             }
 
             html += `
@@ -1523,7 +1523,7 @@
 
             // CRITICAL: Only add total cost column if CONFIRMED admin
             if (finalAdminStatus) {
-                console.log('??? Adding Total Cost column to table header');
+                console.log('✅ Adding Total Cost column to table header');
                 html += `
                                 <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); min-width: 100px; text-align: left;">Total Cost</th>
                 `;
@@ -1578,7 +1578,7 @@
 
                 // CRITICAL: Only add admin columns if CONFIRMED admin
                 if (finalAdminStatus) {
-                    console.log(`??? Adding admin cells for supply ${supply.code}`);
+                    console.log(`✅ Adding admin cells for supply ${supply.code}`);
                     html += `
                         <td style="padding: 12px; border: 1px solid #e2e8f0;">${supply.hcpcs || ''}</td>
                         <td style="padding: 12px; border: 1px solid #e2e8f0; color: #38a169; font-weight: 600;">${supplyCost.toFixed(2)}</td>
@@ -1622,7 +1622,7 @@
                 </div>
                 
                 <div style="margin-top: 10px; padding: 10px; background: ${finalAdminStatus ? '#f0fff4' : '#f0f4ff'}; border-radius: 5px; font-size: 12px; color: #4a5568;">
-                    <strong>???? CONFIRMED Access Level:</strong> ${finalAdminStatus ? '??? ADMIN - Full access with cost information' : '??? USER - Supply tracking only'} | 
+                    <strong>🔐 CONFIRMED Access Level:</strong> ${finalAdminStatus ? '✅ ADMIN - Full access with cost information' : '❌ USER - Supply tracking only'} | 
                     <strong>Columns Rendered:</strong> ${finalAdminStatus ? 'AR Code, Description, HCPCS, Unit Cost, Total Units, Total Cost + Days (' + (baseColumns + daysInMonth) + ' total)' : 'AR Code, Description, Total Units + Days (' + (baseColumns + daysInMonth) + ' total)'} |
                     <strong>User Role:</strong> ${user?.role || 'Unknown'} | <strong>Email:</strong> ${user?.email || 'Unknown'}
                 </div>
@@ -1630,7 +1630,7 @@
 
             container.innerHTML = html;
             
-            console.log('??? Table rendered with', finalAdminStatus ? 'ADMIN' : 'USER', 'permissions');
+            console.log('✅ Table rendered with', finalAdminStatus ? 'ADMIN' : 'USER', 'permissions');
         }
 
         function filterSupplies(searchTerm) {
@@ -1679,11 +1679,11 @@
                     }
                 });
 
-                showTrackingStatus('??? Wound diagnosis saved successfully');
+                showTrackingStatus('✅ Wound diagnosis saved successfully');
                 
             } catch (error) {
                 console.error('Failed to update wound diagnosis:', error);
-                showTrackingStatus('??? Failed to save wound diagnosis: ' + error.message, true);
+                showTrackingStatus('❌ Failed to save wound diagnosis: ' + error.message, true);
             }
         }
 
@@ -1707,7 +1707,7 @@
                 inputElement.style.backgroundColor = '#f0fff4';
                 
                 recalculateTotals(supplyId);
-                showTrackingStatus('??? Quantity saved successfully');
+                showTrackingStatus('✅ Quantity saved successfully');
 
                 setTimeout(() => {
                     inputElement.style.borderColor = '';
@@ -1720,7 +1720,7 @@
                 inputElement.style.borderColor = '#e53e3e';
                 inputElement.style.backgroundColor = '#fed7d7';
                 
-                showTrackingStatus('??? Failed to save quantity: ' + error.message, true);
+                showTrackingStatus('❌ Failed to save quantity: ' + error.message, true);
                 
                 setTimeout(() => {
                     inputElement.style.borderColor = '';
@@ -1769,9 +1769,9 @@
                     totalCostCell.innerHTML = `<strong>${totalCost.toFixed(2)}</strong>`;
                 }
                 
-                console.log(`???? Cost updated for admin: ${totalUnits} ?? ${unitCost} = ${totalCost.toFixed(2)}`);
+                console.log(`💰 Cost updated for admin: ${totalUnits} × ${unitCost} = ${totalCost.toFixed(2)}`);
             } else {
-                console.log(`???? Units updated for user: ${totalUnits} (no cost calculation)`);
+                console.log(`📊 Units updated for user: ${totalUnits} (no cost calculation)`);
             }
         }
 
@@ -2008,7 +2008,7 @@
                 updateSummary();
             } catch (error) {
                 console.error('Failed to load data:', error);
-                showTrackingStatus('??? Failed to load data: ' + error.message, true);
+                showTrackingStatus('❌ Failed to load data: ' + error.message, true);
             }
         }
 
@@ -2173,7 +2173,7 @@
                 document.getElementById('patientFacility').value = '';
 
                 await loadAllData();
-                showTrackingStatus('??? Patient added successfully!');
+                showTrackingStatus('✅ Patient added successfully!');
             } catch (error) {
                 alert(error.message);
             } finally {
@@ -2446,7 +2446,7 @@
 
         async function downloadReport(includeAdminData = false) {
             try {
-                showTrackingStatus('???? Generating report...', false);
+                showTrackingStatus('🔄 Generating report...', false);
                 
                 const filteredPatients = getFilteredPatients();
                 const reportData = [];
@@ -2546,11 +2546,11 @@
                 
                 XLSX.writeFile(workbook, `${fileName}.xlsx`);
                 
-                showTrackingStatus('??? Report downloaded successfully!');
+                showTrackingStatus('✅ Report downloaded successfully!');
                 
             } catch (error) {
                 console.error('Failed to generate report:', error);
-                showTrackingStatus('??? Failed to generate report: ' + error.message, true);
+                showTrackingStatus('❌ Failed to generate report: ' + error.message, true);
             }
         }
 
@@ -2644,18 +2644,18 @@
                 }
                 
                 if (failedCount === 0) {
-                    showTrackingStatus(`??? ${deletedCount} patient(s) removed successfully!`);
+                    showTrackingStatus(`✅ ${deletedCount} patient(s) removed successfully!`);
                 } else {
-                    showTrackingStatus(`?????? ${deletedCount} patient(s) removed, ${failedCount} failed`, true);
+                    showTrackingStatus(`⚠️ ${deletedCount} patient(s) removed, ${failedCount} failed`, true);
                 }
                 
             } catch (error) {
                 console.error('Bulk removal error:', error);
-                showTrackingStatus(`??? Failed to remove patients: ${error.message}`, true);
+                showTrackingStatus(`❌ Failed to remove patients: ${error.message}`, true);
             } finally {
                 const removeBtn = document.getElementById('removeSelectedBtn');
                 removeBtn.disabled = false;
-                removeBtn.innerHTML = '??????? Remove Selected Patients';
+                removeBtn.innerHTML = '🗑️ Remove Selected Patients';
             }
         }
 
@@ -2674,7 +2674,7 @@
                         loadPatientTracking();
                     }
                     
-                    showTrackingStatus('??? Patient removed successfully!');
+                    showTrackingStatus('✅ Patient removed successfully!');
                 } catch (error) {
                     alert('Failed to remove patient: ' + error.message);
                 }
@@ -2831,7 +2831,7 @@
             const dataRows = data.slice(1);
 
             let html = `
-                <h4>???? File Preview: ${fileName}</h4>
+                <h4>📄 File Preview: ${fileName}</h4>
                 <p><strong>Rows to import:</strong> ${dataRows.length}</p>
                 <p><strong>Columns found:</strong> ${headers.join(', ')}</p>
                 <div style="max-height: 150px; overflow-y: auto; margin-top: 10px;">
@@ -2910,7 +2910,7 @@
                     throw new Error(result.error || 'Import failed');
                 }
 
-                let resultsHtml = `<h4>??? Import Complete</h4><p>${result.message}</p>`;
+                let resultsHtml = `<h4>✅ Import Complete</h4><p>${result.message}</p>`;
                 
                 if (result.results.success.length > 0) {
                     resultsHtml += '<h5 style="color: #38a169; margin-top: 15px;">Successfully Added:</h5><ul>';
@@ -2941,7 +2941,7 @@
                 }
 
             } catch (error) {
-                resultsDiv.innerHTML = `<h4>??? Import Failed</h4><p style="color: #e53e3e;">${error.message}</p>`;
+                resultsDiv.innerHTML = `<h4>❌ Import Failed</h4><p style="color: #e53e3e;">${error.message}</p>`;
                 resultsDiv.className = 'import-results error';
                 resultsDiv.style.display = 'block';
             } finally {
@@ -2958,12 +2958,12 @@
             const adminTab = document.getElementById('adminTab');
 
             adminTab.innerHTML = `
-                <h2 style="margin-bottom: 30px; color: #4a5568;">???? Admin Panel</h2>
+                <h2 style="margin-bottom: 30px; color: #4a5568;">🔧 Admin Panel</h2>
 
                 <div class="admin-section">
-                    <h3>???? User Management</h3>
+                    <h3>👥 User Management</h3>
                     <div id="pendingUsersSection" style="margin-bottom: 25px;">
-                        <h4 style="color: #ed8936; margin-bottom: 15px;">??? Pending Approvals</h4>
+                        <h4 style="color: #ed8936; margin-bottom: 15px;">⏳ Pending Approvals</h4>
                         <div id="pendingUsersList">Loading pending users...</div>
                     </div>
                     <h4>All Users</h4>
@@ -2986,7 +2986,7 @@
                 </div>
 
                 <div class="admin-section">
-                    <h3>???? Facility Management</h3>
+                    <h3>🏢 Facility Management</h3>
                     <div class="add-new-section">
                         <h4>Add New Facility</h4>
                         <div class="admin-form">
@@ -3005,7 +3005,7 @@
                 </div>
 
                 <div class="admin-section">
-                    <h3>???? Supply Management</h3>
+                    <h3>📦 Supply Management</h3>
                     <div class="add-new-section">
                         <h4>Add New Supply Item</h4>
                         <div class="admin-form">
@@ -3047,7 +3047,7 @@
                 </div>
 
                 <div class="admin-section">
-                    <h3>???? System Overview</h3>
+                    <h3>📊 System Overview</h3>
                     <div class="admin-cards" id="adminStatsCards">Loading statistics...</div>
                 </div>
             `;
@@ -3072,13 +3072,13 @@
                     pendingUsers.forEach(user => {
                         html += `
                             <div class="admin-card" style="border-left: 4px solid #ed8936;">
-                                <h4>???? ${user.name}</h4>
+                                <h4>👤 ${user.name}</h4>
                                 <p><strong>Email:</strong> ${user.email}</p>
                                 <p><strong>Facility:</strong> ${user.facility_name || 'None selected'}</p>
                                 <p><strong>Registered:</strong> ${new Date(user.created_at).toLocaleDateString()}</p>
                                 <div class="card-actions">
-                                    <button class="btn btn-success btn-sm" onclick="approveUser(${user.id})">??? Approve</button>
-                                    <button class="btn btn-danger btn-sm" onclick="rejectUser(${user.id})">??? Reject</button>
+                                    <button class="btn btn-success btn-sm" onclick="approveUser(${user.id})">✅ Approve</button>
+                                    <button class="btn btn-danger btn-sm" onclick="rejectUser(${user.id})">❌ Reject</button>
                                 </div>
                             </div>
                         `;
@@ -3130,7 +3130,7 @@
         async function approveUser(userId) {
             try {
                 await apiCall(`/users/${userId}/approve`, { method: 'POST' });
-                showTrackingStatus('??? User approved successfully!');
+                showTrackingStatus('✅ User approved successfully!');
                 adminRefreshUsers();
             } catch (error) {
                 alert('Failed to approve user: ' + error.message);
@@ -3141,7 +3141,7 @@
             if (confirm('Are you sure you want to reject this user registration? This will permanently delete their account.')) {
                 try {
                     await apiCall(`/users/${userId}`, { method: 'DELETE' });
-                    showTrackingStatus('??? User registration rejected');
+                    showTrackingStatus('✅ User registration rejected');
                     adminRefreshUsers();
                 } catch (error) {
                     alert('Failed to reject user: ' + error.message);
@@ -3155,7 +3155,7 @@
                     method: 'PUT',
                     body: { facilityId: facilityId || null }
                 });
-                showTrackingStatus('??? User facility updated successfully!');
+                showTrackingStatus('✅ User facility updated successfully!');
                 adminRefreshUsers();
             } catch (error) {
                 alert('Failed to update user facility: ' + error.message);
@@ -3167,7 +3167,7 @@
             if (confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
                 try {
                     await apiCall(`/users/${userId}`, { method: 'DELETE' });
-                    showTrackingStatus('??? User deleted successfully');
+                    showTrackingStatus('✅ User deleted successfully');
                     adminRefreshUsers();
                 } catch (error) {
                     alert('Failed to delete user: ' + error.message);
@@ -3198,7 +3198,7 @@
                 adminRefreshFacilities();
                 adminRefreshStats();
 
-                showTrackingStatus('??? Facility added successfully!');
+                showTrackingStatus('✅ Facility added successfully!');
             } catch (error) {
                 alert(error.message);
             } finally {
@@ -3223,7 +3223,7 @@
                 const card = document.createElement('div');
                 card.className = 'admin-card';
                 card.innerHTML = `
-                    <h4>???? ${facility.name}</h4>
+                    <h4>🏢 ${facility.name}</h4>
                     <p><strong>Facility ID:</strong> ${facility.id}</p>
                     <p><strong>Created:</strong> ${new Date(facility.created_at).toLocaleDateString()}</p>
                     <p><strong>Patients:</strong> ${patientsInFacility} active</p>
@@ -3249,7 +3249,7 @@
                     await loadAllData();
                     adminRefreshFacilities();
                     adminRefreshStats();
-                    showTrackingStatus('??? Facility removed successfully!');
+                    showTrackingStatus('✅ Facility removed successfully!');
                 } catch (error) {
                     alert('Failed to remove facility: ' + error.message);
                 }
@@ -3291,7 +3291,7 @@
                 adminRefreshSupplies();
                 adminRefreshStats();
 
-                showTrackingStatus(`??? New supply item "${description}" (AR Code: ${arCode}) added successfully!`);
+                showTrackingStatus(`✅ New supply item "${description}" (AR Code: ${arCode}) added successfully!`);
             } catch (error) {
                 alert(error.message);
             } finally {
@@ -3357,7 +3357,7 @@
                     supply.cost = cost;
                 }
                 
-                showTrackingStatus('??? Supply cost updated successfully!');
+                showTrackingStatus('✅ Supply cost updated successfully!');
             } catch (error) {
                 console.error('Failed to update supply cost:', error);
                 alert('Failed to update cost');
@@ -3379,7 +3379,7 @@
                     appData.supplies = await apiCall('/supplies');
                     adminRefreshSupplies();
                     adminRefreshStats();
-                    showTrackingStatus('??? Supply item removed successfully!');
+                    showTrackingStatus('✅ Supply item removed successfully!');
                 } catch (error) {
                     alert('Failed to remove supply: ' + error.message);
                 }
@@ -3395,31 +3395,31 @@
 
                 container.innerHTML = `
                     <div class="stats-card">
-                        <h4>???? Total Facilities</h4>
+                        <h4>📈 Total Facilities</h4>
                         <div class="value">${stats.totalFacilities || 0}</div>
                         <p>Active healthcare facilities</p>
                     </div>
 
                     <div class="stats-card">
-                        <h4>???? Active Users</h4>
+                        <h4>👥 Active Users</h4>
                         <div class="value">${stats.totalUsers || 0}</div>
                         <p>Approved system users</p>
                     </div>
 
                     <div class="stats-card">
-                        <h4>??? Pending Users</h4>
+                        <h4>⏳ Pending Users</h4>
                         <div class="value">${stats.pendingUsers || 0}</div>
                         <p>Awaiting approval</p>
                     </div>
 
                     <div class="stats-card">
-                        <h4>???? Active Patients</h4>
+                        <h4>🏥 Active Patients</h4>
                         <div class="value">${stats.totalPatients || 0}</div>
                         <p>Patients with tracking sheets</p>
                     </div>
 
                     <div class="stats-card">
-                        <h4>???? Supply Items</h4>
+                        <h4>📦 Supply Items</h4>
                         <div class="value">${stats.totalSupplies || 0}</div>
                         <p>Available supply types</p>
                     </div>
@@ -3432,7 +3432,7 @@
 
         // Enhanced DOMContentLoaded with proper token decoding
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('???? Application starting...');
+            console.log('🚀 Application starting...');
             
             if (authToken) {
                 try {
@@ -3447,13 +3447,13 @@
                         facility_name: tokenPayload.role === 'admin' ? 'All Facilities' : null
                     };
                     
-                    console.log('???? Token decoded, user:', currentUser);
+                    console.log('🔑 Token decoded, user:', currentUser);
                     
                     document.getElementById('loginContainer').style.display = 'none';
                     document.getElementById('mainApp').style.display = 'block';
                     initApp();
                 } catch (error) {
-                    console.error('??? Token decode error:', error);
+                    console.error('❌ Token decode error:', error);
                     logout();
                 }
             }
@@ -3469,8 +3469,8 @@
                 if (e.key === 'Enter') register();
             });
             
-            console.log('??? Application initialization complete');
-            console.log('???? Login Credentials:');
+            console.log('✅ Application initialization complete');
+            console.log('🔑 Login Credentials:');
             console.log('   Admin: admin@system.com / admin123');
             console.log('   User:  user@demo.com / user123');
         }); error:', error);
@@ -3489,12 +3489,12 @@
                 if (e.key === 'Enter') register();
             });
             
-            console.log('??? Application initialization complete');
+            console.log('✅ Application initialization complete');
         });
 
         // Debug utility for testing admin visibility
         function debugAdminVisibility() {
-            console.log('???? Debug: Checking frozen table admin visibility...');
+            console.log('🔍 Debug: Checking frozen table admin visibility...');
             
             const mainApp = document.getElementById('mainApp');
             const adminColumns = document.querySelectorAll('.admin-only-column');
@@ -3507,7 +3507,7 @@
             const frozenHeaderTexts = Array.from(frozenHeaders).map(th => th.textContent.trim());
             const scrollableHeaderTexts = Array.from(scrollableHeaders).map(th => th.textContent.trim());
             
-            console.log('???? COMPREHENSIVE FROZEN TABLE DEBUG:');
+            console.log('🔧 COMPREHENSIVE FROZEN TABLE DEBUG:');
             console.log('=====================================');
             console.log('User Info:', {
                 currentUser: user,
@@ -3560,22 +3560,22 @@
             const isShowingAdmin = frozenHeaderTexts.includes('HCPCS Code');
             
             console.log('=====================================');
-            console.log('???? FINAL STATUS:', {
+            console.log('🎯 FINAL STATUS:', {
                 shouldShowAdminColumns: shouldShowAdmin,
                 isCurrentlyShowingAdminColumns: isShowingAdmin,
                 hasAllWoundDxColumn: frozenHeaderTexts.includes('All Wound Dx'),
                 frozenColumnsWorking: frozenHeaders.length > 0,
                 scrollableColumnsWorking: scrollableHeaders.length > 0,
-                STATUS: shouldShowAdmin === isShowingAdmin ? '??? CORRECT' : '??? MISMATCH'
+                STATUS: shouldShowAdmin === isShowingAdmin ? '✅ CORRECT' : '❌ MISMATCH'
             });
             
             if (shouldShowAdmin !== isShowingAdmin) {
-                console.log('???? ISSUE DETECTED: Admin columns visibility does not match user role!');
-                console.log('???? Try refreshing the patient tracking tab.');
+                console.log('🚨 ISSUE DETECTED: Admin columns visibility does not match user role!');
+                console.log('💡 Try refreshing the patient tracking tab.');
             }
             
             if (!frozenHeaderTexts.includes('All Wound Dx')) {
-                console.log('???? ISSUE: All Wound Dx column is missing!');
+                console.log('🚨 ISSUE: All Wound Dx column is missing!');
             }
         }
 
@@ -3583,10 +3583,10 @@
         function forceRefreshTracking() {
             const patientId = document.getElementById('patientSelect').value;
             if (patientId) {
-                console.log('???? Force refreshing frozen table...');
+                console.log('🔄 Force refreshing frozen table...');
                 loadPatientTracking();
             } else {
-                console.log('??? No patient selected to refresh');
+                console.log('❌ No patient selected to refresh');
             }
         }
 
@@ -3594,15 +3594,15 @@
         window.debugAdminVisibility = debugAdminVisibility;
         window.forceRefreshTracking = forceRefreshTracking;
         
-        console.log('??????? FROZEN COLUMN TABLE with All Wound Dx loaded!');
-        console.log('???? Debug commands:');
+        console.log('🛠️ FROZEN COLUMN TABLE with All Wound Dx loaded!');
+        console.log('💡 Debug commands:');
         console.log('   - debugAdminVisibility() - Check frozen table admin visibility');
         console.log('   - forceRefreshTracking() - Force refresh the tracking table');
-        console.log('???? New Features:');
-        console.log('   - ??? All Wound Dx editable column added');
-        console.log('   - ??? Frozen columns (left side) with horizontal scroll for days');
-        console.log('   - ??? Admin cost columns properly controlled');
-        console.log('???? Admin columns will ONLY show for confirmed admin users');
+        console.log('🆕 New Features:');
+        console.log('   - ✅ All Wound Dx editable column added');
+        console.log('   - ✅ Frozen columns (left side) with horizontal scroll for days');
+        console.log('   - ✅ Admin cost columns properly controlled');
+        console.log('🔐 Admin columns will ONLY show for confirmed admin users');
     </script>
 </body>
 </html>
