@@ -617,6 +617,71 @@ app.post('/api/patients/:id/tracking', authenticateToken, async (req, res) => {
     }
 });
 
+// ==================== WOUND DX ROUTES ====================
+
+// Get wound dx data for patient
+app.get('/api/patients/:id/wound-dx', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Check if user has access to this patient
+        if (req.user.role !== 'admin') {
+            const patientCheck = await pool.query('SELECT facility_id FROM patients WHERE id = $1', [id]);
+            if (patientCheck.rows.length === 0 || patientCheck.rows[0].facility_id !== req.user.facility_id) {
+                return res.status(403).json({ error: 'Access denied' });
+            }
+        }
+
+        const result = await pool.query(`
+            SELECT supply_id, wound_dx
+            FROM patient_supply_dx
+            WHERE patient_id = $1
+        `, [id]);
+
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Get wound dx error:', error);
+        res.status(500).json({ error: 'Failed to fetch wound dx data' });
+    }
+});
+
+// Update wound dx data
+app.post('/api/patients/:id/wound-dx', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { supplyId, woundDx } = req.body;
+
+        // Check if user has access to this patient
+        if (req.user.role !== 'admin') {
+            const patientCheck = await pool.query('SELECT facility_id FROM patients WHERE id = $1', [id]);
+            if (patientCheck.rows.length === 0 || patientCheck.rows[0].facility_id !== req.user.facility_id) {
+                return res.status(403).json({ error: 'Access denied' });
+            }
+        }
+
+        if (woundDx && woundDx.trim()) {
+            // Insert or update wound dx record
+            await pool.query(`
+                INSERT INTO patient_supply_dx (patient_id, supply_id, wound_dx)
+                VALUES ($1, $2, $3)
+                ON CONFLICT (patient_id, supply_id)
+                DO UPDATE SET wound_dx = $3, updated_at = CURRENT_TIMESTAMP
+            `, [id, supplyId, woundDx.trim()]);
+        } else {
+            // Remove wound dx record if empty
+            await pool.query(
+                'DELETE FROM patient_supply_dx WHERE patient_id = $1 AND supply_id = $2',
+                [id, supplyId]
+            );
+        }
+
+        res.json({ message: 'Wound Dx updated successfully' });
+    } catch (error) {
+        console.error('Update wound dx error:', error);
+        res.status(500).json({ error: 'Failed to update wound dx data' });
+    }
+});
+
 // ==================== USER MANAGEMENT ROUTES (ADMIN ONLY) ====================
 
 // Get all users
