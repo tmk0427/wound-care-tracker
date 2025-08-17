@@ -3075,16 +3075,38 @@
                         </div>
                     </div>
                     <h4>Edit Existing Supply Costs</h4>
+                    
+                    <!-- Supply selection controls -->
+                    <div id="supplyControls" class="hidden" style="background: #f7fafc; padding: 20px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #667eea;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+                            <div>
+                                <label style="display: flex; align-items: center; gap: 10px; font-weight: 600; color: #4a5568;">
+                                    <input type="checkbox" id="selectAllSupplies" onchange="toggleSelectAllSupplies()" style="transform: scale(1.2);">
+                                    Select All Supply Items
+                                </label>
+                                <p style="margin: 5px 0 0 0; color: #718096; font-size: 14px;">
+                                    <span id="selectedSupplyCount">0</span> supply item(s) selected
+                                </p>
+                            </div>
+                            <div>
+                                <button class="btn btn-danger" onclick="deleteSelectedSupplies()" id="deleteSelectedSuppliesBtn" disabled>
+                                    🗑️ Delete Selected Supply Items
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <input type="text" id="adminSupplySearch" placeholder="Search supplies..." class="search-box" onkeyup="adminFilterSupplies(this.value)" autocomplete="off">
                     <div class="table-container">
                         <table class="admin-table" id="adminSupplyTable">
                             <thead>
                                 <tr>
+                                    <th style="width: 50px;">Select</th>
                                     <th style="width: 100px;">AR Code</th>
                                     <th style="min-width: 300px;">Item Description</th>
                                     <th style="width: 120px;">HCPCS Code</th>
                                     <th style="width: 100px;">Unit Cost</th>
-                                    <th style="width: 140px;">Actions</th>
+                                    <th style="width: 100px;">Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="adminSupplyTableBody">
@@ -3353,11 +3375,17 @@
             if (!tbody) return;
 
             tbody.innerHTML = '';
+            
+            const controlsSection = document.getElementById('supplyControls');
 
             if (!appData.supplies || appData.supplies.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #718096; padding: 40px;">No supplies in system. Add your first supply above or use batch import.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #718096; padding: 40px;">No supplies in system. Add your first supply above or use batch import.</td></tr>';
+                if (controlsSection) controlsSection.classList.add('hidden');
                 return;
             }
+
+            // Show controls section
+            if (controlsSection) controlsSection.classList.remove('hidden');
 
             appData.supplies.forEach(supply => {
                 const row = document.createElement('tr');
@@ -3365,28 +3393,10 @@
                     row.classList.add('custom-supply');
                 }
                 
-                // Determine which actions are available
-                const isCustomSupply = supply.is_custom;
-                let actionsHtml = '';
-                
-                if (isCustomSupply) {
-                    // Custom supplies can be deleted (permanent removal)
-                    actionsHtml = `
-                        <div style="display: flex; gap: 5px; flex-wrap: wrap;">
-                            <button class="btn btn-danger btn-sm" onclick="adminDeleteSupply(${supply.id})" title="Delete Custom Item (Permanent)">🗑️ Delete</button>
-                        </div>
-                    `;
-                } else {
-                    // System supplies can only be "removed" (deactivated or marked inactive)
-                    actionsHtml = `
-                        <div style="display: flex; gap: 5px; flex-wrap: wrap;">
-                            <button class="btn btn-warning btn-sm" onclick="adminRemoveSupply(${supply.id})" title="Remove System Item">❌ Remove</button>
-                            <span style="color: #718096; font-size: 11px;">System Item</span>
-                        </div>
-                    `;
-                }
-                
                 row.innerHTML = `
+                    <td style="text-align: center;">
+                        <input type="checkbox" class="supply-checkbox" value="${supply.id}" onchange="updateSelectedSupplyCount()" style="transform: scale(1.2);">
+                    </td>
                     <td><strong>${supply.code}</strong>${supply.is_custom ? '<span class="custom-badge">CUSTOM</span>' : ''}</td>
                     <td>${supply.description}</td>
                     <td>
@@ -3399,26 +3409,142 @@
                                style="width: 100%; padding: 4px; border: 1px solid #e2e8f0; border-radius: 4px;"
                                onchange="adminUpdateSupply(${supply.id}, 'cost', this.value)">
                     </td>
-                    <td>${actionsHtml}</td>
+                    <td style="text-align: center;">
+                        <button class="btn btn-danger btn-sm" onclick="adminDeleteSupply(${supply.id})" title="Delete Supply Item Completely">
+                            🗑️
+                        </button>
+                    </td>
                 `;
                 tbody.appendChild(row);
             });
+            
+            updateSelectedSupplyCount();
+        }
+
+        function toggleSelectAllSupplies() {
+            const selectAllCheckbox = document.getElementById('selectAllSupplies');
+            const supplyCheckboxes = document.querySelectorAll('.supply-checkbox');
+            
+            supplyCheckboxes.forEach(checkbox => {
+                checkbox.checked = selectAllCheckbox.checked;
+            });
+            
+            updateSelectedSupplyCount();
+        }
+
+        function updateSelectedSupplyCount() {
+            const selectedCheckboxes = document.querySelectorAll('.supply-checkbox:checked');
+            const selectAllCheckbox = document.getElementById('selectAllSupplies');
+            const selectedCountSpan = document.getElementById('selectedSupplyCount');
+            const deleteSelectedBtn = document.getElementById('deleteSelectedSuppliesBtn');
+            const totalCheckboxes = document.querySelectorAll('.supply-checkbox');
+            
+            if (selectedCountSpan) selectedCountSpan.textContent = selectedCheckboxes.length;
+            if (deleteSelectedBtn) deleteSelectedBtn.disabled = selectedCheckboxes.length === 0;
+            
+            if (selectAllCheckbox) {
+                if (selectedCheckboxes.length === 0) {
+                    selectAllCheckbox.indeterminate = false;
+                    selectAllCheckbox.checked = false;
+                } else if (selectedCheckboxes.length === totalCheckboxes.length) {
+                    selectAllCheckbox.indeterminate = false;
+                    selectAllCheckbox.checked = true;
+                } else {
+                    selectAllCheckbox.indeterminate = true;
+                    selectAllCheckbox.checked = false;
+                }
+            }
+        }
+
+        async function deleteSelectedSupplies() {
+            const selectedCheckboxes = document.querySelectorAll('.supply-checkbox:checked');
+            const selectedIds = Array.from(selectedCheckboxes).map(cb => parseInt(cb.value));
+            
+            if (selectedIds.length === 0) {
+                alert('No supply items selected');
+                return;
+            }
+            
+            const selectedSupplies = appData.supplies.filter(s => selectedIds.includes(s.id));
+            const customCount = selectedSupplies.filter(s => s.is_custom).length;
+            const systemCount = selectedSupplies.filter(s => !s.is_custom).length;
+            
+            let confirmMessage = `Are you sure you want to PERMANENTLY DELETE ${selectedIds.length} selected supply item(s)?\n\n`;
+            if (customCount > 0) confirmMessage += `• ${customCount} custom supply item(s)\n`;
+            if (systemCount > 0) confirmMessage += `• ${systemCount} system supply item(s)\n`;
+            confirmMessage += `\n⚠️ This action cannot be undone and will affect all existing tracking data for these items.`;
+            
+            if (!confirm(confirmMessage)) {
+                return;
+            }
+            
+            try {
+                const deleteBtn = document.getElementById('deleteSelectedSuppliesBtn');
+                deleteBtn.disabled = true;
+                deleteBtn.innerHTML = '<span class="loading"></span>Deleting...';
+                
+                let deletedCount = 0;
+                let failedCount = 0;
+                const errors = [];
+                
+                for (const supplyId of selectedIds) {
+                    try {
+                        await apiCall(`/supplies/${supplyId}`, {
+                            method: 'DELETE'
+                        });
+                        deletedCount++;
+                    } catch (error) {
+                        console.error(`Failed to delete supply ${supplyId}:`, error);
+                        const supply = appData.supplies.find(s => s.id === supplyId);
+                        errors.push(`${supply ? supply.description : `ID ${supplyId}`}: ${error.message}`);
+                        failedCount++;
+                    }
+                }
+                
+                await loadAllData();
+                adminRefreshSupplies();
+                adminRefreshStats();
+                
+                if (failedCount === 0) {
+                    showTrackingStatus(`✅ ${deletedCount} supply item(s) deleted successfully!`);
+                } else {
+                    showTrackingStatus(`⚠️ ${deletedCount} deleted, ${failedCount} failed`, true);
+                    if (errors.length > 0) {
+                        console.error('Delete errors:', errors);
+                        alert('Some items could not be deleted:\n' + errors.slice(0, 3).join('\n') + (errors.length > 3 ? '\n... and more' : ''));
+                    }
+                }
+                
+            } catch (error) {
+                console.error('Bulk delete error:', error);
+                showTrackingStatus(`❌ Failed to delete supply items: ${error.message}`, true);
+            } finally {
+                const deleteBtn = document.getElementById('deleteSelectedSuppliesBtn');
+                deleteBtn.disabled = false;
+                deleteBtn.innerHTML = '🗑️ Delete Selected Supply Items';
+            }
         }
 
         function adminFilterSupplies(searchTerm) {
             const rows = document.querySelectorAll('#adminSupplyTableBody tr');
             const term = searchTerm.toLowerCase().trim();
+            let visibleCount = 0;
 
             rows.forEach(row => {
                 const cells = row.querySelectorAll('td');
                 if (cells.length === 1) return; // Skip empty state row
                 
-                const code = cells[0].textContent.toLowerCase();
-                const description = cells[1].textContent.toLowerCase();
+                // Check AR Code (2nd column, index 1) and Description (3rd column, index 2)
+                const code = cells[1] ? cells[1].textContent.toLowerCase() : '';
+                const description = cells[2] ? cells[2].textContent.toLowerCase() : '';
                 const shouldShow = !term || code.includes(term) || description.includes(term);
                 
                 row.style.display = shouldShow ? '' : 'none';
+                if (shouldShow) visibleCount++;
             });
+            
+            // Update selection counts after filtering
+            updateSelectedSupplyCount();
         }
 
         async function adminUpdateSupply(supplyId, field, value) {
@@ -3445,81 +3571,35 @@
         }
 
         async function adminDeleteSupply(supplyId) {
-            // Find the supply to verify it's custom
+            // Find the supply
             const supply = appData.supplies.find(s => s.id === supplyId);
             if (!supply) {
                 alert('Supply not found');
                 return;
             }
 
-            if (!supply.is_custom) {
-                alert('Only custom supply items can be deleted. System items can be removed (deactivated) instead.');
-                return;
-            }
+            const itemType = supply.is_custom ? 'custom' : 'system';
+            const confirmMessage = `Are you sure you want to PERMANENTLY DELETE this ${itemType} supply item?\n\n` +
+                                 `Item: ${supply.description} (AR Code: ${supply.code})\n\n` +
+                                 `⚠️ This action cannot be undone and will affect all existing tracking data for this item.`;
 
-            if (confirm('Are you sure you want to permanently delete this custom supply item? This action cannot be undone and will affect any existing tracking data.')) {
+            if (confirm(confirmMessage)) {
                 try {
                     await apiCall(`/supplies/${supplyId}`, { method: 'DELETE' });
                     await loadAllData();
                     adminRefreshSupplies();
-                    showTrackingStatus('✅ Custom supply deleted successfully');
+                    adminRefreshStats();
+                    showTrackingStatus(`✅ Supply item "${supply.description}" deleted successfully`);
                 } catch (error) {
                     console.error('Delete supply error:', error);
-                    alert('Failed to delete custom supply: ' + error.message);
-                }
-            }
-        }
-
-        async function adminRemoveSupply(supplyId) {
-            // Find the supply to check if it's custom or system
-            const supply = appData.supplies.find(s => s.id === supplyId);
-            if (!supply) {
-                alert('Supply not found');
-                return;
-            }
-
-            const isCustomSupply = supply.is_custom;
-            const actionText = isCustomSupply ? 'delete this custom supply item' : 'remove this system supply item';
-            const warningText = isCustomSupply 
-                ? 'This action cannot be undone.' 
-                : 'This will hide the item from future tracking but preserve existing data.';
-
-            if (confirm(`Are you sure you want to ${actionText}? ${warningText}`)) {
-                try {
-                    if (isCustomSupply) {
-                        // For custom supplies, use DELETE method
-                        await apiCall(`/supplies/${supplyId}`, { method: 'DELETE' });
-                        showTrackingStatus('✅ Custom supply deleted successfully');
-                    } else {
-                        // For system supplies, try to deactivate/hide them
-                        // If this endpoint doesn't exist, we'll catch the error
-                        try {
-                            await apiCall(`/supplies/${supplyId}/deactivate`, { method: 'POST' });
-                            showTrackingStatus('✅ System supply deactivated successfully');
-                        } catch (deactivateError) {
-                            // If deactivate endpoint doesn't exist, try updating with an inactive flag
-                            try {
-                                await apiCall(`/supplies/${supplyId}`, { 
-                                    method: 'PUT',
-                                    body: { active: false }
-                                });
-                                showTrackingStatus('✅ System supply marked as inactive');
-                            } catch (updateError) {
-                                // If neither works, inform user that system supplies cannot be removed
-                                alert('System supplies cannot be removed. Only custom supplies can be deleted. You can set the cost to 0 to effectively disable this item.');
-                                return;
-                            }
-                        }
-                    }
                     
-                    await loadAllData();
-                    adminRefreshSupplies();
-                } catch (error) {
-                    console.error('Remove supply error:', error);
-                    if (error.message.includes('Custom supply not found')) {
-                        alert('This appears to be a system supply. System supplies cannot be deleted, only custom supplies can be removed.');
+                    // Provide helpful error messages
+                    if (error.message.includes('Custom supply not found') || error.message.includes('not found')) {
+                        alert(`This ${itemType} supply item could not be deleted. It may have already been removed or there may be existing tracking data preventing deletion.`);
+                    } else if (error.message.includes('Cannot delete') || error.message.includes('has tracking data')) {
+                        alert('This supply item cannot be deleted because it has existing tracking data. You may need to remove all tracking entries first, or contact your system administrator.');
                     } else {
-                        alert('Failed to remove supply: ' + error.message);
+                        alert(`Failed to delete supply item: ${error.message}`);
                     }
                 }
             }
