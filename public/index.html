@@ -3077,24 +3077,15 @@
             document.getElementById('batchSupplyModal').style.display = 'flex';
             setupBatchSupplyDragAndDrop();
             
-            // Pre-populate with the user's system supply data - FIXED FORMAT
-            const systemSupplyData = 'AR Code\tItem Description\tHCPCS Code\tUnit Cost\n272\tMed/Surgical Supplies\tB4149\t0.00\n400\tHME filter holder for trach or vent\tA7507\t3.49\n401\tHME housing & adhesive\tA7509\t1.97\n402\tHMES/trach valve adhesive disk\tA7506\t0.45\n403\tHMES filter holder or cap for tracheostoma\tA7503\t15.85\n404\tHMES filter\tA7504\t0.95\n405\tHMES/trach valve housing\tA7505\t6.55\n406\tHME housing w/adhesive filter\tA7508\t4.01\n407\tLubricant per oz to insert trach\tA4402\t1.90\n408\tPiston irrigation syringe irrigation trach ostomy, uro\tA4322\t4.16\n409\tSterile saline 10ml and 15ml bullets\tA4216\t0.62\n410\tSterile saline 100ml, 1000ml, 120ml, 250ml and 500ml\tA4217\t4.38\n411\tClosed suction catheter for trach\tA4605\t22.92\n412\tOpen suction catheter for trach\tA4624\t3.69\n413\tTracheal suction catheter closed system (yankauers/ballards)\tA4605\t22.92\n414\tTrach';
-
-            // Auto-switch to paste method and populate the data
+            // Auto-switch to paste method with helpful message
             setTimeout(function() {
                 showBatchImportMethod('paste', document.querySelector('.auth-tab:last-child'));
-                document.getElementById('batchSupplyPasteArea').value = systemSupplyData;
-                
-                // Add helper message
-                const pasteArea = document.getElementById('batchSupplyPasteArea');
-                pasteArea.style.border = '2px solid #38a169';
-                pasteArea.style.backgroundColor = '#f0fff4';
                 
                 // Show a helpful message
                 const resultsDiv = document.getElementById('batchSupplyResults');
-                resultsDiv.innerHTML = '<div style="background: #f0fff4; padding: 15px; border-radius: 8px; border-left: 4px solid #38a169; margin-bottom: 15px;"><h4 style="color: #276749; margin-bottom: 10px;">✅ Fixed System Supply Data is Ready!</h4><p style="color: #276749; margin: 0;"><strong>92 medical supply items</strong> with corrected format and HCPCS codes.<br>Click <strong>"📊 Parse Data"</strong> below, then <strong>"Import Supply Items"</strong> to add them to your system.</p></div>';
+                resultsDiv.innerHTML = '<div style="background: #f0f4ff; padding: 15px; border-radius: 8px; border-left: 4px solid #667eea; margin-bottom: 15px;"><h4 style="color: #4f46e5; margin-bottom: 10px;">📦 Ready for Supply Import</h4><p style="color: #4f46e5; margin: 0;">You can import supply items by:<br>• <strong>Copy & Paste</strong> from Excel/Google Sheets<br>• <strong>Upload Excel file</strong> using the Excel Upload tab<br>• <strong>Download template</strong> to see the required format</p></div>';
                 resultsDiv.style.display = 'block';
-                resultsDiv.className = 'import-results success';
+                resultsDiv.className = 'import-results mixed';
             }, 100);
         }
 
