@@ -3621,6 +3621,155 @@
         function showBatchSupplyModal() {
             document.getElementById('batchSupplyModal').style.display = 'flex';
             setupBatchSupplyDragAndDrop();
+            
+            // Pre-populate with the user's system supply data for easy import
+            const systemSupplyData = `AR Code	Description	HCPCS Code	Amount
+272	Med/Surgical Supplies	B4149	0.00
+400	HME filter holder for trach or vent	A7507	3.49
+401	HME housing & adhesive	A7509	1.97
+402	HMES/trach valve adhesive disk	A7506	0.45
+403	HMES filter holder or cap for tracheostoma	A7503	15.85
+404	HMES filter	A7504	0.95
+405	HMES/trach valve housing	A7505	6.55
+406	HME housing w/adhesive filter	A7508	4.01
+407	Lubricant per oz to insert trach	A4402	1.90
+408	Piston irrigation syringe irrigation trach ostomy, uro	A4322	4.16
+409	Sterile saline 10ml and 15ml bullets	A4216	0.62
+410	Sterile saline 100ml, 1000ml, 120ml, 250ml and 500ml	A4217	4.38
+411	Closed suction catheter for trach	A4605	22.92
+412	Open suction catheter for trach	A4624	3.69
+413	Tracheal suction catheter closed system (yankauers/ballards)	A4605	22.92
+414	Tracheostoma filter	A4481	0.50
+415	Tracheostomy inner cannula	A4623	8.74
+416	Trach kit new trach	A4625	9.68
+417	Trach mask	A7525	2.79
+418	Trach/laryn tube non-cuffed	A7520	66.33
+419	Tracheostoma stent/stud/button	A7524	108.17
+420	Trach ties	A7526	4.74
+421	Trach/laryn tube cuffed	A7521	65.73
+422	Trach/laryn tube plug/stop	A7527	5.00
+423	Trach kit established trach	A4629	6.58
+424	Tracheostomy speaking valve	L8501	175.90
+425	Yankauer oropharyngeal	A4628	5.23
+600	Sterile Gauze sponge 2x2 up to 4x4, EACH 2 in package	A6251	2.78
+601	Sterile gauze sponge greater than 4x4, each	A6252	4.55
+602	ABD dressing non bordered 16 sq inches	A6251	2.78
+603	ABD dressing non bordered greater than 48 sq inches	A6253	8.85
+604	ABD dressing non bordered 48 sq inches	A6252	4.55
+605	ABD dressing bordered up to 16 sq inches	A6254	1.67
+606	ABD dressing bordered 18 sq inches or greater	A6255	4.25
+607	Adhesive remover wipes	A4456	0.34
+608	Alginate/Fiber gelling sterile 4x4 each	A6196	10.28
+609	Alginate fiber gelling sterile dressing up to 6x6 each	A6197	22.98
+610	AMB antimicrobial drain sponges	A6222	2.98
+611	Any tape each 18" (framed 4x4) or steri strips	A4452	0.53
+612	Irrigation tubing set for continuous bladder irrigation tubing used with 3 way indwelling foley cath	A4355	12.46
+613	Border gauze island dressing medium 6x6 incision & 4x10 each	A6220	3.62
+614	Border gauze island dressing small 2x2, 3x3, 4x4 each	A6219	1.33
+615	calcium alginate rope per 6"	A6199	7.37
+616	cath foley 2 way all	A4344	19.01
+617	Cah foley 3 way cont' irrigation	A4346	23.26
+618	Intermittent urinary cath with insertion supplies	A4353	9.77
+619	Cath insert tray w/drain bag	A4354	16.50
+620	Cath insert tray without drain bag	A4310	10.79
+621	Coflex compression bandage second layer per yard	A6452	8.24
+622	Coflex zinc impregnated bandage per yard	A6456	1.75
+623	Collagen dressing 16 inches	A6021	29.38
+624	Collagen dressing more than 48 inches	A6023	265.90
+625	Collagen gel or paste per gm	A6011	3.19
+626	Collagen powder per 1 gm	A6010	43.27
+627	Colostomy bag closed no barrier	A5052	2.08
+628	Composite bordered 16 sq inches or less (2x2, 4x4) each	A6203	4.71
+629	Composite dressing greater than 16 sq inches (6x6)	A6204	8.69
+630	Compression bandage 3" width per yard	A6448	1.61
+631	Condom catheter	A4326	15.07
+632	Drain bag	A4358	9.07
+633	Drain bag bedside	A4357	11.53
+634	Foam non bordered dressing medium 6x6, each Mepilex, Allevyn, xeroform	A6210	27.84
+635	Foam non bordered large dressing more than 48 sq inches large Mepilex, Allevyn, Xeroform, Optifoam	A6211	41.04
+636	Gauze stretch per yard>3"<5" Kerlix	A6449	2.45
+637	Gradient wrap (Circaid/Sigvaris) each	A6545	119.03
+638	High compression bandage per yard	A6452	8.24
+639	Honey gel per oz	A6248	22.70
+640	Hydrocolloid dressing pad 16 sq inches non bordered	A6234	9.15
+641	Hydrocolloid dressing large 6x6 non bordered	A6235	23.50
+642	Hydrocolloid bordered dressing 6x6 each	A6238	31.86
+643	Hydrocolloid bordered dressing 4x4 each	A6237	11.05
+644	Hydrogel dressing pad 4x4 each	A6242	8.46
+645	Hydrofiber rope per 6"	A6199	7.37
+646	Hydrogel per oz	A6248	22.70
+647	Hydrogel dressing greater than 4x4	A6243	17.22
+648	Saline impregnated gauze sponge >16 sq inches	A6252	4.55
+649	I0doform packing strip per yard	A6266	2.67
+650	Iodosorb gel (antimicrobial) per oz	A6248	22.70
+651	Irrigation syringe/bulb/piston	A4322	4.16
+652	Irrigation tray any purpose	A4320	6.59
+653	Kerlex roll gauze 3" to 5" per yard 4.1 yrd roll = 4 units	A6449	2.45
+654	Light compression elastic, woven bandage 3 to 5" w(ACE) per yard	A6449	2.45
+655	Male cath any type	A4326	15.07
+656	Manuka honey 4x4 each	A6242	8.46
+657	Negative pressure wound therapy dressing set	A6550	30.52
+658	Ostomy adhesive per oz	A4364	3.49
+659	Ostomy belt	0	9.41
+660	Ostomy face plate	A4361	22.55
+661	Ostomy pouch w/faceplate	A4375	23.99
+662	Ostomy skin barrier powder per oz	A4371	5.10
+663	Ostomy skin barrier solid	A4362	4.12
+664	Ostomy skin barrier w/flange	A4373	8.76
+665	Padding bandage per yard use with coflex	A6441	0.95
+666	Perianal fecal collection pouch	A4330	10.01
+667	Petrolatum dressing 5x9 xeroform	A6223	3.39
+668	Petro impregnated gauze sponge 4x4	A6222	2.98
+669	Piston irrigation syringe	A4322	4.16
+670	Plain 4x4 alginate gelling dressing each	A6196	10.28
+671	Puracol dressing 4x4	A6203	4.71
+672	Sterile saline 10ml and 15ml bullets	0	0.62
+673	Sterile saline 100ml, 120ml, 250ml, 500ml and 1000ml	A4217	4.38
+674	Silver 4x4 alginate gelling dressing each	A6196	10.28
+675	Skin prep wipe each	A5120	0.34
+676	Split gauze each 2 per package	A6251	2.78
+677	Steri strips per 18 inches	A4452	0.53
+678	Super absorbent sterile dressing	A6251	2.78
+679	Transparent film Tegaderm/opsite 16" or less	A6257	2.14
+680	Tegaderm opsite composite film 48"	A6204	8.69
+681	Tubular dressing non elastic any width per yard	A6457	1.59
+682	Wound drain collector pouch	A6154	20.09
+683	Xero/Optifoam/Mepilex 48"	A6211	41.04
+OUT-MD SUPP	Medical Supplies Outlier	0	0.00
+684	Mesalt cleansing dressing with 20% sodium chloride 1.1 yr	A6266	2.67
+685	Plurogel burn and wound dressing per oz	A4649	22.70
+686	Sorbex wound dressing 6x9 more than 48 sq in non adherent pansement	A6253	8.85
+687	Coban 3" wide per yard	A6452	8.24
+688	Black granufoam more than 48 sq inches	A6211	41.04
+689	Hydrofera Blue 4x4 or less	A6209	10.20
+690	Hydrofera Blue greater than 48 sq inches 6x6 8x8	A6211	41.04
+691	oil emulsion impregnated gauze	A6222	2.98
+692	Optiview transparent dressing	A6259	15.28`;
+
+            // Auto-switch to paste method and populate the data
+            setTimeout(() => {
+                showBatchImportMethod('paste', document.querySelector('.auth-tab:last-child'));
+                document.getElementById('batchSupplyPasteArea').value = systemSupplyData;
+                
+                // Add helper message
+                const pasteArea = document.getElementById('batchSupplyPasteArea');
+                pasteArea.style.border = '2px solid #38a169';
+                pasteArea.style.backgroundColor = '#f0fff4';
+                
+                // Show a helpful message
+                const resultsDiv = document.getElementById('batchSupplyResults');
+                resultsDiv.innerHTML = `
+                    <div style="background: #f0fff4; padding: 15px; border-radius: 8px; border-left: 4px solid #38a169; margin-bottom: 15px;">
+                        <h4 style="color: #276749; margin-bottom: 10px;">✅ Your System Supply Data is Ready!</h4>
+                        <p style="color: #276749; margin: 0;">
+                            <strong>92 medical supply items</strong> loaded and ready to import as system supplies.<br>
+                            Click <strong>"📊 Parse Data"</strong> below, then <strong>"Import Supply Items"</strong> to add them to your system.
+                        </p>
+                    </div>
+                `;
+                resultsDiv.style.display = 'block';
+                resultsDiv.className = 'import-results success';
+            }, 100);
         }
 
         function closeBatchSupplyModal() {
