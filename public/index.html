@@ -1460,44 +1460,52 @@
                     </div>
                 </div>
 
-                <div style="position: relative; max-height: 70vh; border: 1px solid #e2e8f0; border-radius: 10px; background: white; overflow: hidden;">
-                    <!-- Wrapper for synchronized vertical scrolling -->
-                    <div style="max-height: 70vh; overflow-y: auto;" id="tableScrollWrapper">
-                        <!-- Frozen columns table -->
-                        <div style="position: absolute; left: 0; top: 0; z-index: 20; background: white; width: ${frozenWidth}px; border-right: 2px solid #667eea;">
-                            <table style="width: 100%; border-collapse: collapse;">
-                                <thead style="position: sticky; top: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; z-index: 30;">
-                                    <tr>
-                                        <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 80px; text-align: left; height: 45px; box-sizing: border-box;">AR Code</th>
-                                        <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 250px; text-align: left; height: 45px; box-sizing: border-box;">Item Description</th>
-                                        <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 200px; text-align: left; background: #4f46e5; height: 45px; box-sizing: border-box;">All Wound Dx</th>
+                <div style="border: 1px solid #e2e8f0; border-radius: 10px; background: white; overflow: hidden; max-height: 70vh;">
+                    <div style="overflow: auto; max-height: 70vh;">
+                        <table style="border-collapse: collapse; width: max-content; min-width: 100%;">
+                            <thead style="position: sticky; top: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; z-index: 10;">
+                                <tr>
+                                    <th style="position: sticky; left: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 80px; text-align: left; z-index: 20;">AR Code</th>
+                                    <th style="position: sticky; left: 80px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 250px; text-align: left; z-index: 20;">Item Description</th>
+                                    <th style="position: sticky; left: 330px; background: linear-gradient(135deg, #4f46e5 0%, #5b21b6 100%); padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 200px; text-align: left; z-index: 20;">All Wound Dx</th>`;
             `;
 
+            // Calculate sticky positions for admin columns
+            let currentStickyPos = 530; // After AR Code (80) + Description (250) + Wound Dx (200)
+            
             // Add admin columns to frozen section
             if (finalAdminStatus) {
                 html += `
-                                    <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 100px; text-align: left; height: 45px; box-sizing: border-box;">HCPCS Code</th>
-                                    <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 90px; text-align: left; height: 45px; box-sizing: border-box;">Unit Cost</th>
+                                    <th style="position: sticky; left: ${currentStickyPos}px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 100px; text-align: left; z-index: 20;">HCPCS Code</th>
+                                    <th style="position: sticky; left: ${currentStickyPos + 100}px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 90px; text-align: left; z-index: 20;">Unit Cost</th>
                 `;
+                currentStickyPos += 190; // 100 + 90
             }
 
             html += `
-                                    <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 90px; text-align: left; height: 45px; box-sizing: border-box;">Total Units</th>
+                                    <th style="position: sticky; left: ${currentStickyPos}px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 90px; text-align: left; z-index: 20;">Total Units</th>
             `;
+            currentStickyPos += 90;
 
             if (finalAdminStatus) {
                 html += `
-                                    <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 100px; text-align: left; height: 45px; box-sizing: border-box;">Total Cost</th>
+                                    <th style="position: sticky; left: ${currentStickyPos}px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 100px; text-align: left; z-index: 20;">Total Cost</th>
                 `;
+                currentStickyPos += 100;
+            }
+
+            // Add day headers (these will scroll horizontally)
+            for (let day = 1; day <= daysInMonth; day++) {
+                html += `<th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 60px; text-align: center; min-width: 60px;">Day ${day}</th>`;
             }
 
             html += `
                                 </tr>
                             </thead>
-                            <tbody id="frozenTableBody">
+                            <tbody id="singleTableBody">
             `;
 
-            // Build frozen column rows
+            // Build table rows with sticky columns and day columns in one table
             appData.supplies.forEach((supply, index) => {
                 let supplyCost = 0;
                 if (finalAdminStatus && supply.cost !== null && supply.cost !== undefined) {
@@ -1517,6 +1525,9 @@
                 const rowBg = isCustomSupply ? '#f0f4ff' : (index % 2 === 0 ? 'white' : '#fafafa');
                 const woundDx = woundDxData[supply.id] || '';
 
+                // Calculate sticky positions for this row
+                let currentStickyPos = 530;
+
                 html += `
                     <tr class="supply-row ${isCustomSupply ? 'custom-supply' : ''}" 
                         data-description="${supply.description.toLowerCase()}" 
@@ -1524,86 +1535,50 @@
                         data-supply-id="${supply.id}"
                         style="background: ${rowBg};">
                         
-                        <td style="padding: 15px 12px; border: 1px solid #e2e8f0; width: 80px; line-height: 20px; vertical-align: middle;">
+                        <td style="position: sticky; left: 0; background: ${rowBg}; padding: 12px; border: 1px solid #e2e8f0; width: 80px; z-index: 10;">
                             <strong>${supply.code}</strong>
                             ${isCustomSupply ? '<span style="color: #667eea; font-size: 11px; margin-left: 5px;">CUSTOM</span>' : ''}
                         </td>
                         
-                        <td style="padding: 15px 12px; border: 1px solid #e2e8f0; width: 250px; line-height: 20px; vertical-align: middle;">${supply.description}</td>
+                        <td style="position: sticky; left: 80px; background: ${rowBg}; padding: 12px; border: 1px solid #e2e8f0; width: 250px; z-index: 10;">${supply.description}</td>
                         
-                        <td style="padding: 11px 12px; border: 1px solid #e2e8f0; width: 200px; background: #f8faff; vertical-align: middle;">
+                        <td style="position: sticky; left: 330px; background: #f8faff; padding: 12px; border: 1px solid #e2e8f0; width: 200px; z-index: 10;">
                             <input type="text" value="${woundDx}" placeholder="Enter wound diagnosis..."
-                                   style="width: 100%; padding: 4px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 14px; background: white; box-sizing: border-box; line-height: normal;"
+                                   style="width: 100%; padding: 4px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 14px; background: white; box-sizing: border-box;"
                                    onchange="updateWoundDx(${patient.id}, ${supply.id}, this.value, this)">
                         </td>
                 `;
 
                 if (finalAdminStatus) {
                     html += `
-                        <td style="padding: 15px 12px; border: 1px solid #e2e8f0; width: 100px; line-height: 20px; vertical-align: middle;">${supply.hcpcs || ''}</td>
-                        <td style="padding: 15px 12px; border: 1px solid #e2e8f0; width: 90px; color: #38a169; font-weight: 600; line-height: 20px; vertical-align: middle;">${supplyCost.toFixed(2)}</td>
+                        <td style="position: sticky; left: ${currentStickyPos}px; background: ${rowBg}; padding: 12px; border: 1px solid #e2e8f0; width: 100px; z-index: 10;">${supply.hcpcs || ''}</td>
+                        <td style="position: sticky; left: ${currentStickyPos + 100}px; background: ${rowBg}; padding: 12px; border: 1px solid #e2e8f0; width: 90px; color: #38a169; font-weight: 600; z-index: 10;">${supplyCost.toFixed(2)}</td>
                     `;
+                    currentStickyPos += 190;
                 }
 
                 html += `
-                        <td style="padding: 15px 12px; border: 1px solid #e2e8f0; width: 90px; line-height: 20px; vertical-align: middle;" class="total-units-${supply.id}">
+                        <td style="position: sticky; left: ${currentStickyPos}px; background: ${rowBg}; padding: 12px; border: 1px solid #e2e8f0; width: 90px; z-index: 10;" class="total-units-${supply.id}">
                             <strong>${totalUnits}</strong>
                         </td>
                 `;
+                currentStickyPos += 90;
 
                 if (finalAdminStatus) {
                     html += `
-                        <td style="padding: 15px 12px; border: 1px solid #e2e8f0; width: 100px; color: #38a169; font-weight: 600; line-height: 20px; vertical-align: middle;" class="total-cost-${supply.id}">
+                        <td style="position: sticky; left: ${currentStickyPos}px; background: ${rowBg}; padding: 12px; border: 1px solid #e2e8f0; width: 100px; color: #38a169; font-weight: 600; z-index: 10;" class="total-cost-${supply.id}">
                             <strong>${totalCost.toFixed(2)}</strong>
                         </td>
                     `;
                 }
 
-                html += '</tr>';
-            });
-
-            html += `
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <!-- Scrollable days table -->
-                    <div style="margin-left: ${frozenWidth}px; overflow-x: auto;">
-                        <table style="width: ${scrollableWidth}px; border-collapse: collapse;">
-                            <thead style="position: sticky; top: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; z-index: 10;">
-                                <tr>
-            `;
-
-            // Add day headers
-            for (let day = 1; day <= daysInMonth; day++) {
-                html += `<th style="padding: 8px; border: 1px solid rgba(255,255,255,0.2); width: 60px; text-align: center; height: 45px; box-sizing: border-box;">Day ${day}</th>`;
-            }
-
-            html += `
-                                </tr>
-                            </thead>
-                            <tbody id="scrollableTableBody">
-            `;
-
-            // Build scrollable day columns
-            appData.supplies.forEach((supply, index) => {
-                const trackingInfo = trackingBySupply[supply.code];
-                const isCustomSupply = supply.is_custom;
-                const rowBg = isCustomSupply ? '#f0f4ff' : (index % 2 === 0 ? 'white' : '#fafafa');
-
-                html += `
-                    <tr class="supply-row ${isCustomSupply ? 'custom-supply' : ''}" 
-                        data-supply-id="${supply.id}"
-                        style="background: ${rowBg};">
-                `;
-
-                // Add quantity input cells for each day
+                // Add day quantity columns (these scroll horizontally)
                 for (let day = 1; day <= daysInMonth; day++) {
                     const value = (trackingInfo?.days[day]) || '';
                     html += `
-                        <td style="padding: 11px 6px; border: 1px solid #e2e8f0; text-align: center; width: 60px; vertical-align: middle;">
+                        <td style="padding: 12px 6px; border: 1px solid #e2e8f0; text-align: center; width: 60px; min-width: 60px;">
                             <input type="number" min="0" 
-                                   style="width: 50px; padding: 4px; border: 1px solid #e2e8f0; border-radius: 4px; text-align: center; font-size: 14px; box-sizing: border-box; line-height: normal;" 
+                                   style="width: 50px; padding: 4px; border: 1px solid #e2e8f0; border-radius: 4px; text-align: center; font-size: 14px; box-sizing: border-box;" 
                                    value="${value}" placeholder="0"
                                    onchange="updateQuantity(${patient.id}, ${supply.id}, ${day}, this.value, this)">
                         </td>
@@ -1618,11 +1593,10 @@
                         </table>
                     </div>
                 </div>
-            </div>
                 
                 <div style="margin-top: 10px; padding: 10px; background: ${finalAdminStatus ? '#f0fff4' : '#f0f4ff'}; border-radius: 5px; font-size: 12px; color: #4a5568;">
                     <strong>🔍 Access Level:</strong> ${finalAdminStatus ? '✅ ADMIN - Full access with cost information' : '👤 USER - Supply tracking only'} | 
-                    <strong>New Feature:</strong> ✨ All Wound Dx column added with synchronized scrolling |
+                    <strong>New Feature:</strong> ✨ Single table with sticky columns for perfect alignment |
                     <strong>Days:</strong> ${daysInMonth} days in ${monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                 </div>
             `;
@@ -1633,26 +1607,21 @@
         }
 
         function filterSupplies(searchTerm) {
-            // Get rows from both frozen and scrollable tables
-            const frozenRows = document.querySelectorAll('#frozenTableBody .supply-row');
-            const scrollableRows = document.querySelectorAll('#scrollableTableBody .supply-row');
+            // Get rows from the single table
+            const tableRows = document.querySelectorAll('#singleTableBody .supply-row');
             const term = searchTerm.toLowerCase().trim();
             let visibleCount = 0;
 
-            // Filter both tables simultaneously
-            frozenRows.forEach((frozenRow, index) => {
-                const scrollableRow = scrollableRows[index];
-                if (!scrollableRow) return;
-
-                const description = frozenRow.getAttribute('data-description');
-                const code = frozenRow.getAttribute('data-code');
+            // Filter table rows
+            tableRows.forEach((row) => {
+                const description = row.getAttribute('data-description');
+                const code = row.getAttribute('data-code');
                 const shouldShow = !term || 
                     (description && description.includes(term)) || 
                     (code && code.toLowerCase().includes(term));
                 
-                // Apply filter to both tables
-                frozenRow.style.display = shouldShow ? '' : 'none';
-                scrollableRow.style.display = shouldShow ? '' : 'none';
+                // Apply filter to the row
+                row.style.display = shouldShow ? '' : 'none';
                 
                 if (shouldShow) visibleCount++;
             });
@@ -1751,31 +1720,24 @@
             }
         }
 
-        // FIXED: Updated recalculateTotals to work with separate frozen and scrollable tables
+        // FIXED: Updated recalculateTotals to work with single table structure
         function recalculateTotals(supplyId) {
             const supply = appData.supplies.find(s => s.id === supplyId);
             if (!supply) return;
 
-            // Get all quantity inputs from the scrollable table (day columns) for this supply
-            const scrollableRows = document.querySelectorAll('#scrollableTableBody .supply-row');
-            let targetScrollableRow = null;
-            
-            scrollableRows.forEach(row => {
-                if (row.getAttribute('data-supply-id') == supplyId) {
-                    targetScrollableRow = row;
-                }
-            });
+            // Get the supply row from the single table
+            const supplyRow = document.querySelector(`#singleTableBody .supply-row[data-supply-id="${supplyId}"]`);
+            if (!supplyRow) return;
 
-            if (!targetScrollableRow) return;
-
-            const inputs = targetScrollableRow.querySelectorAll('input[type="number"]');
+            // Get all quantity inputs from the day columns in this row
+            const inputs = supplyRow.querySelectorAll('input[type="number"]');
             let totalUnits = 0;
             
             inputs.forEach(input => {
                 totalUnits += parseInt(input.value) || 0;
             });
 
-            // Update total units in frozen table
+            // Update total units in the same row
             const totalUnitsCell = document.querySelector(`.total-units-${supplyId}`);
             if (totalUnitsCell) {
                 totalUnitsCell.innerHTML = `<strong>${totalUnits}</strong>`;
