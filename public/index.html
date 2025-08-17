@@ -1529,9 +1529,9 @@
                         
                         <td style="padding: 12px; border: 1px solid #e2e8f0; width: 250px;">${supply.description}</td>
                         
-                        <td style="padding: 6px; border: 1px solid #e2e8f0; width: 200px; background: #f8faff;">
+                        <td style="padding: 12px; border: 1px solid #e2e8f0; width: 200px; background: #f8faff; vertical-align: middle;">
                             <input type="text" value="${woundDx}" placeholder="Enter wound diagnosis..."
-                                   style="width: 100%; padding: 4px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 14px; background: white;"
+                                   style="width: 100%; padding: 4px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 14px; background: white; box-sizing: border-box;"
                                    onchange="updateWoundDx(${patient.id}, ${supply.id}, this.value, this)">
                         </td>
                 `;
