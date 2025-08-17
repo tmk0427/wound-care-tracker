@@ -1461,14 +1461,16 @@
                 </div>
 
                 <div style="position: relative; max-height: 70vh; border: 1px solid #e2e8f0; border-radius: 10px; background: white; overflow: hidden;">
-                    <!-- Frozen columns table -->
-                    <div style="position: absolute; left: 0; top: 0; z-index: 20; background: white; width: ${frozenWidth}px; height: 100%; overflow-y: auto; border-right: 2px solid #667eea;">
-                        <table style="width: 100%; border-collapse: collapse;">
-                            <thead style="position: sticky; top: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; z-index: 30;">
-                                <tr>
-                                    <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 80px; text-align: left; height: 45px; box-sizing: border-box;">AR Code</th>
-                                    <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 250px; text-align: left; height: 45px; box-sizing: border-box;">Item Description</th>
-                                    <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 200px; text-align: left; background: #4f46e5; height: 45px; box-sizing: border-box;">All Wound Dx</th>
+                    <!-- Wrapper for synchronized vertical scrolling -->
+                    <div style="max-height: 70vh; overflow-y: auto;" id="tableScrollWrapper">
+                        <!-- Frozen columns table -->
+                        <div style="position: absolute; left: 0; top: 0; z-index: 20; background: white; width: ${frozenWidth}px; border-right: 2px solid #667eea;">
+                            <table style="width: 100%; border-collapse: collapse;">
+                                <thead style="position: sticky; top: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; z-index: 30;">
+                                    <tr>
+                                        <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 80px; text-align: left; height: 45px; box-sizing: border-box;">AR Code</th>
+                                        <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 250px; text-align: left; height: 45px; box-sizing: border-box;">Item Description</th>
+                                        <th style="padding: 12px; border: 1px solid rgba(255,255,255,0.2); width: 200px; text-align: left; background: #4f46e5; height: 45px; box-sizing: border-box;">All Wound Dx</th>
             `;
 
             // Add admin columns to frozen section
@@ -1522,36 +1524,36 @@
                         data-supply-id="${supply.id}"
                         style="background: ${rowBg};">
                         
-                        <td style="padding: 12px; border: 1px solid #e2e8f0; width: 80px; height: 53px; box-sizing: border-box; vertical-align: middle;">
+                        <td style="padding: 15px 12px; border: 1px solid #e2e8f0; width: 80px; line-height: 20px; vertical-align: middle;">
                             <strong>${supply.code}</strong>
                             ${isCustomSupply ? '<span style="color: #667eea; font-size: 11px; margin-left: 5px;">CUSTOM</span>' : ''}
                         </td>
                         
-                        <td style="padding: 12px; border: 1px solid #e2e8f0; width: 250px; height: 53px; box-sizing: border-box; vertical-align: middle;">${supply.description}</td>
+                        <td style="padding: 15px 12px; border: 1px solid #e2e8f0; width: 250px; line-height: 20px; vertical-align: middle;">${supply.description}</td>
                         
-                        <td style="padding: 12px; border: 1px solid #e2e8f0; width: 200px; background: #f8faff; height: 53px; box-sizing: border-box; vertical-align: middle;">
+                        <td style="padding: 11px 12px; border: 1px solid #e2e8f0; width: 200px; background: #f8faff; vertical-align: middle;">
                             <input type="text" value="${woundDx}" placeholder="Enter wound diagnosis..."
-                                   style="width: 100%; padding: 4px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 14px; background: white; box-sizing: border-box;"
+                                   style="width: 100%; padding: 4px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 14px; background: white; box-sizing: border-box; line-height: normal;"
                                    onchange="updateWoundDx(${patient.id}, ${supply.id}, this.value, this)">
                         </td>
                 `;
 
                 if (finalAdminStatus) {
                     html += `
-                        <td style="padding: 12px; border: 1px solid #e2e8f0; width: 100px; height: 53px; box-sizing: border-box; vertical-align: middle;">${supply.hcpcs || ''}</td>
-                        <td style="padding: 12px; border: 1px solid #e2e8f0; width: 90px; color: #38a169; font-weight: 600; height: 53px; box-sizing: border-box; vertical-align: middle;">${supplyCost.toFixed(2)}</td>
+                        <td style="padding: 15px 12px; border: 1px solid #e2e8f0; width: 100px; line-height: 20px; vertical-align: middle;">${supply.hcpcs || ''}</td>
+                        <td style="padding: 15px 12px; border: 1px solid #e2e8f0; width: 90px; color: #38a169; font-weight: 600; line-height: 20px; vertical-align: middle;">${supplyCost.toFixed(2)}</td>
                     `;
                 }
 
                 html += `
-                        <td style="padding: 12px; border: 1px solid #e2e8f0; width: 90px; height: 53px; box-sizing: border-box; vertical-align: middle;" class="total-units-${supply.id}">
+                        <td style="padding: 15px 12px; border: 1px solid #e2e8f0; width: 90px; line-height: 20px; vertical-align: middle;" class="total-units-${supply.id}">
                             <strong>${totalUnits}</strong>
                         </td>
                 `;
 
                 if (finalAdminStatus) {
                     html += `
-                        <td style="padding: 12px; border: 1px solid #e2e8f0; width: 100px; color: #38a169; font-weight: 600; height: 53px; box-sizing: border-box; vertical-align: middle;" class="total-cost-${supply.id}">
+                        <td style="padding: 15px 12px; border: 1px solid #e2e8f0; width: 100px; color: #38a169; font-weight: 600; line-height: 20px; vertical-align: middle;" class="total-cost-${supply.id}">
                             <strong>${totalCost.toFixed(2)}</strong>
                         </td>
                     `;
@@ -1566,7 +1568,7 @@
                     </div>
 
                     <!-- Scrollable days table -->
-                    <div style="margin-left: ${frozenWidth}px; overflow-x: auto; max-height: 70vh;">
+                    <div style="margin-left: ${frozenWidth}px; overflow-x: auto;">
                         <table style="width: ${scrollableWidth}px; border-collapse: collapse;">
                             <thead style="position: sticky; top: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; z-index: 10;">
                                 <tr>
@@ -1599,9 +1601,9 @@
                 for (let day = 1; day <= daysInMonth; day++) {
                     const value = (trackingInfo?.days[day]) || '';
                     html += `
-                        <td style="padding: 12px 6px; border: 1px solid #e2e8f0; text-align: center; width: 60px; height: 53px; box-sizing: border-box; vertical-align: middle;">
+                        <td style="padding: 11px 6px; border: 1px solid #e2e8f0; text-align: center; width: 60px; vertical-align: middle;">
                             <input type="number" min="0" 
-                                   style="width: 50px; padding: 4px; border: 1px solid #e2e8f0; border-radius: 4px; text-align: center; font-size: 14px; box-sizing: border-box;" 
+                                   style="width: 50px; padding: 4px; border: 1px solid #e2e8f0; border-radius: 4px; text-align: center; font-size: 14px; box-sizing: border-box; line-height: normal;" 
                                    value="${value}" placeholder="0"
                                    onchange="updateQuantity(${patient.id}, ${supply.id}, ${day}, this.value, this)">
                         </td>
@@ -1616,10 +1618,11 @@
                         </table>
                     </div>
                 </div>
+            </div>
                 
                 <div style="margin-top: 10px; padding: 10px; background: ${finalAdminStatus ? '#f0fff4' : '#f0f4ff'}; border-radius: 5px; font-size: 12px; color: #4a5568;">
                     <strong>🔍 Access Level:</strong> ${finalAdminStatus ? '✅ ADMIN - Full access with cost information' : '👤 USER - Supply tracking only'} | 
-                    <strong>New Feature:</strong> ✨ All Wound Dx column added with frozen column scrolling |
+                    <strong>New Feature:</strong> ✨ All Wound Dx column added with synchronized scrolling |
                     <strong>Days:</strong> ${daysInMonth} days in ${monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                 </div>
             `;
