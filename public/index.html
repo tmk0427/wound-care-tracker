@@ -2505,7 +2505,7 @@
                 // Only update cost for admin users
                 const totalCostElement = document.getElementById('totalCost');
                 if (totalCostElement) {
-                    totalCostElement.textContent = '
+                    totalCostElement.textContent = '$' + totalCost.toLocaleString();
 
         async function updateSummaryTable(patients) {
             const tbody = document.getElementById('summaryTableBody');
