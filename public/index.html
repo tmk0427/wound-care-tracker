@@ -1092,8 +1092,9 @@
                     <div class="value" id="totalUnits">0</div>
                 </div>
                 <div class="summary-card">
-                    <h3>Wound Diagnoses</h3>
+                    <h3>Wound Dx Entries</h3>
                     <div class="value" id="totalWoundDx">0</div>
+                    <p style="font-size: 12px;">Total supply items with diagnoses</p>
                 </div>
                 <div class="summary-card admin-only-controls">
                     <h3>Total Cost</h3>
@@ -1390,6 +1391,10 @@
                         const supplyName = supply ? supply.description : 'Supply ' + supplyId;
                         message += '• ' + supplyName + ': "' + dx + '"\n';
                     });
+                    
+                    // Count unique diagnoses vs total entries
+                    const uniqueDiagnoses = new Set(Object.values(currentPatientData).filter(function(dx) { return dx && dx.trim(); }));
+                    message += '\nSummary: ' + Object.keys(currentPatientData).length + ' total entries, ' + uniqueDiagnoses.size + ' unique diagnoses';
                 } else {
                     message += '\n⚠️ No wound dx entries found in storage for current patient.';
                 }
@@ -1491,6 +1496,66 @@
             URL.revokeObjectURL(url);
             
             showTrackingStatus('📄 Wound dx debug data exported');
+        }
+
+        // Test report generation for current patient
+        function testReportGeneration() {
+            if (!appData.selectedPatient) {
+                alert('Please select a patient first');
+                return;
+            }
+            
+            console.log('🧪 TESTING REPORT GENERATION for patient:', appData.selectedPatient);
+            
+            const patient = appData.patients.find(function(p) { return p.id == appData.selectedPatient; });
+            if (!patient) {
+                alert('Patient not found');
+                return;
+            }
+            
+            console.log('📋 Patient found:', patient.name);
+            
+            // Test wound dx data access
+            const woundDxData = appData.woundDxData[patient.id] || {};
+            console.log('📦 Wound dx data for patient:', woundDxData);
+            console.log('📦 Wound dx data keys:', Object.keys(woundDxData));
+            
+            // Test against each supply
+            let reportPreview = 'Report Preview for ' + patient.name + ':\n\n';
+            let foundEntries = 0;
+            
+            appData.supplies.forEach(function(supply) {
+                const supplyIdStr = String(supply.id);
+                const supplyIdNum = Number(supply.id);
+                
+                let woundDx = '';
+                if (woundDxData[supply.id]) {
+                    woundDx = woundDxData[supply.id];
+                } else if (woundDxData[supplyIdStr]) {
+                    woundDx = woundDxData[supplyIdStr];
+                } else if (woundDxData[supplyIdNum]) {
+                    woundDx = woundDxData[supplyIdNum];
+                }
+                
+                if (woundDx) {
+                    foundEntries++;
+                    reportPreview += '✅ ' + supply.description + ': "' + woundDx + '"\n';
+                    console.log('✅ Supply', supply.id, '(' + supply.description + ') would have wound dx:', woundDx);
+                }
+            });
+            
+            reportPreview += '\nSUMMARY: Found ' + foundEntries + ' wound dx entries for this patient\n';
+            
+            if (foundEntries === 0) {
+                reportPreview += '❌ No wound dx data would be included in report\n';
+                reportPreview += '\nTroubleshooting:\n';
+                reportPreview += '- Make sure you have quantity > 0 for supplies with wound dx\n';
+                reportPreview += '- Check that supply IDs match between tracking and wound dx data\n';
+            } else {
+                reportPreview += '✅ These ' + foundEntries + ' entries will appear in reports (if quantities > 0)\n';
+            }
+            
+            alert(reportPreview);
         }
 
         // User interface setup with improved admin detection
@@ -1775,6 +1840,7 @@
             html += '<div style="display: flex; gap: 5px; flex-wrap: wrap;">';
             html += '<button onclick="captureCurrentWoundDxFromDOM()" style="padding: 5px 10px; background: #e53e3e; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">🔄 Capture Current Values</button>';
             html += '<button onclick="debugWoundDxData()" style="padding: 5px 10px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">🔍 Debug Wound Dx</button>';
+            html += '<button onclick="testReportGeneration()" style="padding: 5px 10px; background: #6b46c1; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">🧪 Test Report</button>';
             html += '<button onclick="addTestWoundDxData()" style="padding: 5px 10px; background: #38a169; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">📝 Add Test Data</button>';
             html += '<button onclick="forceRefreshWoundDx()" style="padding: 5px 10px; background: #ed8936; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">🔄 Refresh</button>';
             html += '<button onclick="exportWoundDxData()" style="padding: 5px 10px; background: #9f7aea; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">📄 Export</button>';
@@ -2733,21 +2799,20 @@
                             totalCost += quantity * cost;
                         });
 
-                        // Get wound dx data for this patient using ONLY local data for accuracy
+                        // Get wound dx data for this patient - count TOTAL ENTRIES not unique diagnoses
                         let patientWoundDxCount = 0;
                         if (appData.woundDxData[patient.id]) {
-                            const uniqueWoundDx = new Set();
+                            // Count all non-empty wound dx entries
                             Object.values(appData.woundDxData[patient.id]).forEach(function(dx) {
                                 if (dx && dx.trim()) {
-                                    uniqueWoundDx.add(dx.trim());
+                                    patientWoundDxCount++;
                                 }
                             });
-                            patientWoundDxCount = uniqueWoundDx.size;
-                            console.log('📊 Local wound dx count for', patient.name + ':', patientWoundDxCount);
+                            console.log('📊 Patient', patient.name + '- Total wound dx entries:', patientWoundDxCount);
                         }
                         totalWoundDxCount += patientWoundDxCount;
                         
-                        console.log('📊 Running total wound dx count:', totalWoundDxCount);
+                        console.log('📊 Running total wound dx entries:', totalWoundDxCount);
 
                     } catch (error) {
                         console.error('Failed to load data for patient ' + patient.name + ':', error);
@@ -2757,10 +2822,3417 @@
                 document.getElementById('totalUnits').textContent = totalUnits.toLocaleString();
                 document.getElementById('totalWoundDx').textContent = totalWoundDxCount;
                 
+                console.log('📊 SUMMARY CARD TOTALS:');
+                console.log('- Total patients:', filteredPatients.length);
+                console.log('- Total units used:', totalUnits);
+                console.log('- Total wound dx entries (not unique):', totalWoundDxCount);
+                
                 // Only update cost for admin users
                 const totalCostElement = document.getElementById('totalCost');
                 if (totalCostElement) {
-                    totalCostElement.textContent = '$' + totalCost.toFixed(2);
+                    totalCostElement.textContent = '
+
+                updateSummaryTable(filteredPatients);
+            } catch (error) {
+                console.error('Failed to update summary:', error);
+            }
+        }
+
+        async function updateSummaryTable(patients) {
+            const tbody = document.getElementById('summaryTableBody');
+            tbody.innerHTML = '';
+
+            const patientsToShow = patients || getFilteredPatients();
+
+            if (patientsToShow.length === 0) {
+                const isAdmin = currentUser && currentUser.role === 'admin';
+                const colspan = isAdmin ? '8' : '6';
+                tbody.innerHTML = '<tr><td colspan="' + colspan + '" style="text-align: center; color: #718096;">No patients to display</td></tr>';
+                return;
+            }
+
+            const isAdmin = currentUser && currentUser.role === 'admin';
+
+            for (let i = 0; i < patientsToShow.length; i++) {
+                const patient = patientsToShow[i];
+                try {
+                    const trackingData = await apiCall('/patients/' + patient.id + '/tracking');
+                    
+                    let totalUnits = 0;
+                    let totalCost = 0;
+                    const hcpcsCodes = new Set();
+                    
+                    trackingData.forEach(function(item) {
+                        const quantity = parseInt(item.quantity) || 0;
+                        
+                        let cost = 0;
+                        if (item.cost !== null && item.cost !== undefined) {
+                            const costValue = Number(item.cost);
+                            cost = isNaN(costValue) ? 0 : costValue;
+                        }
+                        
+                        totalUnits += quantity;
+                        totalCost += quantity * cost;
+                        if (item.hcpcs) hcpcsCodes.add(item.hcpcs);
+                    });
+
+                    const yearPart = patient.month.split('-')[0];
+                    const monthPart = patient.month.split('-')[1];
+                    const displayMonth = monthPart + '-' + yearPart.slice(-2);
+                    const lastUpdated = new Date(patient.updated_at).toLocaleDateString();
+
+                    const row = document.createElement('tr');
+                    row.innerHTML = 
+                        '<td>' + patient.name + '</td>' +
+                        '<td>' + displayMonth + '</td>' +
+                        '<td>' + (patient.mrn || 'N/A') + '</td>' +
+                        '<td>' + (patient.facility_name || 'Unknown') + '</td>' +
+                        '<td><strong>' + totalUnits + '</strong></td>' +
+                        '<td class="admin-only-column">' + (Array.from(hcpcsCodes).join(', ') || 'N/A') + '</td>' +
+                        '<td class="admin-only-column"><strong>$' + totalCost.toFixed(2) + '</strong></td>' +
+                        '<td>' + lastUpdated + '</td>';
+                    tbody.appendChild(row);
+                } catch (error) {
+                    console.error('Failed to load data for patient ' + patient.name + ':', error);
+                }
+            }
+        }
+
+        async function downloadUserReport() {
+            await downloadReport(false);
+        }
+
+        async function downloadAdminReport() {
+            await downloadReport(true);
+        }
+
+        // FIXED: Updated downloadReport to properly include wound diagnosis data
+        async function downloadReport(includeAdminData) {
+            try {
+                showTrackingStatus('📄 Generating report...', false);
+                
+                const filteredPatients = getFilteredPatients();
+                const reportData = [];
+                
+                let fileName = 'Supply_Report';
+                if (appData.currentFilters.month) {
+                    const monthName = new Date(appData.currentFilters.month + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                    fileName = 'Supply_Report_' + monthName.replace(' ', '_');
+                }
+                if (appData.currentFilters.facility) {
+                    const facility = appData.facilities.find(function(f) { return f.id == appData.currentFilters.facility; });
+                    if (facility) {
+                        fileName += '_' + facility.name.replace(/[^a-zA-Z0-9]/g, '_');
+                    }
+                }
+                
+                const header = ['Patient Name', 'MRN', 'Month/Year', 'Facility', 'AR Code', 'Item Description', 'All Wound Dx'];
+                if (includeAdminData) {
+                    header.push('HCPCS Code', 'Unit Cost');
+                }
+                header.push('Total Units');
+                if (includeAdminData) {
+                    header.push('Total Cost');
+                }
+                
+                reportData.push([(includeAdminData ? 'Admin' : 'User') + ' Report - Generated ' + new Date().toLocaleDateString()]);
+                reportData.push(header);
+                
+                for (let i = 0; i < filteredPatients.length; i++) {
+                    const patient = filteredPatients[i];
+                    try {
+                        const trackingData = await apiCall('/patients/' + patient.id + '/tracking');
+                        
+                        // FIXED: Load wound dx data using LOCAL STORAGE FIRST for reports with better debugging
+                        let woundDxData = {};
+                        
+                        // Use local data as primary source for reports
+                        if (appData.woundDxData[patient.id]) {
+                            woundDxData = Object.assign({}, appData.woundDxData[patient.id]);
+                            console.log('📦 Using local wound dx data for report:', patient.name, woundDxData);
+                            console.log('📋 Available supply IDs in wound dx data:', Object.keys(woundDxData));
+                        } else {
+                            console.log('⚠️ No local wound dx data found for patient:', patient.name);
+                        }
+                        
+                        // Optionally try to merge server data, but local takes precedence
+                        try {
+                            const woundDxResponse = await apiCall('/patients/' + patient.id + '/wound-dx');
+                            if (woundDxResponse && Array.isArray(woundDxResponse)) {
+                                woundDxResponse.forEach(function(item) {
+                                    if (item && typeof item.supply_id !== 'undefined' && typeof item.wound_dx !== 'undefined') {
+                                        // Only use server data if no local data exists for this supply
+                                        if (!woundDxData[item.supply_id]) {
+                                            woundDxData[item.supply_id] = item.wound_dx || '';
+                                        }
+                                    }
+                                });
+                            }
+                        } catch (error) {
+                            console.log('⚠️ Server wound dx failed for report, using local only:', error);
+                        }
+
+                        console.log('📋 Final wound dx data for report:', patient.name, woundDxData);
+                        
+                        const supplyTotals = {};
+                        trackingData.forEach(function(item) {
+                            const key = item.code;
+                            if (!supplyTotals[key]) {
+                                supplyTotals[key] = {
+                                    supply: item,
+                                    totalUnits: 0
+                                };
+                            }
+                            supplyTotals[key].totalUnits += parseInt(item.quantity) || 0;
+                        });
+                        
+                        const yearPart = patient.month.split('-')[0];
+                        const monthPart = patient.month.split('-')[1];
+                        const displayMonth = monthPart + '-' + yearPart.slice(-2);
+                        
+                        Object.values(supplyTotals).forEach(function(supplyTotal) {
+                            const supply = supplyTotal.supply;
+                            const totalUnits = supplyTotal.totalUnits;
+                            if (totalUnits > 0) {
+                                const unitCost = parseFloat(supply.cost) || 0;
+                                const totalCost = totalUnits * unitCost;
+                                
+                                // FIXED: Ensure we get the wound dx for this specific supply with robust ID matching
+                                let woundDx = '';
+                                
+                                // Try multiple ID formats to ensure we find the match
+                                const supplyIdStr = String(supply.id);
+                                const supplyIdNum = Number(supply.id);
+                                
+                                console.log('🔍 Looking for wound dx for supply:', supply.id, '(' + supply.description + ')');
+                                console.log('🔍 Trying ID formats:', supplyIdStr, supplyIdNum);
+                                console.log('🔍 Available wound dx keys:', Object.keys(woundDxData));
+                                
+                                if (woundDxData[supply.id]) {
+                                    woundDx = woundDxData[supply.id];
+                                    console.log('✅ Found with original ID:', woundDx);
+                                } else if (woundDxData[supplyIdStr]) {
+                                    woundDx = woundDxData[supplyIdStr];
+                                    console.log('✅ Found with string ID:', woundDx);
+                                } else if (woundDxData[supplyIdNum]) {
+                                    woundDx = woundDxData[supplyIdNum];
+                                    console.log('✅ Found with number ID:', woundDx);
+                                } else {
+                                    console.log('❌ No wound dx found for supply', supply.id, '(' + supply.description + ')');
+                                }
+                                
+                                const row = [
+                                    patient.name || 'Unknown',
+                                    patient.mrn || 'N/A',
+                                    displayMonth,
+                                    patient.facility_name || 'Unknown',
+                                    supply.code || 'N/A',
+                                    supply.description || 'Unknown',
+                                    woundDx || ''  // Now properly includes wound dx data with robust matching
+                                ];
+                                
+                                if (includeAdminData) {
+                                    row.push(supply.hcpcs || 'N/A', '$' + unitCost.toFixed(2));
+                                }
+                                
+                                row.push(totalUnits);
+                                
+                                if (includeAdminData) {
+                                    row.push('$' + totalCost.toFixed(2));
+                                }
+                                
+                                reportData.push(row);
+                            }
+                        });
+                    } catch (error) {
+                        console.error('Error processing patient ' + patient.name + ':', error);
+                    }
+                }
+                
+                const worksheet = XLSX.utils.aoa_to_sheet(reportData);
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, worksheet, 'Report');
+                
+                const colWidths = [
+                    { width: 20 }, { width: 15 }, { width: 12 }, { width: 20 }, 
+                    { width: 10 }, { width: 35 }, { width: 25 } // Added width for All Wound Dx
+                ];
+                if (includeAdminData) {
+                    colWidths.push({ width: 12 }, { width: 12 });
+                }
+                colWidths.push({ width: 12 });
+                if (includeAdminData) {
+                    colWidths.push({ width: 12 });
+                }
+                
+                worksheet['!cols'] = colWidths;
+                
+                XLSX.writeFile(workbook, fileName + '.xlsx');
+                
+                // Log summary of what was included in the report
+                console.log('📊 REPORT SUMMARY:');
+                console.log('- Patients processed:', filteredPatients.length);
+                
+                let totalWoundDxEntriesInSystem = 0;
+                let patientsWithWoundDx = 0;
+                
+                Object.keys(appData.woundDxData).forEach(function(patientId) {
+                    const patientEntries = appData.woundDxData[patientId] || {};
+                    const entryCount = Object.values(patientEntries).filter(function(dx) { return dx && dx.trim(); }).length;
+                    if (entryCount > 0) {
+                        totalWoundDxEntriesInSystem += entryCount;
+                        patientsWithWoundDx++;
+                    }
+                });
+                
+                console.log('- Total wound dx entries in system:', totalWoundDxEntriesInSystem);
+                console.log('- Patients with wound dx data:', patientsWithWoundDx);
+                console.log('- Report includes wound dx for supplies with quantities > 0');
+                
+                showTrackingStatus('✅ Report downloaded with ' + totalWoundDxEntriesInSystem + ' wound dx entries available!');
+                
+            } catch (error) {
+                console.error('Failed to generate report:', error);
+                showTrackingStatus('❌ Failed to generate report: ' + error.message, true);
+            }
+        }
+
+        function showTrackingStatus(message, isError) {
+            const statusDiv = document.getElementById('trackingStatus');
+            const statusText = document.getElementById('trackingStatusText');
+            
+            statusText.textContent = message;
+            statusDiv.className = 'tracking-status' + (isError ? ' error' : '');
+            statusDiv.style.display = 'block';
+
+            setTimeout(function() {
+                statusDiv.style.display = 'none';
+            }, 3000);
+        }
+
+        function toggleSelectAll() {
+            const selectAllCheckbox = document.getElementById('selectAllPatients');
+            const patientCheckboxes = document.querySelectorAll('.patient-checkbox');
+            
+            patientCheckboxes.forEach(function(checkbox) {
+                checkbox.checked = selectAllCheckbox.checked;
+            });
+            
+            updateSelectedCount();
+        }
+
+        function updateSelectedCount() {
+            const selectedCheckboxes = document.querySelectorAll('.patient-checkbox:checked');
+            const selectAllCheckbox = document.getElementById('selectAllPatients');
+            const selectedCountSpan = document.getElementById('selectedCount');
+            const removeSelectedBtn = document.getElementById('removeSelectedBtn');
+            const totalCheckboxes = document.querySelectorAll('.patient-checkbox');
+            
+            selectedCountSpan.textContent = selectedCheckboxes.length;
+            removeSelectedBtn.disabled = selectedCheckboxes.length === 0;
+            
+            if (selectedCheckboxes.length === 0) {
+                selectAllCheckbox.indeterminate = false;
+                selectAllCheckbox.checked = false;
+            } else if (selectedCheckboxes.length === totalCheckboxes.length) {
+                selectAllCheckbox.indeterminate = false;
+                selectAllCheckbox.checked = true;
+            } else {
+                selectAllCheckbox.indeterminate = true;
+                selectAllCheckbox.checked = false;
+            }
+        }
+
+        async function removeSelectedPatients() {
+            const selectedCheckboxes = document.querySelectorAll('.patient-checkbox:checked');
+            const selectedIds = Array.from(selectedCheckboxes).map(function(cb) { return parseInt(cb.value); });
+            
+            if (selectedIds.length === 0) {
+                alert('No patients selected');
+                return;
+            }
+            
+            const confirmMessage = 'Are you sure you want to remove ' + selectedIds.length + ' selected patient(s) and all their tracking data?\n\nThis action cannot be undone.';
+            
+            if (!confirm(confirmMessage)) {
+                return;
+            }
+            
+            try {
+                const removeBtn = document.getElementById('removeSelectedBtn');
+                removeBtn.disabled = true;
+                removeBtn.innerHTML = '<span class="loading"></span>Removing...';
+                
+                let deletedCount = 0;
+                let failedCount = 0;
+                
+                for (let i = 0; i < selectedIds.length; i++) {
+                    const patientId = selectedIds[i];
+                    try {
+                        await apiCall('/patients/' + patientId, {
+                            method: 'DELETE'
+                        });
+                        deletedCount++;
+                    } catch (error) {
+                        console.error('Failed to delete patient ' + patientId + ':', error);
+                        failedCount++;
+                    }
+                }
+                
+                await loadAllData();
+                
+                const selectedPatient = document.getElementById('patientSelect').value;
+                if (selectedIds.includes(parseInt(selectedPatient))) {
+                    document.getElementById('patientSelect').value = '';
+                    loadPatientTracking();
+                }
+                
+                if (failedCount === 0) {
+                    showTrackingStatus('✅ ' + deletedCount + ' patient(s) removed successfully!');
+                } else {
+                    showTrackingStatus('⚠️ ' + deletedCount + ' patient(s) removed, ' + failedCount + ' failed', true);
+                }
+                
+            } catch (error) {
+                console.error('Bulk removal error:', error);
+                showTrackingStatus('❌ Failed to remove patients: ' + error.message, true);
+            } finally {
+                const removeBtn = document.getElementById('removeSelectedBtn');
+                removeBtn.disabled = false;
+                removeBtn.innerHTML = '🗑️ Remove Selected Patients';
+            }
+        }
+
+        async function removePatient(patientId) {
+            if (confirm('Are you sure you want to remove this patient and all tracking data?')) {
+                try {
+                    await apiCall('/patients/' + patientId, {
+                        method: 'DELETE'
+                    });
+
+                    await loadAllData();
+
+                    const selectedPatient = document.getElementById('patientSelect').value;
+                    if (selectedPatient == patientId) {
+                        document.getElementById('patientSelect').value = '';
+                        loadPatientTracking();
+                    }
+                    
+                    showTrackingStatus('✅ Patient removed successfully!');
+                } catch (error) {
+                    alert('Failed to remove patient: ' + error.message);
+                }
+            }
+        }
+
+        function showChangePasswordModal() {
+            document.getElementById('changePasswordModal').style.display = 'flex';
+        }
+
+        function closeChangePasswordModal() {
+            document.getElementById('changePasswordModal').style.display = 'none';
+            document.getElementById('currentPassword').value = '';
+            document.getElementById('newPassword').value = '';
+            document.getElementById('confirmPassword').value = '';
+            document.getElementById('passwordMessage').innerHTML = '';
+        }
+
+        async function changePassword() {
+            const current = document.getElementById('currentPassword').value;
+            const newPass = document.getElementById('newPassword').value;
+            const confirm = document.getElementById('confirmPassword').value;
+            const messageEl = document.getElementById('passwordMessage');
+            const changeBtn = document.getElementById('changePasswordBtn');
+
+            if (!current || !newPass || !confirm) {
+                messageEl.innerHTML = '<div class="error-message">Please fill in all fields</div>';
+                return;
+            }
+
+            if (newPass !== confirm) {
+                messageEl.innerHTML = '<div class="error-message">New passwords do not match</div>';
+                return;
+            }
+
+            if (newPass.length < 6) {
+                messageEl.innerHTML = '<div class="error-message">Password must be at least 6 characters</div>';
+                return;
+            }
+
+            try {
+                changeBtn.disabled = true;
+                changeBtn.innerHTML = '<span class="loading"></span>Changing...';
+
+                await apiCall('/auth/change-password', {
+                    method: 'POST',
+                    body: { currentPassword: current, newPassword: newPass }
+                });
+
+                messageEl.innerHTML = '<div class="success-message">Password changed successfully!</div>';
+
+                setTimeout(function() {
+                    closeChangePasswordModal();
+                }, 2000);
+            } catch (error) {
+                messageEl.innerHTML = '<div class="error-message">' + error.message + '</div>';
+            } finally {
+                changeBtn.disabled = false;
+                changeBtn.innerHTML = 'Change Password';
+            }
+        }
+
+        function downloadExcelTemplate() {
+            const worksheet = XLSX.utils.aoa_to_sheet([
+                ['Name', 'Month', 'MRN', 'Facility'],
+                ['Smith, John', '2024-12', 'MRN12345', 'Main Hospital'],
+                ['Doe, Jane', '2024-12', 'MRN67890', 'Main Hospital'],
+                ['Johnson, Bob', '2024-12', '', 'Main Hospital']
+            ]);
+
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Patients');
+            XLSX.writeFile(workbook, 'patient_import_template.xlsx');
+        }
+
+        function showExcelImportModal() {
+            document.getElementById('excelImportModal').style.display = 'flex';
+            setupDragAndDrop();
+        }
+
+        function closeExcelImportModal() {
+            document.getElementById('excelImportModal').style.display = 'none';
+            document.getElementById('excelFileInput').value = '';
+            document.getElementById('importResults').style.display = 'none';
+            document.getElementById('importProgress').style.display = 'none';
+            document.getElementById('processImportBtn').disabled = true;
+            excelData = null;
+        }
+
+        function setupDragAndDrop() {
+            const uploadArea = document.getElementById('fileUploadArea');
+            
+            uploadArea.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                uploadArea.classList.add('dragover');
+            });
+
+            uploadArea.addEventListener('dragleave', function() {
+                uploadArea.classList.remove('dragover');
+            });
+
+            uploadArea.addEventListener('drop', function(e) {
+                e.preventDefault();
+                uploadArea.classList.remove('dragover');
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    handleExcelFile(files[0]);
+                }
+            });
+
+            uploadArea.addEventListener('click', function() {
+                document.getElementById('excelFileInput').click();
+            });
+        }
+
+        function handleExcelFile(file) {
+            if (!file) return;
+
+            if (!file.name.match(/\.(xlsx|xls)$/)) {
+                alert('Please select an Excel file (.xlsx or .xls)');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    excelData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+                    showExcelPreview(excelData, file.name);
+                    document.getElementById('processImportBtn').disabled = false;
+                } catch (error) {
+                    alert('Error reading Excel file: ' + error.message);
+                }
+            };
+
+            reader.readAsArrayBuffer(file);
+        }
+
+        function showExcelPreview(data, fileName) {
+            const resultsDiv = document.getElementById('importResults');
+            
+            if (data.length < 2) {
+                resultsDiv.innerHTML = '<p><strong>Error:</strong> Excel file must contain at least a header row and one data row.</p>';
+                resultsDiv.className = 'import-results error';
+                resultsDiv.style.display = 'block';
+                return;
+            }
+
+            const headers = data[0];
+            const dataRows = data.slice(1);
+
+            let html = '<h4>📄 File Preview: ' + fileName + '</h4>';
+            html += '<p><strong>Rows to import:</strong> ' + dataRows.length + '</p>';
+            html += '<p><strong>Columns found:</strong> ' + headers.join(', ') + '</p>';
+            html += '<div style="max-height: 150px; overflow-y: auto; margin-top: 10px;">';
+            html += '<table style="width: 100%; border-collapse: collapse; font-size: 12px;">';
+            html += '<thead><tr style="background: #f7fafc;">';
+
+            headers.forEach(function(header) {
+                html += '<th style="padding: 5px; border: 1px solid #e2e8f0;">' + header + '</th>';
+            });
+
+            html += '</tr></thead><tbody>';
+
+            dataRows.slice(0, 5).forEach(function(row) {
+                html += '<tr>';
+                headers.forEach(function(header, index) {
+                    html += '<td style="padding: 5px; border: 1px solid #e2e8f0;">' + (row[index] || '') + '</td>';
+                });
+                html += '</tr>';
+            });
+
+            if (dataRows.length > 5) {
+                html += '<tr><td colspan="' + headers.length + '" style="padding: 5px; text-align: center; font-style: italic;">... and ' + (dataRows.length - 5) + ' more rows</td></tr>';
+            }
+
+            html += '</tbody></table></div>';
+
+            resultsDiv.innerHTML = html;
+            resultsDiv.className = 'import-results mixed';
+            resultsDiv.style.display = 'block';
+        }
+
+        async function processExcelImport() {
+            const processBtn = document.getElementById('processImportBtn');
+            const progressBar = document.getElementById('importProgress');
+            const progressFill = document.getElementById('importProgressFill');
+            const resultsDiv = document.getElementById('importResults');
+
+            if (!excelData) {
+                alert('No Excel data to process');
+                return;
+            }
+
+            try {
+                processBtn.disabled = true;
+                processBtn.innerHTML = '<span class="loading"></span>Processing...';
+                progressBar.style.display = 'block';
+                progressFill.style.width = '20%';
+
+                const worksheet = XLSX.utils.aoa_to_sheet(excelData);
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, worksheet, 'Patients');
+                const excelBuffer = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' });
+
+                progressFill.style.width = '50%';
+
+                const formData = new FormData();
+                const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                formData.append('excelFile', blob, 'patients.xlsx');
+
+                progressFill.style.width = '80%';
+
+                const response = await fetch(API_BASE + '/patients/import-excel', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + authToken
+                    },
+                    body: formData
+                });
+
+                const result = await response.json();
+                progressFill.style.width = '100%';
+
+                if (!response.ok) {
+                    throw new Error(result.error || 'Import failed');
+                }
+
+                let resultsHtml = '<h4>✅ Import Complete</h4><p>' + result.message + '</p>';
+                
+                if (result.results.success.length > 0) {
+                    resultsHtml += '<h5 style="color: #38a169; margin-top: 15px;">Successfully Added:</h5><ul>';
+                    result.results.success.forEach(function(msg) {
+                        resultsHtml += '<li style="color: #38a169;">' + msg + '</li>';
+                    });
+                    resultsHtml += '</ul>';
+                }
+
+                if (result.results.errors.length > 0) {
+                    resultsHtml += '<h5 style="color: #e53e3e; margin-top: 15px;">Errors:</h5><ul>';
+                    result.results.errors.forEach(function(msg) {
+                        resultsHtml += '<li style="color: #e53e3e;">' + msg + '</li>';
+                    });
+                    resultsHtml += '</ul>';
+                }
+
+                resultsDiv.innerHTML = resultsHtml;
+                resultsDiv.className = result.results.errors.length === 0 ? 'import-results success' : 'import-results mixed';
+                resultsDiv.style.display = 'block';
+
+                await loadAllData();
+
+                if (result.results.errors.length === 0) {
+                    setTimeout(function() {
+                        closeExcelImportModal();
+                    }, 3000);
+                }
+
+            } catch (error) {
+                resultsDiv.innerHTML = '<h4>❌ Import Failed</h4><p style="color: #e53e3e;">' + error.message + '</p>';
+                resultsDiv.className = 'import-results error';
+                resultsDiv.style.display = 'block';
+            } finally {
+                processBtn.disabled = false;
+                processBtn.innerHTML = 'Import Data';
+                setTimeout(function() {
+                    progressBar.style.display = 'none';
+                    progressFill.style.width = '0%';
+                }, 1000);
+            }
+        }
+
+        // Batch Supply Import Functions
+        let batchSupplyData = null;
+
+        function showBatchSupplyModal() {
+            document.getElementById('batchSupplyModal').style.display = 'flex';
+            setupBatchSupplyDragAndDrop();
+            
+            // Pre-populate with the user's system supply data - FIXED FORMAT
+            const systemSupplyData = 'AR Code\tItem Description\tHCPCS Code\tUnit Cost\n272\tMed/Surgical Supplies\tB4149\t0.00\n400\tHME filter holder for trach or vent\tA7507\t3.49\n401\tHME housing & adhesive\tA7509\t1.97\n402\tHMES/trach valve adhesive disk\tA7506\t0.45\n403\tHMES filter holder or cap for tracheostoma\tA7503\t15.85\n404\tHMES filter\tA7504\t0.95\n405\tHMES/trach valve housing\tA7505\t6.55\n406\tHME housing w/adhesive filter\tA7508\t4.01\n407\tLubricant per oz to insert trach\tA4402\t1.90\n408\tPiston irrigation syringe irrigation trach ostomy, uro\tA4322\t4.16\n409\tSterile saline 10ml and 15ml bullets\tA4216\t0.62\n410\tSterile saline 100ml, 1000ml, 120ml, 250ml and 500ml\tA4217\t4.38\n411\tClosed suction catheter for trach\tA4605\t22.92\n412\tOpen suction catheter for trach\tA4624\t3.69\n413\tTracheal suction catheter closed system (yankauers/ballards)\tA4605\t22.92\n414\tTrach';
+
+            // Auto-switch to paste method and populate the data
+            setTimeout(function() {
+                showBatchImportMethod('paste', document.querySelector('.auth-tab:last-child'));
+                document.getElementById('batchSupplyPasteArea').value = systemSupplyData;
+                
+                // Add helper message
+                const pasteArea = document.getElementById('batchSupplyPasteArea');
+                pasteArea.style.border = '2px solid #38a169';
+                pasteArea.style.backgroundColor = '#f0fff4';
+                
+                // Show a helpful message
+                const resultsDiv = document.getElementById('batchSupplyResults');
+                resultsDiv.innerHTML = '<div style="background: #f0fff4; padding: 15px; border-radius: 8px; border-left: 4px solid #38a169; margin-bottom: 15px;"><h4 style="color: #276749; margin-bottom: 10px;">✅ Fixed System Supply Data is Ready!</h4><p style="color: #276749; margin: 0;"><strong>92 medical supply items</strong> with corrected format and HCPCS codes.<br>Click <strong>"📊 Parse Data"</strong> below, then <strong>"Import Supply Items"</strong> to add them to your system.</p></div>';
+                resultsDiv.style.display = 'block';
+                resultsDiv.className = 'import-results success';
+            }, 100);
+        }
+
+        function closeBatchSupplyModal() {
+            document.getElementById('batchSupplyModal').style.display = 'none';
+            document.getElementById('batchSupplyFileInput').value = '';
+            document.getElementById('batchSupplyPasteArea').value = '';
+            document.getElementById('batchSupplyResults').style.display = 'none';
+            document.getElementById('batchSupplyProgress').style.display = 'none';
+            document.getElementById('processBatchSupplyBtn').disabled = true;
+            batchSupplyData = null;
+        }
+
+        function showBatchImportMethod(method, element) {
+            // Update tabs
+            document.querySelectorAll('.auth-tab').forEach(function(t) { t.classList.remove('active'); });
+            element.classList.add('active');
+
+            // Show/hide methods
+            if (method === 'excel') {
+                document.getElementById('batchExcelMethod').classList.remove('hidden');
+                document.getElementById('batchPasteMethod').classList.add('hidden');
+            } else {
+                document.getElementById('batchExcelMethod').classList.add('hidden');
+                document.getElementById('batchPasteMethod').classList.remove('hidden');
+            }
+        }
+
+        function downloadSupplyTemplate() {
+            const worksheet = XLSX.utils.aoa_to_sheet([
+                ['AR Code', 'Item Description', 'HCPCS Code', 'Unit Cost'],
+                [700, 'Gauze Pad 4x4', 'A6251', 1.50],
+                [701, 'Medical Tape 1 inch', 'A6260', 2.25],
+                [702, 'Bandage Roll 3 inch', 'A6448', 3.75],
+                [703, 'Antiseptic Wipes', 'A4649', 0.85]
+            ]);
+
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Supply Items');
+            
+            // Set column widths
+            worksheet['!cols'] = [
+                { width: 12 }, { width: 35 }, { width: 15 }, { width: 12 }
+            ];
+            
+            XLSX.writeFile(workbook, 'supply_items_template.xlsx');
+        }
+
+        function setupBatchSupplyDragAndDrop() {
+            const uploadArea = document.getElementById('batchSupplyUploadArea');
+            
+            uploadArea.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                uploadArea.classList.add('dragover');
+            });
+
+            uploadArea.addEventListener('dragleave', function() {
+                uploadArea.classList.remove('dragover');
+            });
+
+            uploadArea.addEventListener('drop', function(e) {
+                e.preventDefault();
+                uploadArea.classList.remove('dragover');
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    handleBatchSupplyFile(files[0]);
+                }
+            });
+
+            uploadArea.addEventListener('click', function() {
+                document.getElementById('batchSupplyFileInput').click();
+            });
+        }
+
+        function handleBatchSupplyFile(file) {
+            if (!file) return;
+
+            if (!file.name.match(/\.(xlsx|xls)$/)) {
+                alert('Please select an Excel file (.xlsx or .xls)');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    batchSupplyData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+                    showBatchSupplyPreview(batchSupplyData, file.name, 'excel');
+                    document.getElementById('processBatchSupplyBtn').disabled = false;
+                } catch (error) {
+                    alert('Error reading Excel file: ' + error.message);
+                }
+            };
+
+            reader.readAsArrayBuffer(file);
+        }
+
+        function parsePastedSupplyData() {
+            const pasteArea = document.getElementById('batchSupplyPasteArea');
+            const text = pasteArea.value.trim();
+            
+            if (!text) {
+                alert('Please paste some data first');
+                return;
+            }
+
+            try {
+                // Parse tab-separated or comma-separated values
+                const lines = text.split('\n').filter(function(line) { return line.trim(); });
+                const data = [['AR Code', 'Item Description', 'HCPCS Code', 'Unit Cost']]; // Header
+                
+                lines.forEach(function(line) {
+                    // Try tab-separated first, then comma-separated
+                    let parts = line.split('\t');
+                    if (parts.length < 4) {
+                        parts = line.split(',');
+                    }
+                    
+                    if (parts.length >= 4) {
+                        data.push([
+                            parts[0].trim(),
+                            parts[1].trim(),
+                            parts[2].trim(),
+                            parts[3].trim()
+                        ]);
+                    }
+                });
+
+                if (data.length < 2) {
+                    alert('No valid data found. Please ensure data is tab-separated or comma-separated with 4 columns.');
+                    return;
+                }
+
+                batchSupplyData = data;
+                showBatchSupplyPreview(batchSupplyData, 'Pasted Data', 'paste');
+                document.getElementById('processBatchSupplyBtn').disabled = false;
+            } catch (error) {
+                alert('Error parsing pasted data: ' + error.message);
+            }
+        }
+
+        function showBatchSupplyPreview(data, fileName, method) {
+            const resultsDiv = document.getElementById('batchSupplyResults');
+            
+            if (data.length < 2) {
+                resultsDiv.innerHTML = '<p><strong>Error:</strong> Data must contain at least a header row and one data row.</p>';
+                resultsDiv.className = 'import-results error';
+                resultsDiv.style.display = 'block';
+                return;
+            }
+
+            const headers = data[0];
+            const dataRows = data.slice(1);
+
+            let html = '<h4>📦 Supply Data Preview: ' + fileName + '</h4>';
+            html += '<p><strong>Items to import:</strong> ' + dataRows.length + '</p>';
+            html += '<p><strong>Columns found:</strong> ' + headers.join(', ') + '</p>';
+            html += '<div style="max-height: 150px; overflow-y: auto; margin-top: 10px;">';
+            html += '<table style="width: 100%; border-collapse: collapse; font-size: 12px;">';
+            html += '<thead><tr style="background: #f7fafc;">';
+
+            headers.forEach(function(header) {
+                html += '<th style="padding: 5px; border: 1px solid #e2e8f0;">' + header + '</th>';
+            });
+
+            html += '</tr></thead><tbody>';
+
+            dataRows.slice(0, 5).forEach(function(row) {
+                html += '<tr>';
+                headers.forEach(function(header, index) {
+                    html += '<td style="padding: 5px; border: 1px solid #e2e8f0;">' + (row[index] || '') + '</td>';
+                });
+                html += '</tr>';
+            });
+
+            if (dataRows.length > 5) {
+                html += '<tr><td colspan="' + headers.length + '" style="padding: 5px; text-align: center; font-style: italic;">... and ' + (dataRows.length - 5) + ' more items</td></tr>';
+            }
+
+            html += '</tbody></table></div>';
+
+            resultsDiv.innerHTML = html;
+            resultsDiv.className = 'import-results mixed';
+            resultsDiv.style.display = 'block';
+        }
+
+        async function processBatchSupplyImport() {
+            const processBtn = document.getElementById('processBatchSupplyBtn');
+            const progressBar = document.getElementById('batchSupplyProgress');
+            const progressFill = document.getElementById('batchSupplyProgressFill');
+            const resultsDiv = document.getElementById('batchSupplyResults');
+
+            if (!batchSupplyData || batchSupplyData.length < 2) {
+                alert('No supply data to process');
+                return;
+            }
+
+            try {
+                processBtn.disabled = true;
+                processBtn.innerHTML = '<span class="loading"></span>Processing...';
+                progressBar.style.display = 'block';
+                progressFill.style.width = '20%';
+
+                const headers = batchSupplyData[0];
+                const dataRows = batchSupplyData.slice(1);
+                
+                let successCount = 0;
+                let errorCount = 0;
+                const errors = [];
+                const successItems = [];
+
+                progressFill.style.width = '40%';
+
+                // Process each row
+                for (let i = 0; i < dataRows.length; i++) {
+                    const row = dataRows[i];
+                    
+                    try {
+                        const arCode = parseInt(row[0]);
+                        const description = row[1] ? row[1].trim() : '';
+                        const hcpcsCode = row[2] ? row[2].trim() : '';
+                        const unitCost = parseFloat(row[3]) || 0;
+
+                        if (!arCode || !description) {
+                            errors.push('Row ' + (i + 2) + ': Missing AR Code or Description');
+                            errorCount++;
+                            continue;
+                        }
+
+                        await apiCall('/supplies', {
+                            method: 'POST',
+                            body: { 
+                                code: arCode, 
+                                description: description, 
+                                hcpcs: hcpcsCode || '', 
+                                cost: unitCost,
+                                is_custom: false  // Make batch imported supplies system supplies
+                            }
+                        });
+
+                        successItems.push(arCode + ' - ' + description);
+                        successCount++;
+                    } catch (error) {
+                        errors.push('Row ' + (i + 2) + ': ' + error.message);
+                        errorCount++;
+                    }
+
+                    // Update progress
+                    const progress = 40 + ((i + 1) / dataRows.length) * 50;
+                    progressFill.style.width = progress + '%';
+                }
+
+                progressFill.style.width = '100%';
+
+                // Show results
+                let resultsHtml = '<h4>✅ Batch Import Complete</h4>';
+                resultsHtml += '<p><strong>Successfully added:</strong> ' + successCount + ' items</p>';
+                resultsHtml += '<p><strong>Errors:</strong> ' + errorCount + ' items</p>';
+                
+                if (successItems.length > 0) {
+                    resultsHtml += '<h5 style="color: #38a169; margin-top: 15px;">Successfully Added:</h5><ul>';
+                    successItems.slice(0, 10).forEach(function(item) {
+                        resultsHtml += '<li style="color: #38a169; font-size: 12px;">' + item + '</li>';
+                    });
+                    if (successItems.length > 10) {
+                        resultsHtml += '<li style="color: #38a169; font-size: 12px;"><em>... and ' + (successItems.length - 10) + ' more</em></li>';
+                    }
+                    resultsHtml += '</ul>';
+                }
+
+                if (errors.length > 0) {
+                    resultsHtml += '<h5 style="color: #e53e3e; margin-top: 15px;">Errors:</h5><ul>';
+                    errors.slice(0, 10).forEach(function(error) {
+                        resultsHtml += '<li style="color: #e53e3e; font-size: 12px;">' + error + '</li>';
+                    });
+                    if (errors.length > 10) {
+                        resultsHtml += '<li style="color: #e53e3e; font-size: 12px;"><em>... and ' + (errors.length - 10) + ' more errors</em></li>';
+                    }
+                    resultsHtml += '</ul>';
+                }
+
+                resultsDiv.innerHTML = resultsHtml;
+                resultsDiv.className = errorCount === 0 ? 'import-results success' : 'import-results mixed';
+                resultsDiv.style.display = 'block';
+
+                // Refresh data
+                await loadAllData();
+                adminRefreshSupplies();
+                adminRefreshStats();
+
+                if (errorCount === 0) {
+                    showTrackingStatus('✅ ' + successCount + ' supply items imported successfully!');
+                    setTimeout(function() {
+                        closeBatchSupplyModal();
+                    }, 3000);
+                } else {
+                    showTrackingStatus('⚠️ ' + successCount + ' imported, ' + errorCount + ' failed', true);
+                }
+
+            } catch (error) {
+                resultsDiv.innerHTML = '<h4>❌ Import Failed</h4><p style="color: #e53e3e;">' + error.message + '</p>';
+                resultsDiv.className = 'import-results error';
+                resultsDiv.style.display = 'block';
+                showTrackingStatus('❌ Batch import failed: ' + error.message, true);
+            } finally {
+                processBtn.disabled = false;
+                processBtn.innerHTML = 'Import Supply Items';
+                setTimeout(function() {
+                    progressBar.style.display = 'none';
+                    progressFill.style.width = '0%';
+                }, 1000);
+            }
+        }
+
+        async function loadFullAdminPanel() {
+            const adminTab = document.getElementById('adminTab');
+
+            adminTab.innerHTML = 
+                '<h2 style="margin-bottom: 30px; color: #4a5568;">🔧 Admin Panel</h2>' +
+                '<div class="admin-section">' +
+                '<h3>👥 User Management</h3>' +
+                '<div id="pendingUsersSection" style="margin-bottom: 25px;">' +
+                '<h4 style="color: #ed8936; margin-bottom: 15px;">⏳ Pending Approvals</h4>' +
+                '<div id="pendingUsersList">Loading pending users...</div>' +
+                '</div>' +
+                '<h4>All Users</h4>' +
+                '<div class="table-container">' +
+                '<table class="admin-table" id="allUsersTable">' +
+                '<thead>' +
+                '<tr>' +
+                '<th>Name</th>' +
+                '<th>Email</th>' +
+                '<th>Role</th>' +
+                '<th>Facility</th>' +
+                '<th>Status</th>' +
+                '<th>Registered</th>' +
+                '<th>Actions</th>' +
+                '</tr>' +
+                '</thead>' +
+                '<tbody id="allUsersTableBody">Loading users...</tbody>' +
+                '</table>' +
+                '</div>' +
+                '</div>' +
+                '<div class="admin-section">' +
+                '<h3>🏢 Facility Management</h3>' +
+                '<div class="add-new-section">' +
+                '<h4>Add New Facility</h4>' +
+                '<div class="admin-form">' +
+                '<div class="form-group">' +
+                '<label for="adminFacilityName">Facility Name</label>' +
+                '<input type="text" id="adminFacilityName" placeholder="Enter facility name" autocomplete="off">' +
+                '</div>' +
+                '<div class="form-group">' +
+                '<label>&nbsp;</label>' +
+                '<button class="btn btn-primary" type="button" onclick="adminAddFacility()" id="addFacilityBtn">Add Facility</button>' +
+                '</div>' +
+                '</div>' +
+                '</div>' +
+                '<h4>Existing Facilities</h4>' +
+                '<div class="admin-cards" id="adminFacilityCards">Loading facilities...</div>' +
+                '</div>' +
+                '<div class="admin-section">' +
+                '<h3>📦 Supply Management</h3>' +
+                '<div class="add-new-section">' +
+                '<h4>Add New Supply Item</h4>' +
+                '<div class="admin-form">' +
+                '<div class="form-group">' +
+                '<label for="adminNewArCode">AR Code</label>' +
+                '<input type="number" id="adminNewArCode" placeholder="e.g., 700" min="1" autocomplete="off">' +
+                '</div>' +
+                '<div class="form-group">' +
+                '<label for="adminNewDescription">Item Description</label>' +
+                '<input type="text" id="adminNewDescription" placeholder="Enter description" autocomplete="off">' +
+                '</div>' +
+                '<div class="form-group">' +
+                '<label for="adminNewHcpcsCode">HCPCS Code</label>' +
+                '<input type="text" id="adminNewHcpcsCode" placeholder="e.g., A6251" autocomplete="off">' +
+                '</div>' +
+                '<div class="form-group">' +
+                '<label for="adminNewUnitCost">Unit Cost ($)</label>' +
+                '<input type="number" id="adminNewUnitCost" placeholder="0.00" min="0" step="0.01" autocomplete="off">' +
+                '</div>' +
+                '</div>' +
+                '<div style="display: flex; gap: 15px; flex-wrap: wrap;">' +
+                '<button class="btn btn-success" type="button" onclick="adminAddSupply()" id="addSupplyBtn">Add New Supply Item</button>' +
+                '<button class="btn btn-primary" type="button" onclick="showBatchSupplyModal()" id="batchSupplyBtn">📤 Add Batch Supply Items</button>' +
+                '</div>' +
+                '</div>' +
+                '<h4>Edit Existing Supply Costs</h4>' +
+                '<div id="supplyControls" class="hidden" style="background: #f7fafc; padding: 20px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #667eea;">' +
+                '<div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">' +
+                '<div>' +
+                '<label style="display: flex; align-items: center; gap: 10px; font-weight: 600; color: #4a5568;">' +
+                '<input type="checkbox" id="selectAllSupplies" onchange="toggleSelectAllSupplies()" style="transform: scale(1.2);">' +
+                'Select All Supply Items' +
+                '</label>' +
+                '<p style="margin: 5px 0 0 0; color: #718096; font-size: 14px;">' +
+                '<span id="selectedSupplyCount">0</span> supply item(s) selected' +
+                '</p>' +
+                '</div>' +
+                '<div>' +
+                '<button class="btn btn-danger" onclick="deleteSelectedSupplies()" id="deleteSelectedSuppliesBtn" disabled>' +
+                '🗑️ Delete Selected Supply Items' +
+                '</button>' +
+                '</div>' +
+                '</div>' +
+                '</div>' +
+                '<input type="text" id="adminSupplySearch" placeholder="Search supplies..." class="search-box" onkeyup="adminFilterSupplies(this.value)" autocomplete="off">' +
+                '<div class="table-container">' +
+                '<table class="admin-table" id="adminSupplyTable">' +
+                '<thead>' +
+                '<tr>' +
+                '<th style="width: 50px;">Select</th>' +
+                '<th style="width: 100px;">AR Code</th>' +
+                '<th style="min-width: 300px;">Item Description</th>' +
+                '<th style="width: 120px;">HCPCS Code</th>' +
+                '<th style="width: 100px;">Unit Cost</th>' +
+                '<th style="width: 100px;">Actions</th>' +
+                '</tr>' +
+                '</thead>' +
+                '<tbody id="adminSupplyTableBody">' +
+                '</tbody>' +
+                '</table>' +
+                '</div>' +
+                '</div>' +
+                '<div class="admin-section">' +
+                '<h3>📊 System Overview</h3>' +
+                '<div class="admin-cards" id="adminStatsCards">Loading statistics...</div>' +
+                '</div>';
+
+            setTimeout(function() {
+                adminRefreshUsers();
+                adminRefreshFacilities();
+                adminRefreshSupplies();
+                adminRefreshStats();
+            }, 50);
+        }
+
+        async function adminRefreshUsers() {
+            try {
+                const pendingUsers = await apiCall('/users/pending');
+                const pendingContainer = document.getElementById('pendingUsersList');
+
+                if (pendingUsers.length === 0) {
+                    pendingContainer.innerHTML = '<p style="color: #718096; font-style: italic;">No pending user approvals</p>';
+                } else {
+                    let html = '<div class="admin-cards">';
+                    pendingUsers.forEach(function(user) {
+                        html += 
+                            '<div class="admin-card" style="border-left: 4px solid #ed8936;">' +
+                            '<h4>👤 ' + user.name + '</h4>' +
+                            '<p><strong>Email:</strong> ' + user.email + '</p>' +
+                            '<p><strong>Facility:</strong> ' + (user.facility_name || 'None selected') + '</p>' +
+                            '<p><strong>Registered:</strong> ' + new Date(user.created_at).toLocaleDateString() + '</p>' +
+                            '<div class="card-actions">' +
+                            '<button class="btn btn-success btn-sm" onclick="approveUser(' + user.id + ')">✅ Approve</button>' +
+                            '<button class="btn btn-danger btn-sm" onclick="rejectUser(' + user.id + ')">❌ Reject</button>' +
+                            '</div>' +
+                            '</div>';
+                    });
+                    html += '</div>';
+                    pendingContainer.innerHTML = html;
+                }
+
+                const allUsers = await apiCall('/users');
+                const tbody = document.getElementById('allUsersTableBody');
+                tbody.innerHTML = '';
+
+                allUsers.forEach(function(user) {
+                    const statusBadge = user.is_approved ? 
+                        '<span style="background: #38a169; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px;">Approved</span>' :
+                        '<span class="pending-badge">Pending</span>';
+
+                    const row = document.createElement('tr');
+                    
+                    let facilitySelect = user.facility_name || 'None';
+                    if (user.is_approved) {
+                        facilitySelect = '<select onchange="updateUserFacility(' + user.id + ', this.value)" style="padding: 4px; border-radius: 4px; border: 1px solid #e2e8f0;">';
+                        facilitySelect += '<option value="">No Facility</option>';
+                        appData.facilities.forEach(function(f) {
+                            const selected = f.id === user.facility_id ? 'selected' : '';
+                            facilitySelect += '<option value="' + f.id + '" ' + selected + '>' + f.name + '</option>';
+                        });
+                        facilitySelect += '</select>';
+                    }
+
+                    let actions = '';
+                    if (!user.is_approved) {
+                        actions += '<button class="btn btn-success btn-sm" onclick="approveUser(' + user.id + ')">Approve</button>';
+                    }
+                    if (user.email !== 'admin@system.com') {
+                        actions += '<button class="btn btn-danger btn-sm" onclick="adminDeleteUser(' + user.id + ')" style="margin-left: 5px;">Delete</button>';
+                    }
+
+                    row.innerHTML = 
+                        '<td>' + user.name + '</td>' +
+                        '<td>' + user.email + '</td>' +
+                        '<td><span style="background: ' + (user.role === 'admin' ? '#667eea' : '#718096') + '; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px;">' + user.role.toUpperCase() + '</span></td>' +
+                        '<td>' + facilitySelect + '</td>' +
+                        '<td>' + statusBadge + '</td>' +
+                        '<td>' + new Date(user.created_at).toLocaleDateString() + '</td>' +
+                        '<td>' + actions + '</td>';
+                    tbody.appendChild(row);
+                });
+
+                await updatePendingUsersNotification();
+
+            } catch (error) {
+                console.error('Failed to load users:', error);
+                document.getElementById('pendingUsersList').innerHTML = '<p style="color: #e53e3e;">Failed to load users</p>';
+            }
+        }
+
+        async function approveUser(userId) {
+            try {
+                await apiCall('/users/' + userId + '/approve', { method: 'POST' });
+                showTrackingStatus('✅ User approved successfully!');
+                adminRefreshUsers();
+            } catch (error) {
+                alert('Failed to approve user: ' + error.message);
+            }
+        }
+
+        async function rejectUser(userId) {
+            if (confirm('Are you sure you want to reject this user registration? This will permanently delete their account.')) {
+                try {
+                    await apiCall('/users/' + userId, { method: 'DELETE' });
+                    showTrackingStatus('✅ User registration rejected');
+                    adminRefreshUsers();
+                } catch (error) {
+                    alert('Failed to reject user: ' + error.message);
+                }
+            }
+        }
+
+        async function updateUserFacility(userId, facilityId) {
+            try {
+                await apiCall('/users/' + userId + '/facility', {
+                    method: 'PUT',
+                    body: { facilityId: facilityId || null }
+                });
+                showTrackingStatus('✅ User facility updated successfully!');
+                adminRefreshUsers();
+            } catch (error) {
+                alert('Failed to update user facility: ' + error.message);
+                adminRefreshUsers();
+            }
+        }
+
+        async function adminDeleteUser(userId) {
+            if (confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
+                try {
+                    await apiCall('/users/' + userId, { method: 'DELETE' });
+                    showTrackingStatus('✅ User deleted successfully');
+                    adminRefreshUsers();
+                } catch (error) {
+                    alert('Failed to delete user: ' + error.message);
+                }
+            }
+        }
+
+        async function adminAddFacility() {
+            const name = document.getElementById('adminFacilityName').value.trim();
+            const addBtn = document.getElementById('addFacilityBtn');
+
+            if (!name) {
+                alert('Please enter a facility name');
+                return;
+            }
+
+            try {
+                addBtn.disabled = true;
+                addBtn.innerHTML = '<span class="loading"></span>Adding...';
+
+                await apiCall('/facilities', {
+                    method: 'POST',
+                    body: { name: name }
+                });
+
+                document.getElementById('adminFacilityName').value = '';
+                await loadAllData();
+                adminRefreshFacilities();
+                adminRefreshStats();
+
+                showTrackingStatus('✅ Facility added successfully!');
+            } catch (error) {
+                alert(error.message);
+            } finally {
+                addBtn.disabled = false;
+                addBtn.innerHTML = 'Add Facility';
+            }
+        }
+
+        function adminRefreshFacilities() {
+            const container = document.getElementById('adminFacilityCards');
+            if (!container) return;
+
+            if (appData.facilities.length === 0) {
+                container.innerHTML = '<div class="empty-state"><p>No facilities created yet. Add your first facility above.</p></div>';
+                return;
+            }
+
+            container.innerHTML = '';
+            appData.facilities.forEach(function(facility) {
+                const patientsInFacility = appData.patients.filter(function(p) { return p.facility_id === facility.id; }).length;
+
+                const card = document.createElement('div');
+                card.className = 'admin-card';
+                card.innerHTML = 
+                    '<h4>🏢 ' + facility.name + '</h4>' +
+                    '<p><strong>Facility ID:</strong> ' + facility.id + '</p>' +
+                    '<p><strong>Created:</strong> ' + new Date(facility.created_at).toLocaleDateString() + '</p>' +
+                    '<p><strong>Patients:</strong> ' + patientsInFacility + ' active</p>' +
+                    '<div class="card-actions">' +
+                    '<button class="btn btn-danger btn-sm" onclick="adminRemoveFacility(' + facility.id + ')">Remove Facility</button>' +
+                    '</div>';
+                container.appendChild(card);
+            });
+        }
+
+        async function adminRemoveFacility(facilityId) {
+            const patientsInFacility = appData.patients.filter(function(p) { return p.facility_id === facilityId; });
+
+            if (patientsInFacility.length > 0) {
+                alert('Cannot remove facility. There are ' + patientsInFacility.length + ' patients assigned to this facility. Please remove or reassign patients first.');
+                return;
+            }
+
+            if (confirm('Are you sure you want to remove this facility?')) {
+                try {
+                    await apiCall('/facilities/' + facilityId, { method: 'DELETE' });
+                    await loadAllData();
+                    adminRefreshFacilities();
+                    adminRefreshStats();
+                    showTrackingStatus('✅ Facility removed successfully!');
+                } catch (error) {
+                    alert('Failed to remove facility: ' + error.message);
+                }
+            }
+        }
+
+        async function adminAddSupply() {
+            const arCode = parseInt(document.getElementById('adminNewArCode').value);
+            const description = document.getElementById('adminNewDescription').value.trim();
+            const hcpcsCode = document.getElementById('adminNewHcpcsCode').value.trim();
+            const unitCost = parseFloat(document.getElementById('adminNewUnitCost').value) || 0;
+            const addBtn = document.getElementById('addSupplyBtn');
+
+            if (!arCode || !description) {
+                alert('Please fill in AR Code and Item Description (required fields)');
+                return;
+            }
+
+            if (arCode < 1) {
+                alert('AR Code must be a positive number');
+                return;
+            }
+
+            try {
+                addBtn.disabled = true;
+                addBtn.innerHTML = '<span class="loading"></span>Adding...';
+
+                await apiCall('/supplies', {
+                    method: 'POST',
+                    body: { 
+                        code: arCode, 
+                        description: description, 
+                        hcpcs: hcpcsCode, 
+                        cost: unitCost,
+                        is_custom: false  // Make new supplies system supplies
+                    }
+                });
+
+                document.getElementById('adminNewArCode').value = '';
+                document.getElementById('adminNewDescription').value = '';
+                document.getElementById('adminNewHcpcsCode').value = '';
+                document.getElementById('adminNewUnitCost').value = '';
+
+                await loadAllData();
+                adminRefreshSupplies();
+                adminRefreshStats();
+
+                showTrackingStatus('✅ Supply item added successfully!');
+            } catch (error) {
+                alert(error.message);
+            } finally {
+                addBtn.disabled = false;
+                addBtn.innerHTML = 'Add New Supply Item';
+            }
+        }
+
+        function adminRefreshSupplies() {
+            const tbody = document.getElementById('adminSupplyTableBody');
+            if (!tbody) return;
+
+            tbody.innerHTML = '';
+            
+            const controlsSection = document.getElementById('supplyControls');
+
+            if (!appData.supplies || appData.supplies.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #718096; padding: 40px;">No supplies in system. Add your first supply above or use batch import.</td></tr>';
+                if (controlsSection) controlsSection.classList.add('hidden');
+                return;
+            }
+
+            // Show controls section
+            if (controlsSection) controlsSection.classList.remove('hidden');
+
+            appData.supplies.forEach(function(supply) {
+                const row = document.createElement('tr');
+                if (supply.is_custom) {
+                    row.classList.add('custom-supply');
+                }
+                
+                row.innerHTML = 
+                    '<td style="text-align: center;">' +
+                    '<input type="checkbox" class="supply-checkbox" value="' + supply.id + '" ' +
+                    'onchange="updateSelectedSupplyCount()" style="transform: scale(1.2);">' +
+                    '</td>' +
+                    '<td>' +
+                    '<strong>' + supply.code + '</strong>' +
+                    (supply.is_custom ? '<span class="custom-badge">CUSTOM</span>' : '') +
+                    '</td>' +
+                    '<td>' + supply.description + '</td>' +
+                    '<td>' +
+                    '<input type="text" value="' + (supply.hcpcs || '') + '" ' +
+                    'style="width: 100%; padding: 4px; border: 1px solid #e2e8f0; border-radius: 4px;" ' +
+                    'onchange="adminUpdateSupply(' + supply.id + ', \'hcpcs\', this.value)">' +
+                    '</td>' +
+                    '<td>' +
+                    '<input type="number" value="' + (supply.cost || 0) + '" step="0.01" min="0" ' +
+                    'style="width: 100%; padding: 4px; border: 1px solid #e2e8f0; border-radius: 4px;" ' +
+                    'onchange="adminUpdateSupply(' + supply.id + ', \'cost\', this.value)">' +
+                    '</td>' +
+                    '<td style="text-align: center;">' +
+                    '<button class="btn btn-danger btn-sm" onclick="adminDeleteSupply(' + supply.id + ')" title="Delete Supply Item">' +
+                    '🗑️' +
+                    '</button>' +
+                    '</td>';
+                tbody.appendChild(row);
+            });
+            
+            updateSelectedSupplyCount();
+        }
+
+        function toggleSelectAllSupplies() {
+            const selectAllCheckbox = document.getElementById('selectAllSupplies');
+            const supplyCheckboxes = document.querySelectorAll('.supply-checkbox');
+            
+            supplyCheckboxes.forEach(function(checkbox) {
+                checkbox.checked = selectAllCheckbox.checked;
+            });
+            
+            updateSelectedSupplyCount();
+        }
+
+        function updateSelectedSupplyCount() {
+            const selectedCheckboxes = document.querySelectorAll('.supply-checkbox:checked');
+            const selectAllCheckbox = document.getElementById('selectAllSupplies');
+            const selectedCountSpan = document.getElementById('selectedSupplyCount');
+            const deleteSelectedBtn = document.getElementById('deleteSelectedSuppliesBtn');
+            const totalCheckboxes = document.querySelectorAll('.supply-checkbox');
+            
+            if (selectedCountSpan) selectedCountSpan.textContent = selectedCheckboxes.length;
+            if (deleteSelectedBtn) deleteSelectedBtn.disabled = selectedCheckboxes.length === 0;
+            
+            if (selectAllCheckbox) {
+                if (selectedCheckboxes.length === 0) {
+                    selectAllCheckbox.indeterminate = false;
+                    selectAllCheckbox.checked = false;
+                } else if (selectedCheckboxes.length === totalCheckboxes.length) {
+                    selectAllCheckbox.indeterminate = false;
+                    selectAllCheckbox.checked = true;
+                } else {
+                    selectAllCheckbox.indeterminate = true;
+                    selectAllCheckbox.checked = false;
+                }
+            }
+        }
+
+        async function deleteSelectedSupplies() {
+            const selectedCheckboxes = document.querySelectorAll('.supply-checkbox:checked');
+            const selectedIds = Array.from(selectedCheckboxes).map(function(cb) { return parseInt(cb.value); });
+            
+            if (selectedIds.length === 0) {
+                alert('No supply items selected');
+                return;
+            }
+            
+            const selectedSupplies = appData.supplies.filter(function(s) { return selectedIds.includes(s.id); });
+            const customCount = selectedSupplies.filter(function(s) { return s.is_custom; }).length;
+            const systemCount = selectedSupplies.filter(function(s) { return !s.is_custom; }).length;
+            
+            let confirmMessage = 'Are you sure you want to PERMANENTLY DELETE ' + selectedIds.length + ' selected supply item(s)?\n\n';
+            if (customCount > 0) confirmMessage += '• ' + customCount + ' custom supply item(s)\n';
+            if (systemCount > 0) confirmMessage += '• ' + systemCount + ' system supply item(s)\n';
+            confirmMessage += '\n⚠️ This action cannot be undone and will affect all existing tracking data for these items.';
+            
+            if (!confirm(confirmMessage)) {
+                return;
+            }
+            
+            try {
+                const deleteBtn = document.getElementById('deleteSelectedSuppliesBtn');
+                deleteBtn.disabled = true;
+                deleteBtn.innerHTML = '<span class="loading"></span>Deleting...';
+                
+                let deletedCount = 0;
+                let failedCount = 0;
+                const errors = [];
+                
+                for (let i = 0; i < selectedIds.length; i++) {
+                    const supplyId = selectedIds[i];
+                    try {
+                        await apiCall('/supplies/' + supplyId, {
+                            method: 'DELETE'
+                        });
+                        deletedCount++;
+                    } catch (error) {
+                        console.error('Failed to delete supply ' + supplyId + ':', error);
+                        const supply = appData.supplies.find(function(s) { return s.id === supplyId; });
+                        errors.push((supply ? supply.description : 'ID ' + supplyId) + ': ' + error.message);
+                        failedCount++;
+                    }
+                }
+                
+                await loadAllData();
+                adminRefreshSupplies();
+                adminRefreshStats();
+                
+                if (failedCount === 0) {
+                    showTrackingStatus('✅ ' + deletedCount + ' supply item(s) deleted successfully!');
+                } else {
+                    showTrackingStatus('⚠️ ' + deletedCount + ' deleted, ' + failedCount + ' failed', true);
+                    if (errors.length > 0) {
+                        console.error('Delete errors:', errors);
+                        alert('Some items could not be deleted:\n' + errors.slice(0, 3).join('\n') + (errors.length > 3 ? '\n... and more' : ''));
+                    }
+                }
+                
+            } catch (error) {
+                console.error('Bulk delete error:', error);
+                showTrackingStatus('❌ Failed to delete supply items: ' + error.message, true);
+            } finally {
+                const deleteBtn = document.getElementById('deleteSelectedSuppliesBtn');
+                deleteBtn.disabled = false;
+                deleteBtn.innerHTML = '🗑️ Delete Selected Supply Items';
+            }
+        }
+
+        function adminFilterSupplies(searchTerm) {
+            const rows = document.querySelectorAll('#adminSupplyTableBody tr');
+            const term = searchTerm.toLowerCase().trim();
+            let visibleCount = 0;
+
+            rows.forEach(function(row) {
+                const cells = row.querySelectorAll('td');
+                if (cells.length === 1) return; // Skip empty state row
+                
+                // Check AR Code (2nd column, index 1) and Description (3rd column, index 2)
+                const code = cells[1] ? cells[1].textContent.toLowerCase() : '';
+                const description = cells[2] ? cells[2].textContent.toLowerCase() : '';
+                const shouldShow = !term || code.includes(term) || description.includes(term);
+                
+                row.style.display = shouldShow ? '' : 'none';
+                if (shouldShow) visibleCount++;
+            });
+            
+            // Update selection counts after filtering
+            updateSelectedSupplyCount();
+        }
+
+        async function adminUpdateSupply(supplyId, field, value) {
+            try {
+                const updateData = {};
+                updateData[field] = field === 'cost' ? parseFloat(value) || 0 : value;
+
+                await apiCall('/supplies/' + supplyId, {
+                    method: 'PUT',
+                    body: updateData
+                });
+
+                // Update local data
+                const supply = appData.supplies.find(function(s) { return s.id === supplyId; });
+                if (supply) {
+                    supply[field] = updateData[field];
+                }
+
+                showTrackingStatus('✅ Supply updated successfully');
+            } catch (error) {
+                alert('Failed to update supply: ' + error.message);
+                adminRefreshSupplies(); // Reload to reset values
+            }
+        }
+
+        async function adminDeleteSupply(supplyId) {
+            // Find the supply
+            const supply = appData.supplies.find(function(s) { return s.id === supplyId; });
+            if (!supply) {
+                alert('Supply not found');
+                return;
+            }
+
+            const itemType = supply.is_custom ? 'custom' : 'system';
+            const confirmMessage = 'Are you sure you want to PERMANENTLY DELETE this ' + itemType + ' supply item?\n\n' +
+                                 'Item: ' + supply.description + ' (AR Code: ' + supply.code + ')\n\n' +
+                                 '⚠️ This action cannot be undone and will affect all existing tracking data for this item.';
+
+            if (confirm(confirmMessage)) {
+                try {
+                    await apiCall('/supplies/' + supplyId, { method: 'DELETE' });
+                    await loadAllData();
+                    adminRefreshSupplies();
+                    adminRefreshStats();
+                    showTrackingStatus('✅ Supply item "' + supply.description + '" deleted successfully');
+                } catch (error) {
+                    console.error('Delete supply error:', error);
+                    
+                    // Provide helpful error messages
+                    if (error.message.includes('Custom supply not found') || error.message.includes('not found')) {
+                        alert('This ' + itemType + ' supply item could not be deleted. It may have already been removed or there may be existing tracking data preventing deletion.');
+                    } else if (error.message.includes('Cannot delete') || error.message.includes('has tracking data')) {
+                        alert('This supply item cannot be deleted because it has existing tracking data. You may need to remove all tracking entries first, or contact your system administrator.');
+                    } else {
+                        alert('Failed to delete supply item: ' + error.message);
+                    }
+                }
+            }
+        }
+
+        async function adminRefreshStats() {
+            const container = document.getElementById('adminStatsCards');
+            if (!container) return;
+
+            try {
+                const stats = await apiCall('/statistics');
+                
+                container.innerHTML = 
+                    '<div class="stats-card">' +
+                    '<h4>👥 Total Users</h4>' +
+                    '<div class="value">' + stats.totalUsers + '</div>' +
+                    '<p>' + stats.pendingUsers + ' pending approval</p>' +
+                    '</div>' +
+                    '<div class="stats-card">' +
+                    '<h4>🏢 Facilities</h4>' +
+                    '<div class="value">' + stats.totalFacilities + '</div>' +
+                    '<p>Active facilities</p>' +
+                    '</div>' +
+                    '<div class="stats-card">' +
+                    '<h4>👤 Patients</h4>' +
+                    '<div class="value">' + stats.totalPatients + '</div>' +
+                    '<p>Tracking sheets created</p>' +
+                    '</div>' +
+                    '<div class="stats-card">' +
+                    '<h4>📦 Supply Items</h4>' +
+                    '<div class="value">' + stats.totalSupplies + '</div>' +
+                    '<p>' + stats.customSupplies + ' custom items</p>' +
+                    '</div>';
+            } catch (error) {
+                console.error('Failed to load statistics:', error);
+                container.innerHTML = '<div class="empty-state"><p>Failed to load statistics</p></div>';
+            }
+        }
+
+        // Check for existing auth token on page load
+        window.addEventListener('DOMContentLoaded', async function() {
+            if (authToken) {
+                try {
+                    console.log('🔍 Checking stored auth token...');
+                    
+                    const response = await apiCall('/auth/verify');
+                    currentUser = response.user;
+                    
+                    console.log('✅ Token valid, auto-logging in user:', currentUser.email);
+                    
+                    document.getElementById('loginContainer').style.display = 'none';
+                    document.getElementById('mainApp').style.display = 'block';
+                    
+                    await initApp();
+                } catch (error) {
+                    console.log('❌ Stored token invalid, showing login');
+                    localStorage.removeItem('authToken');
+                    authToken = null;
+                    currentUser = null;
+                }
+            } else {
+                console.log('🔓 No stored token, showing login screen');
+            }
+        });
+
+        // Handle Enter key for login
+        document.addEventListener('DOMContentLoaded', function() {
+            const loginEmail = document.getElementById('loginEmail');
+            const loginPassword = document.getElementById('loginPassword');
+            
+            if (loginEmail && loginPassword) {
+                [loginEmail, loginPassword].forEach(function(input) {
+                    input.addEventListener('keypress', function(e) {
+                        if (e.key === 'Enter') {
+                            login();
+                        }
+                    });
+                });
+            }
+        });
+    </script>
+</body>
+</html> + totalCost.toFixed(2);
+                    console.log('- Total cost (admin):', '
+
+                updateSummaryTable(filteredPatients);
+            } catch (error) {
+                console.error('Failed to update summary:', error);
+            }
+        }
+
+        async function updateSummaryTable(patients) {
+            const tbody = document.getElementById('summaryTableBody');
+            tbody.innerHTML = '';
+
+            const patientsToShow = patients || getFilteredPatients();
+
+            if (patientsToShow.length === 0) {
+                const isAdmin = currentUser && currentUser.role === 'admin';
+                const colspan = isAdmin ? '8' : '6';
+                tbody.innerHTML = '<tr><td colspan="' + colspan + '" style="text-align: center; color: #718096;">No patients to display</td></tr>';
+                return;
+            }
+
+            const isAdmin = currentUser && currentUser.role === 'admin';
+
+            for (let i = 0; i < patientsToShow.length; i++) {
+                const patient = patientsToShow[i];
+                try {
+                    const trackingData = await apiCall('/patients/' + patient.id + '/tracking');
+                    
+                    let totalUnits = 0;
+                    let totalCost = 0;
+                    const hcpcsCodes = new Set();
+                    
+                    trackingData.forEach(function(item) {
+                        const quantity = parseInt(item.quantity) || 0;
+                        
+                        let cost = 0;
+                        if (item.cost !== null && item.cost !== undefined) {
+                            const costValue = Number(item.cost);
+                            cost = isNaN(costValue) ? 0 : costValue;
+                        }
+                        
+                        totalUnits += quantity;
+                        totalCost += quantity * cost;
+                        if (item.hcpcs) hcpcsCodes.add(item.hcpcs);
+                    });
+
+                    const yearPart = patient.month.split('-')[0];
+                    const monthPart = patient.month.split('-')[1];
+                    const displayMonth = monthPart + '-' + yearPart.slice(-2);
+                    const lastUpdated = new Date(patient.updated_at).toLocaleDateString();
+
+                    const row = document.createElement('tr');
+                    row.innerHTML = 
+                        '<td>' + patient.name + '</td>' +
+                        '<td>' + displayMonth + '</td>' +
+                        '<td>' + (patient.mrn || 'N/A') + '</td>' +
+                        '<td>' + (patient.facility_name || 'Unknown') + '</td>' +
+                        '<td><strong>' + totalUnits + '</strong></td>' +
+                        '<td class="admin-only-column">' + (Array.from(hcpcsCodes).join(', ') || 'N/A') + '</td>' +
+                        '<td class="admin-only-column"><strong>$' + totalCost.toFixed(2) + '</strong></td>' +
+                        '<td>' + lastUpdated + '</td>';
+                    tbody.appendChild(row);
+                } catch (error) {
+                    console.error('Failed to load data for patient ' + patient.name + ':', error);
+                }
+            }
+        }
+
+        async function downloadUserReport() {
+            await downloadReport(false);
+        }
+
+        async function downloadAdminReport() {
+            await downloadReport(true);
+        }
+
+        // FIXED: Updated downloadReport to properly include wound diagnosis data
+        async function downloadReport(includeAdminData) {
+            try {
+                showTrackingStatus('📄 Generating report...', false);
+                
+                const filteredPatients = getFilteredPatients();
+                const reportData = [];
+                
+                let fileName = 'Supply_Report';
+                if (appData.currentFilters.month) {
+                    const monthName = new Date(appData.currentFilters.month + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                    fileName = 'Supply_Report_' + monthName.replace(' ', '_');
+                }
+                if (appData.currentFilters.facility) {
+                    const facility = appData.facilities.find(function(f) { return f.id == appData.currentFilters.facility; });
+                    if (facility) {
+                        fileName += '_' + facility.name.replace(/[^a-zA-Z0-9]/g, '_');
+                    }
+                }
+                
+                const header = ['Patient Name', 'MRN', 'Month/Year', 'Facility', 'AR Code', 'Item Description', 'All Wound Dx'];
+                if (includeAdminData) {
+                    header.push('HCPCS Code', 'Unit Cost');
+                }
+                header.push('Total Units');
+                if (includeAdminData) {
+                    header.push('Total Cost');
+                }
+                
+                reportData.push([(includeAdminData ? 'Admin' : 'User') + ' Report - Generated ' + new Date().toLocaleDateString()]);
+                reportData.push(header);
+                
+                for (let i = 0; i < filteredPatients.length; i++) {
+                    const patient = filteredPatients[i];
+                    try {
+                        const trackingData = await apiCall('/patients/' + patient.id + '/tracking');
+                        
+                        // FIXED: Load wound dx data using LOCAL STORAGE FIRST for reports with better debugging
+                        let woundDxData = {};
+                        
+                        // Use local data as primary source for reports
+                        if (appData.woundDxData[patient.id]) {
+                            woundDxData = Object.assign({}, appData.woundDxData[patient.id]);
+                            console.log('📦 Using local wound dx data for report:', patient.name, woundDxData);
+                            console.log('📋 Available supply IDs in wound dx data:', Object.keys(woundDxData));
+                        } else {
+                            console.log('⚠️ No local wound dx data found for patient:', patient.name);
+                        }
+                        
+                        // Optionally try to merge server data, but local takes precedence
+                        try {
+                            const woundDxResponse = await apiCall('/patients/' + patient.id + '/wound-dx');
+                            if (woundDxResponse && Array.isArray(woundDxResponse)) {
+                                woundDxResponse.forEach(function(item) {
+                                    if (item && typeof item.supply_id !== 'undefined' && typeof item.wound_dx !== 'undefined') {
+                                        // Only use server data if no local data exists for this supply
+                                        if (!woundDxData[item.supply_id]) {
+                                            woundDxData[item.supply_id] = item.wound_dx || '';
+                                        }
+                                    }
+                                });
+                            }
+                        } catch (error) {
+                            console.log('⚠️ Server wound dx failed for report, using local only:', error);
+                        }
+
+                        console.log('📋 Final wound dx data for report:', patient.name, woundDxData);
+                        
+                        const supplyTotals = {};
+                        trackingData.forEach(function(item) {
+                            const key = item.code;
+                            if (!supplyTotals[key]) {
+                                supplyTotals[key] = {
+                                    supply: item,
+                                    totalUnits: 0
+                                };
+                            }
+                            supplyTotals[key].totalUnits += parseInt(item.quantity) || 0;
+                        });
+                        
+                        const yearPart = patient.month.split('-')[0];
+                        const monthPart = patient.month.split('-')[1];
+                        const displayMonth = monthPart + '-' + yearPart.slice(-2);
+                        
+                        Object.values(supplyTotals).forEach(function(supplyTotal) {
+                            const supply = supplyTotal.supply;
+                            const totalUnits = supplyTotal.totalUnits;
+                            if (totalUnits > 0) {
+                                const unitCost = parseFloat(supply.cost) || 0;
+                                const totalCost = totalUnits * unitCost;
+                                
+                                // FIXED: Ensure we get the wound dx for this specific supply with robust ID matching
+                                let woundDx = '';
+                                
+                                // Try multiple ID formats to ensure we find the match
+                                const supplyIdStr = String(supply.id);
+                                const supplyIdNum = Number(supply.id);
+                                
+                                console.log('🔍 Looking for wound dx for supply:', supply.id, '(' + supply.description + ')');
+                                console.log('🔍 Trying ID formats:', supplyIdStr, supplyIdNum);
+                                console.log('🔍 Available wound dx keys:', Object.keys(woundDxData));
+                                
+                                if (woundDxData[supply.id]) {
+                                    woundDx = woundDxData[supply.id];
+                                    console.log('✅ Found with original ID:', woundDx);
+                                } else if (woundDxData[supplyIdStr]) {
+                                    woundDx = woundDxData[supplyIdStr];
+                                    console.log('✅ Found with string ID:', woundDx);
+                                } else if (woundDxData[supplyIdNum]) {
+                                    woundDx = woundDxData[supplyIdNum];
+                                    console.log('✅ Found with number ID:', woundDx);
+                                } else {
+                                    console.log('❌ No wound dx found for supply', supply.id, '(' + supply.description + ')');
+                                }
+                                
+                                const row = [
+                                    patient.name || 'Unknown',
+                                    patient.mrn || 'N/A',
+                                    displayMonth,
+                                    patient.facility_name || 'Unknown',
+                                    supply.code || 'N/A',
+                                    supply.description || 'Unknown',
+                                    woundDx || ''  // Now properly includes wound dx data with robust matching
+                                ];
+                                
+                                if (includeAdminData) {
+                                    row.push(supply.hcpcs || 'N/A', '$' + unitCost.toFixed(2));
+                                }
+                                
+                                row.push(totalUnits);
+                                
+                                if (includeAdminData) {
+                                    row.push('$' + totalCost.toFixed(2));
+                                }
+                                
+                                reportData.push(row);
+                            }
+                        });
+                    } catch (error) {
+                        console.error('Error processing patient ' + patient.name + ':', error);
+                    }
+                }
+                
+                const worksheet = XLSX.utils.aoa_to_sheet(reportData);
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, worksheet, 'Report');
+                
+                const colWidths = [
+                    { width: 20 }, { width: 15 }, { width: 12 }, { width: 20 }, 
+                    { width: 10 }, { width: 35 }, { width: 25 } // Added width for All Wound Dx
+                ];
+                if (includeAdminData) {
+                    colWidths.push({ width: 12 }, { width: 12 });
+                }
+                colWidths.push({ width: 12 });
+                if (includeAdminData) {
+                    colWidths.push({ width: 12 });
+                }
+                
+                worksheet['!cols'] = colWidths;
+                
+                XLSX.writeFile(workbook, fileName + '.xlsx');
+                
+                // Log summary of what was included in the report
+                console.log('📊 REPORT SUMMARY:');
+                console.log('- Patients processed:', filteredPatients.length);
+                
+                let totalWoundDxEntriesInReport = 0;
+                let patientsWithWoundDx = 0;
+                
+                Object.keys(appData.woundDxData).forEach(function(patientId) {
+                    const entries = Object.keys(appData.woundDxData[patientId] || {}).length;
+                    if (entries > 0) {
+                        totalWoundDxEntriesInReport += entries;
+                        patientsWithWoundDx++;
+                    }
+                });
+                
+                console.log('- Total wound dx entries in system:', totalWoundDxEntriesInReport);
+                console.log('- Patients with wound dx data:', patientsWithWoundDx);
+                console.log('- Report should include wound dx for supplies with quantities > 0');
+                
+                showTrackingStatus('✅ Report downloaded successfully with wound diagnosis data!');
+                
+            } catch (error) {
+                console.error('Failed to generate report:', error);
+                showTrackingStatus('❌ Failed to generate report: ' + error.message, true);
+            }
+        }
+
+        function showTrackingStatus(message, isError) {
+            const statusDiv = document.getElementById('trackingStatus');
+            const statusText = document.getElementById('trackingStatusText');
+            
+            statusText.textContent = message;
+            statusDiv.className = 'tracking-status' + (isError ? ' error' : '');
+            statusDiv.style.display = 'block';
+
+            setTimeout(function() {
+                statusDiv.style.display = 'none';
+            }, 3000);
+        }
+
+        function toggleSelectAll() {
+            const selectAllCheckbox = document.getElementById('selectAllPatients');
+            const patientCheckboxes = document.querySelectorAll('.patient-checkbox');
+            
+            patientCheckboxes.forEach(function(checkbox) {
+                checkbox.checked = selectAllCheckbox.checked;
+            });
+            
+            updateSelectedCount();
+        }
+
+        function updateSelectedCount() {
+            const selectedCheckboxes = document.querySelectorAll('.patient-checkbox:checked');
+            const selectAllCheckbox = document.getElementById('selectAllPatients');
+            const selectedCountSpan = document.getElementById('selectedCount');
+            const removeSelectedBtn = document.getElementById('removeSelectedBtn');
+            const totalCheckboxes = document.querySelectorAll('.patient-checkbox');
+            
+            selectedCountSpan.textContent = selectedCheckboxes.length;
+            removeSelectedBtn.disabled = selectedCheckboxes.length === 0;
+            
+            if (selectedCheckboxes.length === 0) {
+                selectAllCheckbox.indeterminate = false;
+                selectAllCheckbox.checked = false;
+            } else if (selectedCheckboxes.length === totalCheckboxes.length) {
+                selectAllCheckbox.indeterminate = false;
+                selectAllCheckbox.checked = true;
+            } else {
+                selectAllCheckbox.indeterminate = true;
+                selectAllCheckbox.checked = false;
+            }
+        }
+
+        async function removeSelectedPatients() {
+            const selectedCheckboxes = document.querySelectorAll('.patient-checkbox:checked');
+            const selectedIds = Array.from(selectedCheckboxes).map(function(cb) { return parseInt(cb.value); });
+            
+            if (selectedIds.length === 0) {
+                alert('No patients selected');
+                return;
+            }
+            
+            const confirmMessage = 'Are you sure you want to remove ' + selectedIds.length + ' selected patient(s) and all their tracking data?\n\nThis action cannot be undone.';
+            
+            if (!confirm(confirmMessage)) {
+                return;
+            }
+            
+            try {
+                const removeBtn = document.getElementById('removeSelectedBtn');
+                removeBtn.disabled = true;
+                removeBtn.innerHTML = '<span class="loading"></span>Removing...';
+                
+                let deletedCount = 0;
+                let failedCount = 0;
+                
+                for (let i = 0; i < selectedIds.length; i++) {
+                    const patientId = selectedIds[i];
+                    try {
+                        await apiCall('/patients/' + patientId, {
+                            method: 'DELETE'
+                        });
+                        deletedCount++;
+                    } catch (error) {
+                        console.error('Failed to delete patient ' + patientId + ':', error);
+                        failedCount++;
+                    }
+                }
+                
+                await loadAllData();
+                
+                const selectedPatient = document.getElementById('patientSelect').value;
+                if (selectedIds.includes(parseInt(selectedPatient))) {
+                    document.getElementById('patientSelect').value = '';
+                    loadPatientTracking();
+                }
+                
+                if (failedCount === 0) {
+                    showTrackingStatus('✅ ' + deletedCount + ' patient(s) removed successfully!');
+                } else {
+                    showTrackingStatus('⚠️ ' + deletedCount + ' patient(s) removed, ' + failedCount + ' failed', true);
+                }
+                
+            } catch (error) {
+                console.error('Bulk removal error:', error);
+                showTrackingStatus('❌ Failed to remove patients: ' + error.message, true);
+            } finally {
+                const removeBtn = document.getElementById('removeSelectedBtn');
+                removeBtn.disabled = false;
+                removeBtn.innerHTML = '🗑️ Remove Selected Patients';
+            }
+        }
+
+        async function removePatient(patientId) {
+            if (confirm('Are you sure you want to remove this patient and all tracking data?')) {
+                try {
+                    await apiCall('/patients/' + patientId, {
+                        method: 'DELETE'
+                    });
+
+                    await loadAllData();
+
+                    const selectedPatient = document.getElementById('patientSelect').value;
+                    if (selectedPatient == patientId) {
+                        document.getElementById('patientSelect').value = '';
+                        loadPatientTracking();
+                    }
+                    
+                    showTrackingStatus('✅ Patient removed successfully!');
+                } catch (error) {
+                    alert('Failed to remove patient: ' + error.message);
+                }
+            }
+        }
+
+        function showChangePasswordModal() {
+            document.getElementById('changePasswordModal').style.display = 'flex';
+        }
+
+        function closeChangePasswordModal() {
+            document.getElementById('changePasswordModal').style.display = 'none';
+            document.getElementById('currentPassword').value = '';
+            document.getElementById('newPassword').value = '';
+            document.getElementById('confirmPassword').value = '';
+            document.getElementById('passwordMessage').innerHTML = '';
+        }
+
+        async function changePassword() {
+            const current = document.getElementById('currentPassword').value;
+            const newPass = document.getElementById('newPassword').value;
+            const confirm = document.getElementById('confirmPassword').value;
+            const messageEl = document.getElementById('passwordMessage');
+            const changeBtn = document.getElementById('changePasswordBtn');
+
+            if (!current || !newPass || !confirm) {
+                messageEl.innerHTML = '<div class="error-message">Please fill in all fields</div>';
+                return;
+            }
+
+            if (newPass !== confirm) {
+                messageEl.innerHTML = '<div class="error-message">New passwords do not match</div>';
+                return;
+            }
+
+            if (newPass.length < 6) {
+                messageEl.innerHTML = '<div class="error-message">Password must be at least 6 characters</div>';
+                return;
+            }
+
+            try {
+                changeBtn.disabled = true;
+                changeBtn.innerHTML = '<span class="loading"></span>Changing...';
+
+                await apiCall('/auth/change-password', {
+                    method: 'POST',
+                    body: { currentPassword: current, newPassword: newPass }
+                });
+
+                messageEl.innerHTML = '<div class="success-message">Password changed successfully!</div>';
+
+                setTimeout(function() {
+                    closeChangePasswordModal();
+                }, 2000);
+            } catch (error) {
+                messageEl.innerHTML = '<div class="error-message">' + error.message + '</div>';
+            } finally {
+                changeBtn.disabled = false;
+                changeBtn.innerHTML = 'Change Password';
+            }
+        }
+
+        function downloadExcelTemplate() {
+            const worksheet = XLSX.utils.aoa_to_sheet([
+                ['Name', 'Month', 'MRN', 'Facility'],
+                ['Smith, John', '2024-12', 'MRN12345', 'Main Hospital'],
+                ['Doe, Jane', '2024-12', 'MRN67890', 'Main Hospital'],
+                ['Johnson, Bob', '2024-12', '', 'Main Hospital']
+            ]);
+
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Patients');
+            XLSX.writeFile(workbook, 'patient_import_template.xlsx');
+        }
+
+        function showExcelImportModal() {
+            document.getElementById('excelImportModal').style.display = 'flex';
+            setupDragAndDrop();
+        }
+
+        function closeExcelImportModal() {
+            document.getElementById('excelImportModal').style.display = 'none';
+            document.getElementById('excelFileInput').value = '';
+            document.getElementById('importResults').style.display = 'none';
+            document.getElementById('importProgress').style.display = 'none';
+            document.getElementById('processImportBtn').disabled = true;
+            excelData = null;
+        }
+
+        function setupDragAndDrop() {
+            const uploadArea = document.getElementById('fileUploadArea');
+            
+            uploadArea.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                uploadArea.classList.add('dragover');
+            });
+
+            uploadArea.addEventListener('dragleave', function() {
+                uploadArea.classList.remove('dragover');
+            });
+
+            uploadArea.addEventListener('drop', function(e) {
+                e.preventDefault();
+                uploadArea.classList.remove('dragover');
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    handleExcelFile(files[0]);
+                }
+            });
+
+            uploadArea.addEventListener('click', function() {
+                document.getElementById('excelFileInput').click();
+            });
+        }
+
+        function handleExcelFile(file) {
+            if (!file) return;
+
+            if (!file.name.match(/\.(xlsx|xls)$/)) {
+                alert('Please select an Excel file (.xlsx or .xls)');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    excelData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+                    showExcelPreview(excelData, file.name);
+                    document.getElementById('processImportBtn').disabled = false;
+                } catch (error) {
+                    alert('Error reading Excel file: ' + error.message);
+                }
+            };
+
+            reader.readAsArrayBuffer(file);
+        }
+
+        function showExcelPreview(data, fileName) {
+            const resultsDiv = document.getElementById('importResults');
+            
+            if (data.length < 2) {
+                resultsDiv.innerHTML = '<p><strong>Error:</strong> Excel file must contain at least a header row and one data row.</p>';
+                resultsDiv.className = 'import-results error';
+                resultsDiv.style.display = 'block';
+                return;
+            }
+
+            const headers = data[0];
+            const dataRows = data.slice(1);
+
+            let html = '<h4>📄 File Preview: ' + fileName + '</h4>';
+            html += '<p><strong>Rows to import:</strong> ' + dataRows.length + '</p>';
+            html += '<p><strong>Columns found:</strong> ' + headers.join(', ') + '</p>';
+            html += '<div style="max-height: 150px; overflow-y: auto; margin-top: 10px;">';
+            html += '<table style="width: 100%; border-collapse: collapse; font-size: 12px;">';
+            html += '<thead><tr style="background: #f7fafc;">';
+
+            headers.forEach(function(header) {
+                html += '<th style="padding: 5px; border: 1px solid #e2e8f0;">' + header + '</th>';
+            });
+
+            html += '</tr></thead><tbody>';
+
+            dataRows.slice(0, 5).forEach(function(row) {
+                html += '<tr>';
+                headers.forEach(function(header, index) {
+                    html += '<td style="padding: 5px; border: 1px solid #e2e8f0;">' + (row[index] || '') + '</td>';
+                });
+                html += '</tr>';
+            });
+
+            if (dataRows.length > 5) {
+                html += '<tr><td colspan="' + headers.length + '" style="padding: 5px; text-align: center; font-style: italic;">... and ' + (dataRows.length - 5) + ' more rows</td></tr>';
+            }
+
+            html += '</tbody></table></div>';
+
+            resultsDiv.innerHTML = html;
+            resultsDiv.className = 'import-results mixed';
+            resultsDiv.style.display = 'block';
+        }
+
+        async function processExcelImport() {
+            const processBtn = document.getElementById('processImportBtn');
+            const progressBar = document.getElementById('importProgress');
+            const progressFill = document.getElementById('importProgressFill');
+            const resultsDiv = document.getElementById('importResults');
+
+            if (!excelData) {
+                alert('No Excel data to process');
+                return;
+            }
+
+            try {
+                processBtn.disabled = true;
+                processBtn.innerHTML = '<span class="loading"></span>Processing...';
+                progressBar.style.display = 'block';
+                progressFill.style.width = '20%';
+
+                const worksheet = XLSX.utils.aoa_to_sheet(excelData);
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, worksheet, 'Patients');
+                const excelBuffer = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' });
+
+                progressFill.style.width = '50%';
+
+                const formData = new FormData();
+                const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                formData.append('excelFile', blob, 'patients.xlsx');
+
+                progressFill.style.width = '80%';
+
+                const response = await fetch(API_BASE + '/patients/import-excel', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + authToken
+                    },
+                    body: formData
+                });
+
+                const result = await response.json();
+                progressFill.style.width = '100%';
+
+                if (!response.ok) {
+                    throw new Error(result.error || 'Import failed');
+                }
+
+                let resultsHtml = '<h4>✅ Import Complete</h4><p>' + result.message + '</p>';
+                
+                if (result.results.success.length > 0) {
+                    resultsHtml += '<h5 style="color: #38a169; margin-top: 15px;">Successfully Added:</h5><ul>';
+                    result.results.success.forEach(function(msg) {
+                        resultsHtml += '<li style="color: #38a169;">' + msg + '</li>';
+                    });
+                    resultsHtml += '</ul>';
+                }
+
+                if (result.results.errors.length > 0) {
+                    resultsHtml += '<h5 style="color: #e53e3e; margin-top: 15px;">Errors:</h5><ul>';
+                    result.results.errors.forEach(function(msg) {
+                        resultsHtml += '<li style="color: #e53e3e;">' + msg + '</li>';
+                    });
+                    resultsHtml += '</ul>';
+                }
+
+                resultsDiv.innerHTML = resultsHtml;
+                resultsDiv.className = result.results.errors.length === 0 ? 'import-results success' : 'import-results mixed';
+                resultsDiv.style.display = 'block';
+
+                await loadAllData();
+
+                if (result.results.errors.length === 0) {
+                    setTimeout(function() {
+                        closeExcelImportModal();
+                    }, 3000);
+                }
+
+            } catch (error) {
+                resultsDiv.innerHTML = '<h4>❌ Import Failed</h4><p style="color: #e53e3e;">' + error.message + '</p>';
+                resultsDiv.className = 'import-results error';
+                resultsDiv.style.display = 'block';
+            } finally {
+                processBtn.disabled = false;
+                processBtn.innerHTML = 'Import Data';
+                setTimeout(function() {
+                    progressBar.style.display = 'none';
+                    progressFill.style.width = '0%';
+                }, 1000);
+            }
+        }
+
+        // Batch Supply Import Functions
+        let batchSupplyData = null;
+
+        function showBatchSupplyModal() {
+            document.getElementById('batchSupplyModal').style.display = 'flex';
+            setupBatchSupplyDragAndDrop();
+            
+            // Pre-populate with the user's system supply data - FIXED FORMAT
+            const systemSupplyData = 'AR Code\tItem Description\tHCPCS Code\tUnit Cost\n272\tMed/Surgical Supplies\tB4149\t0.00\n400\tHME filter holder for trach or vent\tA7507\t3.49\n401\tHME housing & adhesive\tA7509\t1.97\n402\tHMES/trach valve adhesive disk\tA7506\t0.45\n403\tHMES filter holder or cap for tracheostoma\tA7503\t15.85\n404\tHMES filter\tA7504\t0.95\n405\tHMES/trach valve housing\tA7505\t6.55\n406\tHME housing w/adhesive filter\tA7508\t4.01\n407\tLubricant per oz to insert trach\tA4402\t1.90\n408\tPiston irrigation syringe irrigation trach ostomy, uro\tA4322\t4.16\n409\tSterile saline 10ml and 15ml bullets\tA4216\t0.62\n410\tSterile saline 100ml, 1000ml, 120ml, 250ml and 500ml\tA4217\t4.38\n411\tClosed suction catheter for trach\tA4605\t22.92\n412\tOpen suction catheter for trach\tA4624\t3.69\n413\tTracheal suction catheter closed system (yankauers/ballards)\tA4605\t22.92\n414\tTrach';
+
+            // Auto-switch to paste method and populate the data
+            setTimeout(function() {
+                showBatchImportMethod('paste', document.querySelector('.auth-tab:last-child'));
+                document.getElementById('batchSupplyPasteArea').value = systemSupplyData;
+                
+                // Add helper message
+                const pasteArea = document.getElementById('batchSupplyPasteArea');
+                pasteArea.style.border = '2px solid #38a169';
+                pasteArea.style.backgroundColor = '#f0fff4';
+                
+                // Show a helpful message
+                const resultsDiv = document.getElementById('batchSupplyResults');
+                resultsDiv.innerHTML = '<div style="background: #f0fff4; padding: 15px; border-radius: 8px; border-left: 4px solid #38a169; margin-bottom: 15px;"><h4 style="color: #276749; margin-bottom: 10px;">✅ Fixed System Supply Data is Ready!</h4><p style="color: #276749; margin: 0;"><strong>92 medical supply items</strong> with corrected format and HCPCS codes.<br>Click <strong>"📊 Parse Data"</strong> below, then <strong>"Import Supply Items"</strong> to add them to your system.</p></div>';
+                resultsDiv.style.display = 'block';
+                resultsDiv.className = 'import-results success';
+            }, 100);
+        }
+
+        function closeBatchSupplyModal() {
+            document.getElementById('batchSupplyModal').style.display = 'none';
+            document.getElementById('batchSupplyFileInput').value = '';
+            document.getElementById('batchSupplyPasteArea').value = '';
+            document.getElementById('batchSupplyResults').style.display = 'none';
+            document.getElementById('batchSupplyProgress').style.display = 'none';
+            document.getElementById('processBatchSupplyBtn').disabled = true;
+            batchSupplyData = null;
+        }
+
+        function showBatchImportMethod(method, element) {
+            // Update tabs
+            document.querySelectorAll('.auth-tab').forEach(function(t) { t.classList.remove('active'); });
+            element.classList.add('active');
+
+            // Show/hide methods
+            if (method === 'excel') {
+                document.getElementById('batchExcelMethod').classList.remove('hidden');
+                document.getElementById('batchPasteMethod').classList.add('hidden');
+            } else {
+                document.getElementById('batchExcelMethod').classList.add('hidden');
+                document.getElementById('batchPasteMethod').classList.remove('hidden');
+            }
+        }
+
+        function downloadSupplyTemplate() {
+            const worksheet = XLSX.utils.aoa_to_sheet([
+                ['AR Code', 'Item Description', 'HCPCS Code', 'Unit Cost'],
+                [700, 'Gauze Pad 4x4', 'A6251', 1.50],
+                [701, 'Medical Tape 1 inch', 'A6260', 2.25],
+                [702, 'Bandage Roll 3 inch', 'A6448', 3.75],
+                [703, 'Antiseptic Wipes', 'A4649', 0.85]
+            ]);
+
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Supply Items');
+            
+            // Set column widths
+            worksheet['!cols'] = [
+                { width: 12 }, { width: 35 }, { width: 15 }, { width: 12 }
+            ];
+            
+            XLSX.writeFile(workbook, 'supply_items_template.xlsx');
+        }
+
+        function setupBatchSupplyDragAndDrop() {
+            const uploadArea = document.getElementById('batchSupplyUploadArea');
+            
+            uploadArea.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                uploadArea.classList.add('dragover');
+            });
+
+            uploadArea.addEventListener('dragleave', function() {
+                uploadArea.classList.remove('dragover');
+            });
+
+            uploadArea.addEventListener('drop', function(e) {
+                e.preventDefault();
+                uploadArea.classList.remove('dragover');
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    handleBatchSupplyFile(files[0]);
+                }
+            });
+
+            uploadArea.addEventListener('click', function() {
+                document.getElementById('batchSupplyFileInput').click();
+            });
+        }
+
+        function handleBatchSupplyFile(file) {
+            if (!file) return;
+
+            if (!file.name.match(/\.(xlsx|xls)$/)) {
+                alert('Please select an Excel file (.xlsx or .xls)');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    batchSupplyData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+                    showBatchSupplyPreview(batchSupplyData, file.name, 'excel');
+                    document.getElementById('processBatchSupplyBtn').disabled = false;
+                } catch (error) {
+                    alert('Error reading Excel file: ' + error.message);
+                }
+            };
+
+            reader.readAsArrayBuffer(file);
+        }
+
+        function parsePastedSupplyData() {
+            const pasteArea = document.getElementById('batchSupplyPasteArea');
+            const text = pasteArea.value.trim();
+            
+            if (!text) {
+                alert('Please paste some data first');
+                return;
+            }
+
+            try {
+                // Parse tab-separated or comma-separated values
+                const lines = text.split('\n').filter(function(line) { return line.trim(); });
+                const data = [['AR Code', 'Item Description', 'HCPCS Code', 'Unit Cost']]; // Header
+                
+                lines.forEach(function(line) {
+                    // Try tab-separated first, then comma-separated
+                    let parts = line.split('\t');
+                    if (parts.length < 4) {
+                        parts = line.split(',');
+                    }
+                    
+                    if (parts.length >= 4) {
+                        data.push([
+                            parts[0].trim(),
+                            parts[1].trim(),
+                            parts[2].trim(),
+                            parts[3].trim()
+                        ]);
+                    }
+                });
+
+                if (data.length < 2) {
+                    alert('No valid data found. Please ensure data is tab-separated or comma-separated with 4 columns.');
+                    return;
+                }
+
+                batchSupplyData = data;
+                showBatchSupplyPreview(batchSupplyData, 'Pasted Data', 'paste');
+                document.getElementById('processBatchSupplyBtn').disabled = false;
+            } catch (error) {
+                alert('Error parsing pasted data: ' + error.message);
+            }
+        }
+
+        function showBatchSupplyPreview(data, fileName, method) {
+            const resultsDiv = document.getElementById('batchSupplyResults');
+            
+            if (data.length < 2) {
+                resultsDiv.innerHTML = '<p><strong>Error:</strong> Data must contain at least a header row and one data row.</p>';
+                resultsDiv.className = 'import-results error';
+                resultsDiv.style.display = 'block';
+                return;
+            }
+
+            const headers = data[0];
+            const dataRows = data.slice(1);
+
+            let html = '<h4>📦 Supply Data Preview: ' + fileName + '</h4>';
+            html += '<p><strong>Items to import:</strong> ' + dataRows.length + '</p>';
+            html += '<p><strong>Columns found:</strong> ' + headers.join(', ') + '</p>';
+            html += '<div style="max-height: 150px; overflow-y: auto; margin-top: 10px;">';
+            html += '<table style="width: 100%; border-collapse: collapse; font-size: 12px;">';
+            html += '<thead><tr style="background: #f7fafc;">';
+
+            headers.forEach(function(header) {
+                html += '<th style="padding: 5px; border: 1px solid #e2e8f0;">' + header + '</th>';
+            });
+
+            html += '</tr></thead><tbody>';
+
+            dataRows.slice(0, 5).forEach(function(row) {
+                html += '<tr>';
+                headers.forEach(function(header, index) {
+                    html += '<td style="padding: 5px; border: 1px solid #e2e8f0;">' + (row[index] || '') + '</td>';
+                });
+                html += '</tr>';
+            });
+
+            if (dataRows.length > 5) {
+                html += '<tr><td colspan="' + headers.length + '" style="padding: 5px; text-align: center; font-style: italic;">... and ' + (dataRows.length - 5) + ' more items</td></tr>';
+            }
+
+            html += '</tbody></table></div>';
+
+            resultsDiv.innerHTML = html;
+            resultsDiv.className = 'import-results mixed';
+            resultsDiv.style.display = 'block';
+        }
+
+        async function processBatchSupplyImport() {
+            const processBtn = document.getElementById('processBatchSupplyBtn');
+            const progressBar = document.getElementById('batchSupplyProgress');
+            const progressFill = document.getElementById('batchSupplyProgressFill');
+            const resultsDiv = document.getElementById('batchSupplyResults');
+
+            if (!batchSupplyData || batchSupplyData.length < 2) {
+                alert('No supply data to process');
+                return;
+            }
+
+            try {
+                processBtn.disabled = true;
+                processBtn.innerHTML = '<span class="loading"></span>Processing...';
+                progressBar.style.display = 'block';
+                progressFill.style.width = '20%';
+
+                const headers = batchSupplyData[0];
+                const dataRows = batchSupplyData.slice(1);
+                
+                let successCount = 0;
+                let errorCount = 0;
+                const errors = [];
+                const successItems = [];
+
+                progressFill.style.width = '40%';
+
+                // Process each row
+                for (let i = 0; i < dataRows.length; i++) {
+                    const row = dataRows[i];
+                    
+                    try {
+                        const arCode = parseInt(row[0]);
+                        const description = row[1] ? row[1].trim() : '';
+                        const hcpcsCode = row[2] ? row[2].trim() : '';
+                        const unitCost = parseFloat(row[3]) || 0;
+
+                        if (!arCode || !description) {
+                            errors.push('Row ' + (i + 2) + ': Missing AR Code or Description');
+                            errorCount++;
+                            continue;
+                        }
+
+                        await apiCall('/supplies', {
+                            method: 'POST',
+                            body: { 
+                                code: arCode, 
+                                description: description, 
+                                hcpcs: hcpcsCode || '', 
+                                cost: unitCost,
+                                is_custom: false  // Make batch imported supplies system supplies
+                            }
+                        });
+
+                        successItems.push(arCode + ' - ' + description);
+                        successCount++;
+                    } catch (error) {
+                        errors.push('Row ' + (i + 2) + ': ' + error.message);
+                        errorCount++;
+                    }
+
+                    // Update progress
+                    const progress = 40 + ((i + 1) / dataRows.length) * 50;
+                    progressFill.style.width = progress + '%';
+                }
+
+                progressFill.style.width = '100%';
+
+                // Show results
+                let resultsHtml = '<h4>✅ Batch Import Complete</h4>';
+                resultsHtml += '<p><strong>Successfully added:</strong> ' + successCount + ' items</p>';
+                resultsHtml += '<p><strong>Errors:</strong> ' + errorCount + ' items</p>';
+                
+                if (successItems.length > 0) {
+                    resultsHtml += '<h5 style="color: #38a169; margin-top: 15px;">Successfully Added:</h5><ul>';
+                    successItems.slice(0, 10).forEach(function(item) {
+                        resultsHtml += '<li style="color: #38a169; font-size: 12px;">' + item + '</li>';
+                    });
+                    if (successItems.length > 10) {
+                        resultsHtml += '<li style="color: #38a169; font-size: 12px;"><em>... and ' + (successItems.length - 10) + ' more</em></li>';
+                    }
+                    resultsHtml += '</ul>';
+                }
+
+                if (errors.length > 0) {
+                    resultsHtml += '<h5 style="color: #e53e3e; margin-top: 15px;">Errors:</h5><ul>';
+                    errors.slice(0, 10).forEach(function(error) {
+                        resultsHtml += '<li style="color: #e53e3e; font-size: 12px;">' + error + '</li>';
+                    });
+                    if (errors.length > 10) {
+                        resultsHtml += '<li style="color: #e53e3e; font-size: 12px;"><em>... and ' + (errors.length - 10) + ' more errors</em></li>';
+                    }
+                    resultsHtml += '</ul>';
+                }
+
+                resultsDiv.innerHTML = resultsHtml;
+                resultsDiv.className = errorCount === 0 ? 'import-results success' : 'import-results mixed';
+                resultsDiv.style.display = 'block';
+
+                // Refresh data
+                await loadAllData();
+                adminRefreshSupplies();
+                adminRefreshStats();
+
+                if (errorCount === 0) {
+                    showTrackingStatus('✅ ' + successCount + ' supply items imported successfully!');
+                    setTimeout(function() {
+                        closeBatchSupplyModal();
+                    }, 3000);
+                } else {
+                    showTrackingStatus('⚠️ ' + successCount + ' imported, ' + errorCount + ' failed', true);
+                }
+
+            } catch (error) {
+                resultsDiv.innerHTML = '<h4>❌ Import Failed</h4><p style="color: #e53e3e;">' + error.message + '</p>';
+                resultsDiv.className = 'import-results error';
+                resultsDiv.style.display = 'block';
+                showTrackingStatus('❌ Batch import failed: ' + error.message, true);
+            } finally {
+                processBtn.disabled = false;
+                processBtn.innerHTML = 'Import Supply Items';
+                setTimeout(function() {
+                    progressBar.style.display = 'none';
+                    progressFill.style.width = '0%';
+                }, 1000);
+            }
+        }
+
+        async function loadFullAdminPanel() {
+            const adminTab = document.getElementById('adminTab');
+
+            adminTab.innerHTML = 
+                '<h2 style="margin-bottom: 30px; color: #4a5568;">🔧 Admin Panel</h2>' +
+                '<div class="admin-section">' +
+                '<h3>👥 User Management</h3>' +
+                '<div id="pendingUsersSection" style="margin-bottom: 25px;">' +
+                '<h4 style="color: #ed8936; margin-bottom: 15px;">⏳ Pending Approvals</h4>' +
+                '<div id="pendingUsersList">Loading pending users...</div>' +
+                '</div>' +
+                '<h4>All Users</h4>' +
+                '<div class="table-container">' +
+                '<table class="admin-table" id="allUsersTable">' +
+                '<thead>' +
+                '<tr>' +
+                '<th>Name</th>' +
+                '<th>Email</th>' +
+                '<th>Role</th>' +
+                '<th>Facility</th>' +
+                '<th>Status</th>' +
+                '<th>Registered</th>' +
+                '<th>Actions</th>' +
+                '</tr>' +
+                '</thead>' +
+                '<tbody id="allUsersTableBody">Loading users...</tbody>' +
+                '</table>' +
+                '</div>' +
+                '</div>' +
+                '<div class="admin-section">' +
+                '<h3>🏢 Facility Management</h3>' +
+                '<div class="add-new-section">' +
+                '<h4>Add New Facility</h4>' +
+                '<div class="admin-form">' +
+                '<div class="form-group">' +
+                '<label for="adminFacilityName">Facility Name</label>' +
+                '<input type="text" id="adminFacilityName" placeholder="Enter facility name" autocomplete="off">' +
+                '</div>' +
+                '<div class="form-group">' +
+                '<label>&nbsp;</label>' +
+                '<button class="btn btn-primary" type="button" onclick="adminAddFacility()" id="addFacilityBtn">Add Facility</button>' +
+                '</div>' +
+                '</div>' +
+                '</div>' +
+                '<h4>Existing Facilities</h4>' +
+                '<div class="admin-cards" id="adminFacilityCards">Loading facilities...</div>' +
+                '</div>' +
+                '<div class="admin-section">' +
+                '<h3>📦 Supply Management</h3>' +
+                '<div class="add-new-section">' +
+                '<h4>Add New Supply Item</h4>' +
+                '<div class="admin-form">' +
+                '<div class="form-group">' +
+                '<label for="adminNewArCode">AR Code</label>' +
+                '<input type="number" id="adminNewArCode" placeholder="e.g., 700" min="1" autocomplete="off">' +
+                '</div>' +
+                '<div class="form-group">' +
+                '<label for="adminNewDescription">Item Description</label>' +
+                '<input type="text" id="adminNewDescription" placeholder="Enter description" autocomplete="off">' +
+                '</div>' +
+                '<div class="form-group">' +
+                '<label for="adminNewHcpcsCode">HCPCS Code</label>' +
+                '<input type="text" id="adminNewHcpcsCode" placeholder="e.g., A6251" autocomplete="off">' +
+                '</div>' +
+                '<div class="form-group">' +
+                '<label for="adminNewUnitCost">Unit Cost ($)</label>' +
+                '<input type="number" id="adminNewUnitCost" placeholder="0.00" min="0" step="0.01" autocomplete="off">' +
+                '</div>' +
+                '</div>' +
+                '<div style="display: flex; gap: 15px; flex-wrap: wrap;">' +
+                '<button class="btn btn-success" type="button" onclick="adminAddSupply()" id="addSupplyBtn">Add New Supply Item</button>' +
+                '<button class="btn btn-primary" type="button" onclick="showBatchSupplyModal()" id="batchSupplyBtn">📤 Add Batch Supply Items</button>' +
+                '</div>' +
+                '</div>' +
+                '<h4>Edit Existing Supply Costs</h4>' +
+                '<div id="supplyControls" class="hidden" style="background: #f7fafc; padding: 20px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #667eea;">' +
+                '<div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">' +
+                '<div>' +
+                '<label style="display: flex; align-items: center; gap: 10px; font-weight: 600; color: #4a5568;">' +
+                '<input type="checkbox" id="selectAllSupplies" onchange="toggleSelectAllSupplies()" style="transform: scale(1.2);">' +
+                'Select All Supply Items' +
+                '</label>' +
+                '<p style="margin: 5px 0 0 0; color: #718096; font-size: 14px;">' +
+                '<span id="selectedSupplyCount">0</span> supply item(s) selected' +
+                '</p>' +
+                '</div>' +
+                '<div>' +
+                '<button class="btn btn-danger" onclick="deleteSelectedSupplies()" id="deleteSelectedSuppliesBtn" disabled>' +
+                '🗑️ Delete Selected Supply Items' +
+                '</button>' +
+                '</div>' +
+                '</div>' +
+                '</div>' +
+                '<input type="text" id="adminSupplySearch" placeholder="Search supplies..." class="search-box" onkeyup="adminFilterSupplies(this.value)" autocomplete="off">' +
+                '<div class="table-container">' +
+                '<table class="admin-table" id="adminSupplyTable">' +
+                '<thead>' +
+                '<tr>' +
+                '<th style="width: 50px;">Select</th>' +
+                '<th style="width: 100px;">AR Code</th>' +
+                '<th style="min-width: 300px;">Item Description</th>' +
+                '<th style="width: 120px;">HCPCS Code</th>' +
+                '<th style="width: 100px;">Unit Cost</th>' +
+                '<th style="width: 100px;">Actions</th>' +
+                '</tr>' +
+                '</thead>' +
+                '<tbody id="adminSupplyTableBody">' +
+                '</tbody>' +
+                '</table>' +
+                '</div>' +
+                '</div>' +
+                '<div class="admin-section">' +
+                '<h3>📊 System Overview</h3>' +
+                '<div class="admin-cards" id="adminStatsCards">Loading statistics...</div>' +
+                '</div>';
+
+            setTimeout(function() {
+                adminRefreshUsers();
+                adminRefreshFacilities();
+                adminRefreshSupplies();
+                adminRefreshStats();
+            }, 50);
+        }
+
+        async function adminRefreshUsers() {
+            try {
+                const pendingUsers = await apiCall('/users/pending');
+                const pendingContainer = document.getElementById('pendingUsersList');
+
+                if (pendingUsers.length === 0) {
+                    pendingContainer.innerHTML = '<p style="color: #718096; font-style: italic;">No pending user approvals</p>';
+                } else {
+                    let html = '<div class="admin-cards">';
+                    pendingUsers.forEach(function(user) {
+                        html += 
+                            '<div class="admin-card" style="border-left: 4px solid #ed8936;">' +
+                            '<h4>👤 ' + user.name + '</h4>' +
+                            '<p><strong>Email:</strong> ' + user.email + '</p>' +
+                            '<p><strong>Facility:</strong> ' + (user.facility_name || 'None selected') + '</p>' +
+                            '<p><strong>Registered:</strong> ' + new Date(user.created_at).toLocaleDateString() + '</p>' +
+                            '<div class="card-actions">' +
+                            '<button class="btn btn-success btn-sm" onclick="approveUser(' + user.id + ')">✅ Approve</button>' +
+                            '<button class="btn btn-danger btn-sm" onclick="rejectUser(' + user.id + ')">❌ Reject</button>' +
+                            '</div>' +
+                            '</div>';
+                    });
+                    html += '</div>';
+                    pendingContainer.innerHTML = html;
+                }
+
+                const allUsers = await apiCall('/users');
+                const tbody = document.getElementById('allUsersTableBody');
+                tbody.innerHTML = '';
+
+                allUsers.forEach(function(user) {
+                    const statusBadge = user.is_approved ? 
+                        '<span style="background: #38a169; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px;">Approved</span>' :
+                        '<span class="pending-badge">Pending</span>';
+
+                    const row = document.createElement('tr');
+                    
+                    let facilitySelect = user.facility_name || 'None';
+                    if (user.is_approved) {
+                        facilitySelect = '<select onchange="updateUserFacility(' + user.id + ', this.value)" style="padding: 4px; border-radius: 4px; border: 1px solid #e2e8f0;">';
+                        facilitySelect += '<option value="">No Facility</option>';
+                        appData.facilities.forEach(function(f) {
+                            const selected = f.id === user.facility_id ? 'selected' : '';
+                            facilitySelect += '<option value="' + f.id + '" ' + selected + '>' + f.name + '</option>';
+                        });
+                        facilitySelect += '</select>';
+                    }
+
+                    let actions = '';
+                    if (!user.is_approved) {
+                        actions += '<button class="btn btn-success btn-sm" onclick="approveUser(' + user.id + ')">Approve</button>';
+                    }
+                    if (user.email !== 'admin@system.com') {
+                        actions += '<button class="btn btn-danger btn-sm" onclick="adminDeleteUser(' + user.id + ')" style="margin-left: 5px;">Delete</button>';
+                    }
+
+                    row.innerHTML = 
+                        '<td>' + user.name + '</td>' +
+                        '<td>' + user.email + '</td>' +
+                        '<td><span style="background: ' + (user.role === 'admin' ? '#667eea' : '#718096') + '; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px;">' + user.role.toUpperCase() + '</span></td>' +
+                        '<td>' + facilitySelect + '</td>' +
+                        '<td>' + statusBadge + '</td>' +
+                        '<td>' + new Date(user.created_at).toLocaleDateString() + '</td>' +
+                        '<td>' + actions + '</td>';
+                    tbody.appendChild(row);
+                });
+
+                await updatePendingUsersNotification();
+
+            } catch (error) {
+                console.error('Failed to load users:', error);
+                document.getElementById('pendingUsersList').innerHTML = '<p style="color: #e53e3e;">Failed to load users</p>';
+            }
+        }
+
+        async function approveUser(userId) {
+            try {
+                await apiCall('/users/' + userId + '/approve', { method: 'POST' });
+                showTrackingStatus('✅ User approved successfully!');
+                adminRefreshUsers();
+            } catch (error) {
+                alert('Failed to approve user: ' + error.message);
+            }
+        }
+
+        async function rejectUser(userId) {
+            if (confirm('Are you sure you want to reject this user registration? This will permanently delete their account.')) {
+                try {
+                    await apiCall('/users/' + userId, { method: 'DELETE' });
+                    showTrackingStatus('✅ User registration rejected');
+                    adminRefreshUsers();
+                } catch (error) {
+                    alert('Failed to reject user: ' + error.message);
+                }
+            }
+        }
+
+        async function updateUserFacility(userId, facilityId) {
+            try {
+                await apiCall('/users/' + userId + '/facility', {
+                    method: 'PUT',
+                    body: { facilityId: facilityId || null }
+                });
+                showTrackingStatus('✅ User facility updated successfully!');
+                adminRefreshUsers();
+            } catch (error) {
+                alert('Failed to update user facility: ' + error.message);
+                adminRefreshUsers();
+            }
+        }
+
+        async function adminDeleteUser(userId) {
+            if (confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
+                try {
+                    await apiCall('/users/' + userId, { method: 'DELETE' });
+                    showTrackingStatus('✅ User deleted successfully');
+                    adminRefreshUsers();
+                } catch (error) {
+                    alert('Failed to delete user: ' + error.message);
+                }
+            }
+        }
+
+        async function adminAddFacility() {
+            const name = document.getElementById('adminFacilityName').value.trim();
+            const addBtn = document.getElementById('addFacilityBtn');
+
+            if (!name) {
+                alert('Please enter a facility name');
+                return;
+            }
+
+            try {
+                addBtn.disabled = true;
+                addBtn.innerHTML = '<span class="loading"></span>Adding...';
+
+                await apiCall('/facilities', {
+                    method: 'POST',
+                    body: { name: name }
+                });
+
+                document.getElementById('adminFacilityName').value = '';
+                await loadAllData();
+                adminRefreshFacilities();
+                adminRefreshStats();
+
+                showTrackingStatus('✅ Facility added successfully!');
+            } catch (error) {
+                alert(error.message);
+            } finally {
+                addBtn.disabled = false;
+                addBtn.innerHTML = 'Add Facility';
+            }
+        }
+
+        function adminRefreshFacilities() {
+            const container = document.getElementById('adminFacilityCards');
+            if (!container) return;
+
+            if (appData.facilities.length === 0) {
+                container.innerHTML = '<div class="empty-state"><p>No facilities created yet. Add your first facility above.</p></div>';
+                return;
+            }
+
+            container.innerHTML = '';
+            appData.facilities.forEach(function(facility) {
+                const patientsInFacility = appData.patients.filter(function(p) { return p.facility_id === facility.id; }).length;
+
+                const card = document.createElement('div');
+                card.className = 'admin-card';
+                card.innerHTML = 
+                    '<h4>🏢 ' + facility.name + '</h4>' +
+                    '<p><strong>Facility ID:</strong> ' + facility.id + '</p>' +
+                    '<p><strong>Created:</strong> ' + new Date(facility.created_at).toLocaleDateString() + '</p>' +
+                    '<p><strong>Patients:</strong> ' + patientsInFacility + ' active</p>' +
+                    '<div class="card-actions">' +
+                    '<button class="btn btn-danger btn-sm" onclick="adminRemoveFacility(' + facility.id + ')">Remove Facility</button>' +
+                    '</div>';
+                container.appendChild(card);
+            });
+        }
+
+        async function adminRemoveFacility(facilityId) {
+            const patientsInFacility = appData.patients.filter(function(p) { return p.facility_id === facilityId; });
+
+            if (patientsInFacility.length > 0) {
+                alert('Cannot remove facility. There are ' + patientsInFacility.length + ' patients assigned to this facility. Please remove or reassign patients first.');
+                return;
+            }
+
+            if (confirm('Are you sure you want to remove this facility?')) {
+                try {
+                    await apiCall('/facilities/' + facilityId, { method: 'DELETE' });
+                    await loadAllData();
+                    adminRefreshFacilities();
+                    adminRefreshStats();
+                    showTrackingStatus('✅ Facility removed successfully!');
+                } catch (error) {
+                    alert('Failed to remove facility: ' + error.message);
+                }
+            }
+        }
+
+        async function adminAddSupply() {
+            const arCode = parseInt(document.getElementById('adminNewArCode').value);
+            const description = document.getElementById('adminNewDescription').value.trim();
+            const hcpcsCode = document.getElementById('adminNewHcpcsCode').value.trim();
+            const unitCost = parseFloat(document.getElementById('adminNewUnitCost').value) || 0;
+            const addBtn = document.getElementById('addSupplyBtn');
+
+            if (!arCode || !description) {
+                alert('Please fill in AR Code and Item Description (required fields)');
+                return;
+            }
+
+            if (arCode < 1) {
+                alert('AR Code must be a positive number');
+                return;
+            }
+
+            try {
+                addBtn.disabled = true;
+                addBtn.innerHTML = '<span class="loading"></span>Adding...';
+
+                await apiCall('/supplies', {
+                    method: 'POST',
+                    body: { 
+                        code: arCode, 
+                        description: description, 
+                        hcpcs: hcpcsCode, 
+                        cost: unitCost,
+                        is_custom: false  // Make new supplies system supplies
+                    }
+                });
+
+                document.getElementById('adminNewArCode').value = '';
+                document.getElementById('adminNewDescription').value = '';
+                document.getElementById('adminNewHcpcsCode').value = '';
+                document.getElementById('adminNewUnitCost').value = '';
+
+                await loadAllData();
+                adminRefreshSupplies();
+                adminRefreshStats();
+
+                showTrackingStatus('✅ Supply item added successfully!');
+            } catch (error) {
+                alert(error.message);
+            } finally {
+                addBtn.disabled = false;
+                addBtn.innerHTML = 'Add New Supply Item';
+            }
+        }
+
+        function adminRefreshSupplies() {
+            const tbody = document.getElementById('adminSupplyTableBody');
+            if (!tbody) return;
+
+            tbody.innerHTML = '';
+            
+            const controlsSection = document.getElementById('supplyControls');
+
+            if (!appData.supplies || appData.supplies.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #718096; padding: 40px;">No supplies in system. Add your first supply above or use batch import.</td></tr>';
+                if (controlsSection) controlsSection.classList.add('hidden');
+                return;
+            }
+
+            // Show controls section
+            if (controlsSection) controlsSection.classList.remove('hidden');
+
+            appData.supplies.forEach(function(supply) {
+                const row = document.createElement('tr');
+                if (supply.is_custom) {
+                    row.classList.add('custom-supply');
+                }
+                
+                row.innerHTML = 
+                    '<td style="text-align: center;">' +
+                    '<input type="checkbox" class="supply-checkbox" value="' + supply.id + '" ' +
+                    'onchange="updateSelectedSupplyCount()" style="transform: scale(1.2);">' +
+                    '</td>' +
+                    '<td>' +
+                    '<strong>' + supply.code + '</strong>' +
+                    (supply.is_custom ? '<span class="custom-badge">CUSTOM</span>' : '') +
+                    '</td>' +
+                    '<td>' + supply.description + '</td>' +
+                    '<td>' +
+                    '<input type="text" value="' + (supply.hcpcs || '') + '" ' +
+                    'style="width: 100%; padding: 4px; border: 1px solid #e2e8f0; border-radius: 4px;" ' +
+                    'onchange="adminUpdateSupply(' + supply.id + ', \'hcpcs\', this.value)">' +
+                    '</td>' +
+                    '<td>' +
+                    '<input type="number" value="' + (supply.cost || 0) + '" step="0.01" min="0" ' +
+                    'style="width: 100%; padding: 4px; border: 1px solid #e2e8f0; border-radius: 4px;" ' +
+                    'onchange="adminUpdateSupply(' + supply.id + ', \'cost\', this.value)">' +
+                    '</td>' +
+                    '<td style="text-align: center;">' +
+                    '<button class="btn btn-danger btn-sm" onclick="adminDeleteSupply(' + supply.id + ')" title="Delete Supply Item">' +
+                    '🗑️' +
+                    '</button>' +
+                    '</td>';
+                tbody.appendChild(row);
+            });
+            
+            updateSelectedSupplyCount();
+        }
+
+        function toggleSelectAllSupplies() {
+            const selectAllCheckbox = document.getElementById('selectAllSupplies');
+            const supplyCheckboxes = document.querySelectorAll('.supply-checkbox');
+            
+            supplyCheckboxes.forEach(function(checkbox) {
+                checkbox.checked = selectAllCheckbox.checked;
+            });
+            
+            updateSelectedSupplyCount();
+        }
+
+        function updateSelectedSupplyCount() {
+            const selectedCheckboxes = document.querySelectorAll('.supply-checkbox:checked');
+            const selectAllCheckbox = document.getElementById('selectAllSupplies');
+            const selectedCountSpan = document.getElementById('selectedSupplyCount');
+            const deleteSelectedBtn = document.getElementById('deleteSelectedSuppliesBtn');
+            const totalCheckboxes = document.querySelectorAll('.supply-checkbox');
+            
+            if (selectedCountSpan) selectedCountSpan.textContent = selectedCheckboxes.length;
+            if (deleteSelectedBtn) deleteSelectedBtn.disabled = selectedCheckboxes.length === 0;
+            
+            if (selectAllCheckbox) {
+                if (selectedCheckboxes.length === 0) {
+                    selectAllCheckbox.indeterminate = false;
+                    selectAllCheckbox.checked = false;
+                } else if (selectedCheckboxes.length === totalCheckboxes.length) {
+                    selectAllCheckbox.indeterminate = false;
+                    selectAllCheckbox.checked = true;
+                } else {
+                    selectAllCheckbox.indeterminate = true;
+                    selectAllCheckbox.checked = false;
+                }
+            }
+        }
+
+        async function deleteSelectedSupplies() {
+            const selectedCheckboxes = document.querySelectorAll('.supply-checkbox:checked');
+            const selectedIds = Array.from(selectedCheckboxes).map(function(cb) { return parseInt(cb.value); });
+            
+            if (selectedIds.length === 0) {
+                alert('No supply items selected');
+                return;
+            }
+            
+            const selectedSupplies = appData.supplies.filter(function(s) { return selectedIds.includes(s.id); });
+            const customCount = selectedSupplies.filter(function(s) { return s.is_custom; }).length;
+            const systemCount = selectedSupplies.filter(function(s) { return !s.is_custom; }).length;
+            
+            let confirmMessage = 'Are you sure you want to PERMANENTLY DELETE ' + selectedIds.length + ' selected supply item(s)?\n\n';
+            if (customCount > 0) confirmMessage += '• ' + customCount + ' custom supply item(s)\n';
+            if (systemCount > 0) confirmMessage += '• ' + systemCount + ' system supply item(s)\n';
+            confirmMessage += '\n⚠️ This action cannot be undone and will affect all existing tracking data for these items.';
+            
+            if (!confirm(confirmMessage)) {
+                return;
+            }
+            
+            try {
+                const deleteBtn = document.getElementById('deleteSelectedSuppliesBtn');
+                deleteBtn.disabled = true;
+                deleteBtn.innerHTML = '<span class="loading"></span>Deleting...';
+                
+                let deletedCount = 0;
+                let failedCount = 0;
+                const errors = [];
+                
+                for (let i = 0; i < selectedIds.length; i++) {
+                    const supplyId = selectedIds[i];
+                    try {
+                        await apiCall('/supplies/' + supplyId, {
+                            method: 'DELETE'
+                        });
+                        deletedCount++;
+                    } catch (error) {
+                        console.error('Failed to delete supply ' + supplyId + ':', error);
+                        const supply = appData.supplies.find(function(s) { return s.id === supplyId; });
+                        errors.push((supply ? supply.description : 'ID ' + supplyId) + ': ' + error.message);
+                        failedCount++;
+                    }
+                }
+                
+                await loadAllData();
+                adminRefreshSupplies();
+                adminRefreshStats();
+                
+                if (failedCount === 0) {
+                    showTrackingStatus('✅ ' + deletedCount + ' supply item(s) deleted successfully!');
+                } else {
+                    showTrackingStatus('⚠️ ' + deletedCount + ' deleted, ' + failedCount + ' failed', true);
+                    if (errors.length > 0) {
+                        console.error('Delete errors:', errors);
+                        alert('Some items could not be deleted:\n' + errors.slice(0, 3).join('\n') + (errors.length > 3 ? '\n... and more' : ''));
+                    }
+                }
+                
+            } catch (error) {
+                console.error('Bulk delete error:', error);
+                showTrackingStatus('❌ Failed to delete supply items: ' + error.message, true);
+            } finally {
+                const deleteBtn = document.getElementById('deleteSelectedSuppliesBtn');
+                deleteBtn.disabled = false;
+                deleteBtn.innerHTML = '🗑️ Delete Selected Supply Items';
+            }
+        }
+
+        function adminFilterSupplies(searchTerm) {
+            const rows = document.querySelectorAll('#adminSupplyTableBody tr');
+            const term = searchTerm.toLowerCase().trim();
+            let visibleCount = 0;
+
+            rows.forEach(function(row) {
+                const cells = row.querySelectorAll('td');
+                if (cells.length === 1) return; // Skip empty state row
+                
+                // Check AR Code (2nd column, index 1) and Description (3rd column, index 2)
+                const code = cells[1] ? cells[1].textContent.toLowerCase() : '';
+                const description = cells[2] ? cells[2].textContent.toLowerCase() : '';
+                const shouldShow = !term || code.includes(term) || description.includes(term);
+                
+                row.style.display = shouldShow ? '' : 'none';
+                if (shouldShow) visibleCount++;
+            });
+            
+            // Update selection counts after filtering
+            updateSelectedSupplyCount();
+        }
+
+        async function adminUpdateSupply(supplyId, field, value) {
+            try {
+                const updateData = {};
+                updateData[field] = field === 'cost' ? parseFloat(value) || 0 : value;
+
+                await apiCall('/supplies/' + supplyId, {
+                    method: 'PUT',
+                    body: updateData
+                });
+
+                // Update local data
+                const supply = appData.supplies.find(function(s) { return s.id === supplyId; });
+                if (supply) {
+                    supply[field] = updateData[field];
+                }
+
+                showTrackingStatus('✅ Supply updated successfully');
+            } catch (error) {
+                alert('Failed to update supply: ' + error.message);
+                adminRefreshSupplies(); // Reload to reset values
+            }
+        }
+
+        async function adminDeleteSupply(supplyId) {
+            // Find the supply
+            const supply = appData.supplies.find(function(s) { return s.id === supplyId; });
+            if (!supply) {
+                alert('Supply not found');
+                return;
+            }
+
+            const itemType = supply.is_custom ? 'custom' : 'system';
+            const confirmMessage = 'Are you sure you want to PERMANENTLY DELETE this ' + itemType + ' supply item?\n\n' +
+                                 'Item: ' + supply.description + ' (AR Code: ' + supply.code + ')\n\n' +
+                                 '⚠️ This action cannot be undone and will affect all existing tracking data for this item.';
+
+            if (confirm(confirmMessage)) {
+                try {
+                    await apiCall('/supplies/' + supplyId, { method: 'DELETE' });
+                    await loadAllData();
+                    adminRefreshSupplies();
+                    adminRefreshStats();
+                    showTrackingStatus('✅ Supply item "' + supply.description + '" deleted successfully');
+                } catch (error) {
+                    console.error('Delete supply error:', error);
+                    
+                    // Provide helpful error messages
+                    if (error.message.includes('Custom supply not found') || error.message.includes('not found')) {
+                        alert('This ' + itemType + ' supply item could not be deleted. It may have already been removed or there may be existing tracking data preventing deletion.');
+                    } else if (error.message.includes('Cannot delete') || error.message.includes('has tracking data')) {
+                        alert('This supply item cannot be deleted because it has existing tracking data. You may need to remove all tracking entries first, or contact your system administrator.');
+                    } else {
+                        alert('Failed to delete supply item: ' + error.message);
+                    }
+                }
+            }
+        }
+
+        async function adminRefreshStats() {
+            const container = document.getElementById('adminStatsCards');
+            if (!container) return;
+
+            try {
+                const stats = await apiCall('/statistics');
+                
+                container.innerHTML = 
+                    '<div class="stats-card">' +
+                    '<h4>👥 Total Users</h4>' +
+                    '<div class="value">' + stats.totalUsers + '</div>' +
+                    '<p>' + stats.pendingUsers + ' pending approval</p>' +
+                    '</div>' +
+                    '<div class="stats-card">' +
+                    '<h4>🏢 Facilities</h4>' +
+                    '<div class="value">' + stats.totalFacilities + '</div>' +
+                    '<p>Active facilities</p>' +
+                    '</div>' +
+                    '<div class="stats-card">' +
+                    '<h4>👤 Patients</h4>' +
+                    '<div class="value">' + stats.totalPatients + '</div>' +
+                    '<p>Tracking sheets created</p>' +
+                    '</div>' +
+                    '<div class="stats-card">' +
+                    '<h4>📦 Supply Items</h4>' +
+                    '<div class="value">' + stats.totalSupplies + '</div>' +
+                    '<p>' + stats.customSupplies + ' custom items</p>' +
+                    '</div>';
+            } catch (error) {
+                console.error('Failed to load statistics:', error);
+                container.innerHTML = '<div class="empty-state"><p>Failed to load statistics</p></div>';
+            }
+        }
+
+        // Check for existing auth token on page load
+        window.addEventListener('DOMContentLoaded', async function() {
+            if (authToken) {
+                try {
+                    console.log('🔍 Checking stored auth token...');
+                    
+                    const response = await apiCall('/auth/verify');
+                    currentUser = response.user;
+                    
+                    console.log('✅ Token valid, auto-logging in user:', currentUser.email);
+                    
+                    document.getElementById('loginContainer').style.display = 'none';
+                    document.getElementById('mainApp').style.display = 'block';
+                    
+                    await initApp();
+                } catch (error) {
+                    console.log('❌ Stored token invalid, showing login');
+                    localStorage.removeItem('authToken');
+                    authToken = null;
+                    currentUser = null;
+                }
+            } else {
+                console.log('🔓 No stored token, showing login screen');
+            }
+        });
+
+        // Handle Enter key for login
+        document.addEventListener('DOMContentLoaded', function() {
+            const loginEmail = document.getElementById('loginEmail');
+            const loginPassword = document.getElementById('loginPassword');
+            
+            if (loginEmail && loginPassword) {
+                [loginEmail, loginPassword].forEach(function(input) {
+                    input.addEventListener('keypress', function(e) {
+                        if (e.key === 'Enter') {
+                            login();
+                        }
+                    });
+                });
+            }
+        });
+    </script>
+</body>
+</html> + totalCost.toFixed(2));
                 }
 
                 updateSummaryTable(filteredPatients);
@@ -2874,13 +6346,16 @@
                     try {
                         const trackingData = await apiCall('/patients/' + patient.id + '/tracking');
                         
-                        // FIXED: Load wound dx data using LOCAL STORAGE FIRST for reports
+                        // FIXED: Load wound dx data using LOCAL STORAGE FIRST for reports with better debugging
                         let woundDxData = {};
                         
                         // Use local data as primary source for reports
                         if (appData.woundDxData[patient.id]) {
                             woundDxData = Object.assign({}, appData.woundDxData[patient.id]);
                             console.log('📦 Using local wound dx data for report:', patient.name, woundDxData);
+                            console.log('📋 Available supply IDs in wound dx data:', Object.keys(woundDxData));
+                        } else {
+                            console.log('⚠️ No local wound dx data found for patient:', patient.name);
                         }
                         
                         // Optionally try to merge server data, but local takes precedence
@@ -2925,13 +6400,28 @@
                                 const unitCost = parseFloat(supply.cost) || 0;
                                 const totalCost = totalUnits * unitCost;
                                 
-                                // FIXED: Ensure we get the wound dx for this specific supply with debugging
+                                // FIXED: Ensure we get the wound dx for this specific supply with robust ID matching
                                 let woundDx = '';
-                                if (woundDxData && supply.id && woundDxData[supply.id]) {
+                                
+                                // Try multiple ID formats to ensure we find the match
+                                const supplyIdStr = String(supply.id);
+                                const supplyIdNum = Number(supply.id);
+                                
+                                console.log('🔍 Looking for wound dx for supply:', supply.id, '(' + supply.description + ')');
+                                console.log('🔍 Trying ID formats:', supplyIdStr, supplyIdNum);
+                                console.log('🔍 Available wound dx keys:', Object.keys(woundDxData));
+                                
+                                if (woundDxData[supply.id]) {
                                     woundDx = woundDxData[supply.id];
-                                    console.log('📋 Found wound dx for supply', supply.id, '(' + supply.description + '):', woundDx);
+                                    console.log('✅ Found with original ID:', woundDx);
+                                } else if (woundDxData[supplyIdStr]) {
+                                    woundDx = woundDxData[supplyIdStr];
+                                    console.log('✅ Found with string ID:', woundDx);
+                                } else if (woundDxData[supplyIdNum]) {
+                                    woundDx = woundDxData[supplyIdNum];
+                                    console.log('✅ Found with number ID:', woundDx);
                                 } else {
-                                    console.log('⚠️ No wound dx found for supply', supply.id, '(' + supply.description + ')');
+                                    console.log('❌ No wound dx found for supply', supply.id, '(' + supply.description + ')');
                                 }
                                 
                                 const row = [
@@ -2941,7 +6431,7 @@
                                     patient.facility_name || 'Unknown',
                                     supply.code || 'N/A',
                                     supply.description || 'Unknown',
-                                    woundDx || ''  // Now properly includes wound dx data with debugging
+                                    woundDx || ''  // Now properly includes wound dx data with robust matching
                                 ];
                                 
                                 if (includeAdminData) {
@@ -2985,9 +6475,21 @@
                 // Log summary of what was included in the report
                 console.log('📊 REPORT SUMMARY:');
                 console.log('- Patients processed:', filteredPatients.length);
-                console.log('- Total wound dx entries found:', Object.keys(appData.woundDxData).reduce(function(total, patientId) {
-                    return total + Object.keys(appData.woundDxData[patientId] || {}).length;
-                }, 0));
+                
+                let totalWoundDxEntriesInReport = 0;
+                let patientsWithWoundDx = 0;
+                
+                Object.keys(appData.woundDxData).forEach(function(patientId) {
+                    const entries = Object.keys(appData.woundDxData[patientId] || {}).length;
+                    if (entries > 0) {
+                        totalWoundDxEntriesInReport += entries;
+                        patientsWithWoundDx++;
+                    }
+                });
+                
+                console.log('- Total wound dx entries in system:', totalWoundDxEntriesInReport);
+                console.log('- Patients with wound dx data:', patientsWithWoundDx);
+                console.log('- Report should include wound dx for supplies with quantities > 0');
                 
                 showTrackingStatus('✅ Report downloaded successfully with wound diagnosis data!');
                 
