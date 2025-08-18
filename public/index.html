@@ -1091,6 +1091,10 @@
                     <h3>Total Units Used</h3>
                     <div class="value" id="totalUnits">0</div>
                 </div>
+                <div class="summary-card">
+                    <h3>Wound Diagnoses</h3>
+                    <div class="value" id="totalWoundDx">0</div>
+                </div>
                 <div class="summary-card admin-only-controls">
                     <h3>Total Cost</h3>
                     <div class="value" id="totalCost">$0.00</div>
@@ -1436,11 +1440,16 @@
             let woundDxData = {};
             try {
                 const woundDxResponse = await apiCall('/patients/' + patient.id + '/wound-dx');
-                woundDxResponse.forEach(function(item) {
-                    woundDxData[item.supply_id] = item.wound_dx;
-                });
+                if (woundDxResponse && Array.isArray(woundDxResponse)) {
+                    woundDxResponse.forEach(function(item) {
+                        if (item && item.supply_id && typeof item.wound_dx !== 'undefined') {
+                            woundDxData[item.supply_id] = item.wound_dx;
+                        }
+                    });
+                }
+                console.log('✅ Loaded wound dx data:', woundDxData);
             } catch (error) {
-                console.log('No wound dx data found or error loading:', error);
+                console.log('⚠️ No wound dx data found or error loading:', error);
             }
             
             // Group tracking data by supply
@@ -1654,6 +1663,8 @@
             try {
                 inputElement.style.borderColor = '#4299e1';
                 inputElement.style.backgroundColor = '#ebf8ff';
+
+                console.log('💊 Saving wound dx:', { patientId, supplyId, value });
 
                 await apiCall('/patients/' + patientId + '/wound-dx', {
                     method: 'POST',
@@ -2438,6 +2449,7 @@
 
                 let totalUnits = 0;
                 let totalCost = 0;
+                let totalWoundDxCount = 0;
 
                 for (let i = 0; i < filteredPatients.length; i++) {
                     const patient = filteredPatients[i];
@@ -2455,12 +2467,30 @@
                             totalUnits += quantity;
                             totalCost += quantity * cost;
                         });
+
+                        // Get wound dx data for this patient
+                        try {
+                            const woundDxResponse = await apiCall('/patients/' + patient.id + '/wound-dx');
+                            if (woundDxResponse && Array.isArray(woundDxResponse)) {
+                                const uniqueWoundDx = new Set();
+                                woundDxResponse.forEach(function(item) {
+                                    if (item && item.wound_dx && item.wound_dx.trim()) {
+                                        uniqueWoundDx.add(item.wound_dx.trim());
+                                    }
+                                });
+                                totalWoundDxCount += uniqueWoundDx.size;
+                            }
+                        } catch (error) {
+                            console.log('No wound dx data for patient:', patient.name);
+                        }
+
                     } catch (error) {
                         console.error('Failed to load data for patient ' + patient.name + ':', error);
                     }
                 }
 
                 document.getElementById('totalUnits').textContent = totalUnits.toLocaleString();
+                document.getElementById('totalWoundDx').textContent = totalWoundDxCount;
                 
                 // Only update cost for admin users
                 const totalCostElement = document.getElementById('totalCost');
@@ -2542,7 +2572,7 @@
             await downloadReport(true);
         }
 
-        // FIXED: Updated downloadReport to include wound diagnosis data
+        // FIXED: Updated downloadReport to properly include wound diagnosis data
         async function downloadReport(includeAdminData) {
             try {
                 showTrackingStatus('📄 Generating report...', false);
@@ -2579,15 +2609,20 @@
                     try {
                         const trackingData = await apiCall('/patients/' + patient.id + '/tracking');
                         
-                        // Load wound dx data for this patient
+                        // FIXED: Load wound dx data for this patient properly
                         let woundDxData = {};
                         try {
                             const woundDxResponse = await apiCall('/patients/' + patient.id + '/wound-dx');
-                            woundDxResponse.forEach(function(item) {
-                                woundDxData[item.supply_id] = item.wound_dx;
-                            });
+                            console.log('📊 Wound Dx data for', patient.name + ':', woundDxResponse);
+                            if (woundDxResponse && Array.isArray(woundDxResponse)) {
+                                woundDxResponse.forEach(function(item) {
+                                    if (item && typeof item.supply_id !== 'undefined' && typeof item.wound_dx !== 'undefined') {
+                                        woundDxData[item.supply_id] = item.wound_dx || '';
+                                    }
+                                });
+                            }
                         } catch (error) {
-                            console.log('No wound dx data found for patient:', patient.name);
+                            console.log('⚠️ No wound dx data found for patient:', patient.name);
                         }
                         
                         const supplyTotals = {};
@@ -2612,7 +2647,12 @@
                             if (totalUnits > 0) {
                                 const unitCost = parseFloat(supply.cost) || 0;
                                 const totalCost = totalUnits * unitCost;
-                                const woundDx = woundDxData[supply.id] || '';
+                                
+                                // FIXED: Ensure we get the wound dx for this specific supply
+                                let woundDx = '';
+                                if (woundDxData && supply.id && woundDxData[supply.id]) {
+                                    woundDx = woundDxData[supply.id];
+                                }
                                 
                                 const row = [
                                     patient.name || 'Unknown',
@@ -2621,7 +2661,7 @@
                                     patient.facility_name || 'Unknown',
                                     supply.code || 'N/A',
                                     supply.description || 'Unknown',
-                                    woundDx || 'N/A'
+                                    woundDx || ''  // Now properly includes wound dx data
                                 ];
                                 
                                 if (includeAdminData) {
@@ -2662,7 +2702,7 @@
                 
                 XLSX.writeFile(workbook, fileName + '.xlsx');
                 
-                showTrackingStatus('✅ Report downloaded successfully!');
+                showTrackingStatus('✅ Report downloaded successfully with wound diagnosis data!');
                 
             } catch (error) {
                 console.error('Failed to generate report:', error);
