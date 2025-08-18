@@ -1390,7 +1390,33 @@
                         const supplyName = supply ? supply.description : 'Supply ' + supplyId;
                         message += '• ' + supplyName + ': "' + dx + '"\n';
                     });
+                } else {
+                    message += '\n⚠️ No wound dx entries found for current patient.';
                 }
+                
+                // Check what's visible in the DOM
+                const woundDxInputs = document.querySelectorAll('input[onchange*="updateWoundDx"]');
+                message += '\n\nVisible wound dx inputs: ' + woundDxInputs.length;
+                let filledInputs = 0;
+                woundDxInputs.forEach(function(input) {
+                    if (input.value && input.value.trim()) {
+                        filledInputs++;
+                    }
+                });
+                message += '\nFilled inputs: ' + filledInputs;
+            }
+            
+            // Add localStorage info
+            try {
+                const savedData = localStorage.getItem('woundDxData');
+                if (savedData) {
+                    const parsed = JSON.parse(savedData);
+                    message += '\n\nLocalStorage has data for ' + Object.keys(parsed).length + ' patients';
+                } else {
+                    message += '\n\n⚠️ No data in localStorage';
+                }
+            } catch (error) {
+                message += '\n\n❌ Error reading localStorage: ' + error.message;
             }
             
             alert(message);
@@ -1416,8 +1442,41 @@
                 }
             });
             
+            // Save to localStorage
+            localStorage.setItem('woundDxData', JSON.stringify(appData.woundDxData));
+            
+            updateWoundDxStatusBar();
             showTrackingStatus('✅ Added test wound dx data - refresh page to see');
             console.log('📝 Added test data:', appData.woundDxData[appData.selectedPatient]);
+        }
+
+        // Force refresh wound dx display
+        function forceRefreshWoundDx() {
+            if (appData.selectedPatient) {
+                loadPatientTracking();
+                showTrackingStatus('🔄 Refreshed wound dx display');
+            } else {
+                alert('Please select a patient first');
+            }
+        }
+
+        // Export wound dx data for debugging
+        function exportWoundDxData() {
+            const data = {
+                localData: appData.woundDxData,
+                currentPatient: appData.selectedPatient,
+                timestamp: new Date().toISOString()
+            };
+            
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'wound_dx_debug_data.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            showTrackingStatus('📄 Wound dx debug data exported');
         }
 
         // User interface setup with improved admin detection
@@ -1694,16 +1753,41 @@
             html += finalAdminStatus ? '✅ ADMIN - Full access with cost information' : '👤 USER - Supply tracking only';
             html += ' | <strong>Enhanced Feature:</strong> ✨ Frozen headers & columns - scroll both ways while keeping key info visible | ';
             html += '<strong>Days:</strong> ' + daysInMonth + ' days in ' + monthYearDisplay;
-            html += ' | <strong>Wound Dx Entries:</strong> ' + Object.keys(woundDxData).length;
+            html += ' | <strong>Wound Dx Entries:</strong> <span data-wound-dx-count>' + Object.keys(woundDxData).length + '</span>';
             html += '</div>';
             html += '<div style="display: flex; gap: 5px;">';
             html += '<button onclick="debugWoundDxData()" style="padding: 5px 10px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">🔍 Debug Wound Dx</button>';
             html += '<button onclick="addTestWoundDxData()" style="padding: 5px 10px; background: #38a169; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">📝 Add Test Data</button>';
+            html += '<button onclick="forceRefreshWoundDx()" style="padding: 5px 10px; background: #ed8936; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">🔄 Refresh</button>';
+            html += '<button onclick="exportWoundDxData()" style="padding: 5px 10px; background: #9f7aea; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">📄 Export</button>';
             html += '</div>';
 
             container.innerHTML = html;
             
+            // IMPORTANT: Sync wound dx inputs with local data after rendering
+            setTimeout(function() {
+                syncWoundDxInputsWithLocalData(patient.id);
+                updateWoundDxStatusBar();
+            }, 100);
+            
             console.log('✅ Enhanced table rendered with frozen headers & columns for both vertical and horizontal scrolling');
+        }
+
+        // Function to sync wound dx inputs with local storage
+        function syncWoundDxInputsWithLocalData(patientId) {
+            if (!appData.woundDxData[patientId]) return;
+            
+            console.log('🔄 Syncing wound dx inputs with local data for patient:', patientId);
+            console.log('Local data to sync:', appData.woundDxData[patientId]);
+            
+            Object.entries(appData.woundDxData[patientId]).forEach(function([supplyId, woundDx]) {
+                // Find the input for this supply
+                const input = document.querySelector('input[onchange*="updateWoundDx(' + patientId + ', ' + supplyId + '"]');
+                if (input && woundDx) {
+                    input.value = woundDx;
+                    console.log('✅ Set input value for supply', supplyId, 'to:', woundDx);
+                }
+            });
         }
 
         function filterSupplies(searchTerm) {
@@ -1747,13 +1831,18 @@
 
                 console.log('💊 Saving wound dx:', { patientId, supplyId, value });
 
-                // Store locally first as backup
+                // ALWAYS store locally first - this is our reliable backup
                 if (!appData.woundDxData[patientId]) {
                     appData.woundDxData[patientId] = {};
                 }
                 appData.woundDxData[patientId][supplyId] = value;
+                
+                // Also save to localStorage for persistence across sessions
+                localStorage.setItem('woundDxData', JSON.stringify(appData.woundDxData));
+                
+                console.log('✅ Saved locally. Current local data:', appData.woundDxData[patientId]);
 
-                // Try to save to server
+                // Try to save to server (optional)
                 try {
                     await apiCall('/patients/' + patientId + '/wound-dx', {
                         method: 'POST',
@@ -1762,14 +1851,16 @@
                             woundDx: value
                         }
                     });
-                    console.log('✅ Successfully saved wound dx to server');
+                    console.log('✅ Also saved to server');
                 } catch (serverError) {
-                    console.warn('⚠️ Server save failed, using local storage:', serverError);
-                    // Continue with local storage - don't throw error
+                    console.warn('⚠️ Server save failed, but local save succeeded:', serverError);
                 }
 
                 inputElement.style.borderColor = '#38a169';
                 inputElement.style.backgroundColor = '#f0fff4';
+                
+                // Update the status bar count immediately
+                updateWoundDxStatusBar();
                 
                 showTrackingStatus('✅ Wound Dx saved successfully');
 
@@ -1790,6 +1881,18 @@
                     inputElement.style.borderColor = '';
                     inputElement.style.backgroundColor = 'white';
                 }, 3000);
+            }
+        }
+
+        // Function to update the wound dx count in status bar
+        function updateWoundDxStatusBar() {
+            if (appData.selectedPatient && appData.woundDxData[appData.selectedPatient]) {
+                const count = Object.keys(appData.woundDxData[appData.selectedPatient]).length;
+                const statusElements = document.querySelectorAll('[data-wound-dx-count]');
+                statusElements.forEach(function(el) {
+                    el.textContent = count;
+                });
+                console.log('📊 Updated status bar wound dx count to:', count);
             }
         }
 
@@ -2083,6 +2186,18 @@
                 if (summaryMonth) {
                     const currentYearMonth = currentDate.getFullYear() + '-' + String(currentDate.getMonth() + 1).padStart(2, '0');
                     summaryMonth.value = currentYearMonth;
+                }
+
+                // Load wound dx data from localStorage
+                try {
+                    const savedWoundDxData = localStorage.getItem('woundDxData');
+                    if (savedWoundDxData) {
+                        appData.woundDxData = JSON.parse(savedWoundDxData);
+                        console.log('✅ Loaded wound dx data from localStorage:', appData.woundDxData);
+                    }
+                } catch (error) {
+                    console.log('⚠️ Failed to load wound dx data from localStorage:', error);
+                    appData.woundDxData = {};
                 }
 
                 setupUserInterface();
@@ -2562,18 +2677,21 @@
                             totalCost += quantity * cost;
                         });
 
-                        // Get wound dx data for this patient using helper function
-                        const patientWoundDxData = await getWoundDxDataForPatient(patient.id);
-                        const uniqueWoundDx = new Set();
-                        Object.values(patientWoundDxData).forEach(function(dx) {
-                            if (dx && dx.trim()) {
-                                uniqueWoundDx.add(dx.trim());
-                            }
-                        });
-                        const patientWoundDxCount = uniqueWoundDx.size;
+                        // Get wound dx data for this patient using ONLY local data for accuracy
+                        let patientWoundDxCount = 0;
+                        if (appData.woundDxData[patient.id]) {
+                            const uniqueWoundDx = new Set();
+                            Object.values(appData.woundDxData[patient.id]).forEach(function(dx) {
+                                if (dx && dx.trim()) {
+                                    uniqueWoundDx.add(dx.trim());
+                                }
+                            });
+                            patientWoundDxCount = uniqueWoundDx.size;
+                            console.log('📊 Local wound dx count for', patient.name + ':', patientWoundDxCount);
+                        }
                         totalWoundDxCount += patientWoundDxCount;
                         
-                        console.log('📊 Wound dx count for', patient.name + ':', patientWoundDxCount, 'Total so far:', totalWoundDxCount);
+                        console.log('📊 Running total wound dx count:', totalWoundDxCount);
 
                     } catch (error) {
                         console.error('Failed to load data for patient ' + patient.name + ':', error);
@@ -2700,9 +2818,33 @@
                     try {
                         const trackingData = await apiCall('/patients/' + patient.id + '/tracking');
                         
-                        // FIXED: Load wound dx data using helper function
-                        const woundDxData = await getWoundDxDataForPatient(patient.id);
-                        console.log('📋 Wound dx data for report:', patient.name, woundDxData);
+                        // FIXED: Load wound dx data using LOCAL STORAGE FIRST for reports
+                        let woundDxData = {};
+                        
+                        // Use local data as primary source for reports
+                        if (appData.woundDxData[patient.id]) {
+                            woundDxData = Object.assign({}, appData.woundDxData[patient.id]);
+                            console.log('📦 Using local wound dx data for report:', patient.name, woundDxData);
+                        }
+                        
+                        // Optionally try to merge server data, but local takes precedence
+                        try {
+                            const woundDxResponse = await apiCall('/patients/' + patient.id + '/wound-dx');
+                            if (woundDxResponse && Array.isArray(woundDxResponse)) {
+                                woundDxResponse.forEach(function(item) {
+                                    if (item && typeof item.supply_id !== 'undefined' && typeof item.wound_dx !== 'undefined') {
+                                        // Only use server data if no local data exists for this supply
+                                        if (!woundDxData[item.supply_id]) {
+                                            woundDxData[item.supply_id] = item.wound_dx || '';
+                                        }
+                                    }
+                                });
+                            }
+                        } catch (error) {
+                            console.log('⚠️ Server wound dx failed for report, using local only:', error);
+                        }
+
+                        console.log('📋 Final wound dx data for report:', patient.name, woundDxData);
                         
                         const supplyTotals = {};
                         trackingData.forEach(function(item) {
@@ -2727,10 +2869,13 @@
                                 const unitCost = parseFloat(supply.cost) || 0;
                                 const totalCost = totalUnits * unitCost;
                                 
-                                // FIXED: Ensure we get the wound dx for this specific supply
+                                // FIXED: Ensure we get the wound dx for this specific supply with debugging
                                 let woundDx = '';
                                 if (woundDxData && supply.id && woundDxData[supply.id]) {
                                     woundDx = woundDxData[supply.id];
+                                    console.log('📋 Found wound dx for supply', supply.id, '(' + supply.description + '):', woundDx);
+                                } else {
+                                    console.log('⚠️ No wound dx found for supply', supply.id, '(' + supply.description + ')');
                                 }
                                 
                                 const row = [
@@ -2740,7 +2885,7 @@
                                     patient.facility_name || 'Unknown',
                                     supply.code || 'N/A',
                                     supply.description || 'Unknown',
-                                    woundDx || ''  // Now properly includes wound dx data
+                                    woundDx || ''  // Now properly includes wound dx data with debugging
                                 ];
                                 
                                 if (includeAdminData) {
@@ -2780,6 +2925,13 @@
                 worksheet['!cols'] = colWidths;
                 
                 XLSX.writeFile(workbook, fileName + '.xlsx');
+                
+                // Log summary of what was included in the report
+                console.log('📊 REPORT SUMMARY:');
+                console.log('- Patients processed:', filteredPatients.length);
+                console.log('- Total wound dx entries found:', Object.keys(appData.woundDxData).reduce(function(total, patientId) {
+                    return total + Object.keys(appData.woundDxData[patientId] || {}).length;
+                }, 0));
                 
                 showTrackingStatus('✅ Report downloaded successfully with wound diagnosis data!');
                 
