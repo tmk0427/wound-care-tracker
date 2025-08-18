@@ -1384,26 +1384,40 @@
                 message += 'Current patient (' + appData.selectedPatient + '): ' + Object.keys(currentPatientData).length + ' wound dx entries\n';
                 
                 if (Object.keys(currentPatientData).length > 0) {
-                    message += '\nCurrent entries:\n';
+                    message += '\nStored entries:\n';
                     Object.entries(currentPatientData).forEach(function([supplyId, dx]) {
                         const supply = appData.supplies.find(function(s) { return s.id == supplyId; });
                         const supplyName = supply ? supply.description : 'Supply ' + supplyId;
                         message += '• ' + supplyName + ': "' + dx + '"\n';
                     });
                 } else {
-                    message += '\n⚠️ No wound dx entries found for current patient.';
+                    message += '\n⚠️ No wound dx entries found in storage for current patient.';
                 }
                 
                 // Check what's visible in the DOM
-                const woundDxInputs = document.querySelectorAll('input[onchange*="updateWoundDx"]');
+                const woundDxInputs = document.querySelectorAll('input[data-patient-id="' + appData.selectedPatient + '"][data-supply-id]');
                 message += '\n\nVisible wound dx inputs: ' + woundDxInputs.length;
                 let filledInputs = 0;
+                const filledValues = [];
                 woundDxInputs.forEach(function(input) {
                     if (input.value && input.value.trim()) {
                         filledInputs++;
+                        const supplyId = input.getAttribute('data-supply-id');
+                        const supply = appData.supplies.find(function(s) { return s.id == supplyId; });
+                        const supplyName = supply ? supply.description : 'Supply ' + supplyId;
+                        filledValues.push('• ' + supplyName + ': "' + input.value + '"');
                     }
                 });
                 message += '\nFilled inputs: ' + filledInputs;
+                
+                if (filledValues.length > 0) {
+                    message += '\n\nCurrent input values:\n' + filledValues.join('\n');
+                }
+                
+                if (filledInputs > Object.keys(currentPatientData).length) {
+                    message += '\n\n❗ ISSUE: You have ' + filledInputs + ' filled inputs but only ' + Object.keys(currentPatientData).length + ' stored entries.';
+                    message += '\nClick "🔄 Capture Current Values" to save what you see!';
+                }
             }
             
             // Add localStorage info
@@ -1700,11 +1714,14 @@
                 // Description column with proper z-index
                 html += '<td style="position: sticky; left: 80px; background: ' + rowBg + '; padding: 12px; border: 1px solid #e2e8f0; width: 250px; z-index: 50;">' + supplyDescription + '</td>';
                 
-                // Wound Dx column with proper z-index
+                // Wound Dx column with proper z-index and FIXED event handling
                 html += '<td style="position: sticky; left: 330px; background: #f8faff; padding: 12px; border: 1px solid #e2e8f0; width: 200px; z-index: 50;">';
                 html += '<input type="text" value="' + woundDx + '" placeholder="Enter wound diagnosis..."';
                 html += ' style="width: 100%; padding: 4px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 14px; background: white; box-sizing: border-box;"';
-                html += ' onchange="updateWoundDx(' + patient.id + ', ' + supply.id + ', this.value, this)">';
+                html += ' data-patient-id="' + patient.id + '" data-supply-id="' + supply.id + '"';
+                html += ' onchange="updateWoundDx(' + patient.id + ', ' + supply.id + ', this.value, this)"';
+                html += ' oninput="updateWoundDx(' + patient.id + ', ' + supply.id + ', this.value, this)"';
+                html += ' onblur="updateWoundDx(' + patient.id + ', ' + supply.id + ', this.value, this)">';
                 html += '</td>';
                 
                 // Admin columns with proper z-index
@@ -1755,7 +1772,8 @@
             html += '<strong>Days:</strong> ' + daysInMonth + ' days in ' + monthYearDisplay;
             html += ' | <strong>Wound Dx Entries:</strong> <span data-wound-dx-count>' + Object.keys(woundDxData).length + '</span>';
             html += '</div>';
-            html += '<div style="display: flex; gap: 5px;">';
+            html += '<div style="display: flex; gap: 5px; flex-wrap: wrap;">';
+            html += '<button onclick="captureCurrentWoundDxFromDOM()" style="padding: 5px 10px; background: #e53e3e; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">🔄 Capture Current Values</button>';
             html += '<button onclick="debugWoundDxData()" style="padding: 5px 10px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">🔍 Debug Wound Dx</button>';
             html += '<button onclick="addTestWoundDxData()" style="padding: 5px 10px; background: #38a169; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">📝 Add Test Data</button>';
             html += '<button onclick="forceRefreshWoundDx()" style="padding: 5px 10px; background: #ed8936; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">🔄 Refresh</button>';
@@ -1826,10 +1844,10 @@
 
         async function updateWoundDx(patientId, supplyId, value, inputElement) {
             try {
+                console.log('💊 updateWoundDx called with:', { patientId, supplyId, value });
+                
                 inputElement.style.borderColor = '#4299e1';
                 inputElement.style.backgroundColor = '#ebf8ff';
-
-                console.log('💊 Saving wound dx:', { patientId, supplyId, value });
 
                 // ALWAYS store locally first - this is our reliable backup
                 if (!appData.woundDxData[patientId]) {
@@ -1841,6 +1859,7 @@
                 localStorage.setItem('woundDxData', JSON.stringify(appData.woundDxData));
                 
                 console.log('✅ Saved locally. Current local data:', appData.woundDxData[patientId]);
+                console.log('✅ Total wound dx entries for patient:', Object.keys(appData.woundDxData[patientId]).length);
 
                 // Try to save to server (optional)
                 try {
@@ -1862,7 +1881,7 @@
                 // Update the status bar count immediately
                 updateWoundDxStatusBar();
                 
-                showTrackingStatus('✅ Wound Dx saved successfully');
+                showTrackingStatus('✅ Wound Dx saved: ' + value);
 
                 setTimeout(function() {
                     inputElement.style.borderColor = '';
@@ -1870,7 +1889,7 @@
                 }, 1000);
 
             } catch (error) {
-                console.error('Failed to update wound dx:', error);
+                console.error('❌ Failed to update wound dx:', error);
                 
                 inputElement.style.borderColor = '#e53e3e';
                 inputElement.style.backgroundColor = '#fed7d7';
@@ -1894,6 +1913,43 @@
                 });
                 console.log('📊 Updated status bar wound dx count to:', count);
             }
+        }
+
+        // Function to capture all current wound dx values from DOM
+        function captureCurrentWoundDxFromDOM() {
+            if (!appData.selectedPatient) {
+                alert('Please select a patient first');
+                return;
+            }
+            
+            console.log('🔄 Capturing wound dx values from DOM...');
+            
+            const woundDxInputs = document.querySelectorAll('input[data-patient-id="' + appData.selectedPatient + '"][data-supply-id]');
+            let capturedCount = 0;
+            
+            if (!appData.woundDxData[appData.selectedPatient]) {
+                appData.woundDxData[appData.selectedPatient] = {};
+            }
+            
+            woundDxInputs.forEach(function(input) {
+                const supplyId = input.getAttribute('data-supply-id');
+                const value = input.value.trim();
+                
+                if (value) {
+                    appData.woundDxData[appData.selectedPatient][supplyId] = value;
+                    capturedCount++;
+                    console.log('📝 Captured:', supplyId, '=', value);
+                }
+            });
+            
+            // Save to localStorage
+            localStorage.setItem('woundDxData', JSON.stringify(appData.woundDxData));
+            
+            updateWoundDxStatusBar();
+            showTrackingStatus('✅ Captured ' + capturedCount + ' wound dx entries from form');
+            
+            console.log('✅ Capture complete. Total entries:', Object.keys(appData.woundDxData[appData.selectedPatient]).length);
+            return capturedCount;
         }
 
         async function updateQuantity(patientId, supplyId, dayOfMonth, value, inputElement) {
