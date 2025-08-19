@@ -2678,16 +2678,17 @@ async function debugSummaryReportSafe() {
         alert(`Found ${errors.length} patients with errors:\n${errors.map(e => `• ${e.patient}: ${e.error}`).join('\n')}`);
     }
 }
-    function applySummaryFiltersThrottled() {
-            const month = document.getElementById('summaryMonth').value;
-            const facility = document.getElementById('summaryFacility').value;
+    // ✅ FIXED - Added async keyword and await
+async function applySummaryFiltersThrottled() {
+    const month = document.getElementById('summaryMonth').value;
+    const facility = document.getElementById('summaryFacility').value;
 
-            appData.currentFilters.month = month;
-            appData.currentFilters.facility = facility;
+    appData.currentFilters.month = month;
+    appData.currentFilters.facility = facility;
 
-            // Use throttled update instead of regular update
-            updateSummaryThrottled();
-        }
+    // Use throttled update instead of regular update
+    await updateSummaryThrottled(); // ← Now properly awaited
+}
             try {
                 const filteredPatients = getFilteredPatients();
 
