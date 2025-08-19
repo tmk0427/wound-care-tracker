@@ -2445,7 +2445,7 @@
 
         async function updateSummary() {
         }
-            // RATE-LIMIT SAFE: Throttled versions that wait between API calls
+       // RATE-LIMIT SAFE: Throttled versions that wait between API calls
 
 // Utility function to add delays between API calls
 function delay(ms) {
@@ -2678,7 +2678,8 @@ async function debugSummaryReportSafe() {
         alert(`Found ${errors.length} patients with errors:\n${errors.map(e => `• ${e.patient}: ${e.error}`).join('\n')}`);
     }
 }
-    // ✅ FIXED - Added async keyword and await
+
+// Safe version of applySummaryFilters
 async function applySummaryFiltersThrottled() {
     const month = document.getElementById('summaryMonth').value;
     const facility = document.getElementById('summaryFacility').value;
@@ -2687,8 +2688,9 @@ async function applySummaryFiltersThrottled() {
     appData.currentFilters.facility = facility;
 
     // Use throttled update instead of regular update
-    await updateSummaryThrottled(); // ← Now properly awaited
-}
+    await updateSummaryThrottled();
+}   
+   
             try {
                 const filteredPatients = getFilteredPatients();
 
