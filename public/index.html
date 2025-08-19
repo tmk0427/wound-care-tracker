@@ -1075,11 +1075,10 @@
                 </div>
 
                 <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: center;">
-                    <button class="btn btn-primary" onclick="applySummaryFiltersThrottled()">📈 Apply Filters (Safe)</button>
+                    <button class="btn btn-primary" onclick="applySummaryFilters()">📈 Apply Filters</button>
                     <button class="btn btn-success" onclick="downloadUserReport()">📊 Download My Report</button>
                     <button class="btn btn-success admin-only-controls" onclick="downloadAdminReport()">📊 Download Admin Report</button>
                     <button class="btn btn-secondary" onclick="clearSummaryFilters()">🔄 Clear Filters</button>
-<button class="btn btn-warning admin-only-controls" onclick="debugSummaryReportSafe()" style="margin-left: 10px;">🐌 Safe Debug</button>
                     <!-- Debug buttons for testing -->
                     <button class="btn btn-warning admin-only-controls" onclick="auditAllWoundDxData()" style="margin-left: 20px;">🔍 Debug: Audit Wound Dx</button>
                 </div>
@@ -2444,265 +2443,6 @@
         }
 
         async function updateSummary() {
-        }
-    // RATE-LIMIT SAFE: Simple versions without async/await
-
-        // Utility function to add delays between API calls
-        function delay(ms) {
-            return new Promise(resolve => setTimeout(resolve, ms));
-        }
-
-        // Simple wrapper for throttled summary (no async/await)
-        function applySummaryFiltersThrottled() {
-            const month = document.getElementById('summaryMonth').value;
-            const facility = document.getElementById('summaryFacility').value;
-
-            appData.currentFilters.month = month;
-            appData.currentFilters.facility = facility;
-
-            // Use .then() instead of await
-            updateSummaryThrottledSimple().then(function() {
-                console.log('Summary update completed');
-            }).catch(function(error) {
-                console.error('Summary update failed:', error);
-                showTrackingStatus('❌ Failed to update summary: ' + error.message, true);
-            });
-        }
-
-        // Simplified throttled summary update using .then() chains
-        function updateSummaryThrottledSimple() {
-            showTrackingStatus('📄 Loading summary data slowly to avoid rate limits...', false);
-            
-            const filteredPatients = getFilteredPatients();
-            console.log(`📋 Processing ${filteredPatients.length} patients with throttling`);
-
-            document.getElementById('totalPatients').textContent = filteredPatients.length;
-            document.getElementById('activeSheets').textContent = filteredPatients.length;
-
-            let totalUnits = 0;
-            let totalCost = 0;
-            let totalWoundDxCount = 0;
-            let errorCount = 0;
-            let successCount = 0;
-
-            // Process patients one by one with delays
-            function processPatient(index) {
-                if (index >= filteredPatients.length) {
-                    // All patients processed
-                    document.getElementById('totalUnits').textContent = totalUnits.toLocaleString();
-                    document.getElementById('totalWoundDx').textContent = totalWoundDxCount;
-                    
-                    const totalCostElement = document.getElementById('totalCost');
-                    if (totalCostElement) {
-                        totalCostElement.textContent = '$' + totalCost.toFixed(2);
-                    }
-
-                    if (errorCount > 0) {
-                        showTrackingStatus(`⚠️ Summary completed: ${successCount} success, ${errorCount} errors`, true);
-                    } else {
-                        showTrackingStatus('✅ Summary updated successfully!');
-                    }
-
-                    updateSummaryTableSimple(filteredPatients);
-                    return Promise.resolve();
-                }
-
-                const patient = filteredPatients[index];
-                showTrackingStatus(`📊 Processing patient ${index + 1}/${filteredPatients.length}: ${patient.name}`, false);
-
-                // Add delay before processing (except first patient)
-                const delayPromise = index > 0 ? delay(1000) : Promise.resolve();
-
-                return delayPromise.then(function() {
-                    console.log(`Processing patient ${index + 1}/${filteredPatients.length}: ${patient.name}`);
-                    return apiCall('/patients/' + patient.id + '/tracking');
-                }).then(function(trackingData) {
-                    trackingData.forEach(function(item) {
-                        const quantity = parseInt(item.quantity) || 0;
-                        let cost = 0;
-                        if (item.cost !== null && item.cost !== undefined) {
-                            const costValue = Number(item.cost);
-                            cost = isNaN(costValue) ? 0 : costValue;
-                        }
-                        
-                        totalUnits += quantity;
-                        totalCost += quantity * cost;
-                    });
-
-                    // Small delay before wound dx call
-                    return delay(500);
-                }).then(function() {
-                    return apiCall('/patients/' + patient.id + '/wound-dx');
-                }).then(function(woundDxResponse) {
-                    if (woundDxResponse && Array.isArray(woundDxResponse)) {
-                        const uniqueWoundDx = new Set();
-                        woundDxResponse.forEach(function(item) {
-                            if (item && item.wound_dx && item.wound_dx.trim()) {
-                                uniqueWoundDx.add(item.wound_dx.trim());
-                            }
-                        });
-                        totalWoundDxCount += uniqueWoundDx.size;
-                    }
-                    successCount++;
-                }).catch(function(error) {
-                    console.error(`❌ Failed to load data for patient ${patient.name}:`, error);
-                    errorCount++;
-                    
-                    // If rate limited, add extra delay
-                    if (error.message.includes('rate') || error.message.includes('requests')) {
-                        showTrackingStatus('⏳ Rate limited - waiting 5 seconds...', true);
-                        return delay(5000);
-                    }
-                }).then(function() {
-                    // Process next patient
-                    return processPatient(index + 1);
-                });
-            }
-
-            return processPatient(0);
-        }
-
-        // Simplified table update
-        function updateSummaryTableSimple(patients) {
-            const tbody = document.getElementById('summaryTableBody');
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #667eea;">Loading patient data with rate limiting...</td></tr>';
-
-            const patientsToShow = patients || getFilteredPatients();
-
-            if (patientsToShow.length === 0) {
-                const isAdmin = currentUser && currentUser.role === 'admin';
-                const colspan = isAdmin ? '8' : '6';
-                tbody.innerHTML = '<tr><td colspan="' + colspan + '" style="text-align: center; color: #718096;">No patients to display</td></tr>';
-                return;
-            }
-
-            const isAdmin = currentUser && currentUser.role === 'admin';
-            tbody.innerHTML = ''; // Clear loading message
-
-            function processTablePatient(index) {
-                if (index >= patientsToShow.length) {
-                    return Promise.resolve();
-                }
-
-                const patient = patientsToShow[index];
-                
-                // Add delay between requests (except first)
-                const delayPromise = index > 0 ? delay(800) : Promise.resolve();
-
-                return delayPromise.then(function() {
-                    return apiCall('/patients/' + patient.id + '/tracking');
-                }).then(function(trackingData) {
-                    let totalUnits = 0;
-                    let totalCost = 0;
-                    const hcpcsCodes = new Set();
-                    
-                    trackingData.forEach(function(item) {
-                        const quantity = parseInt(item.quantity) || 0;
-                        
-                        let cost = 0;
-                        if (item.cost !== null && item.cost !== undefined) {
-                            const costValue = Number(item.cost);
-                            cost = isNaN(costValue) ? 0 : costValue;
-                        }
-                        
-                        totalUnits += quantity;
-                        totalCost += quantity * cost;
-                        if (item.hcpcs) hcpcsCodes.add(item.hcpcs);
-                    });
-
-                    const yearPart = patient.month.split('-')[0];
-                    const monthPart = patient.month.split('-')[1];
-                    const displayMonth = monthPart + '-' + yearPart.slice(-2);
-                    const lastUpdated = new Date(patient.updated_at).toLocaleDateString();
-
-                    const row = document.createElement('tr');
-                    row.innerHTML = 
-                        '<td>' + patient.name + '</td>' +
-                        '<td>' + displayMonth + '</td>' +
-                        '<td>' + (patient.mrn || 'N/A') + '</td>' +
-                        '<td>' + (patient.facility_name || 'Unknown') + '</td>' +
-                        '<td><strong>' + totalUnits + '</strong></td>' +
-                        '<td class="admin-only-column">' + (Array.from(hcpcsCodes).join(', ') || 'N/A') + '</td>' +
-                        '<td class="admin-only-column"><strong>$' + totalCost.toFixed(2) + '</strong></td>' +
-                        '<td>' + lastUpdated + '</td>';
-                    tbody.appendChild(row);
-                }).catch(function(error) {
-                    console.error('Failed to load data for patient ' + patient.name + ':', error);
-                    
-                    // Add error row
-                    const errorRow = document.createElement('tr');
-                    errorRow.style.backgroundColor = '#fed7d7';
-                    errorRow.innerHTML = 
-                        '<td>' + patient.name + '</td>' +
-                        '<td colspan="' + (isAdmin ? '7' : '5') + '" style="color: #c53030;">Error loading data: ' + error.message + '</td>';
-                    tbody.appendChild(errorRow);
-                }).then(function() {
-                    // Process next patient
-                    return processTablePatient(index + 1);
-                });
-            }
-
-            return processTablePatient(0);
-        }
-
-        // Simple debug function
-        function debugSummaryReportSafe() {
-            const filteredPatients = getFilteredPatients();
-            
-            if (filteredPatients.length > 10) {
-                if (!confirm(`This will test ${filteredPatients.length} patients with delays. This could take a while. Continue?`)) {
-                    return;
-                }
-            }
-            
-            console.log('🔍 SAFE DEBUGGING - WITH RATE LIMITING');
-            showTrackingStatus('🐌 Starting slow debug to avoid rate limits...', false);
-            
-            const errors = [];
-            const successes = [];
-            const maxPatients = Math.min(filteredPatients.length, 5);
-
-            function debugPatient(index) {
-                if (index >= maxPatients) {
-                    console.log('✅ Safe debug complete:', { successes, errors });
-                    showTrackingStatus(`🔍 Debug complete: ${successes.length} success, ${errors.length} errors`, false);
-                    
-                    if (errors.length > 0) {
-                        alert(`Found ${errors.length} patients with errors:\n${errors.map(e => `• ${e.patient}: ${e.error}`).join('\n')}`);
-                    }
-                    return;
-                }
-
-                const patient = filteredPatients[index];
-                showTrackingStatus(`🧪 Testing patient ${index + 1}/${maxPatients}: ${patient.name}`, false);
-
-                const delayPromise = index > 0 ? delay(2000) : Promise.resolve();
-
-                delayPromise.then(function() {
-                    return apiCall('/patients/' + patient.id + '/tracking');
-                }).then(function(trackingData) {
-                    return delay(1000).then(function() {
-                        return apiCall('/patients/' + patient.id + '/wound-dx');
-                    }).then(function(woundDxData) {
-                        successes.push({
-                            patient: patient.name,
-                            trackingRecords: trackingData.length,
-                            woundDxRecords: woundDxData ? woundDxData.length : 0
-                        });
-                    });
-                }).catch(function(error) {
-                    errors.push({
-                        patient: patient.name,
-                        error: error.message
-                    });
-                }).then(function() {
-                    debugPatient(index + 1);
-                });
-            }
-
-            debugPatient(0);
-        }  
-   
             try {
                 const filteredPatients = getFilteredPatients();
 
@@ -2713,6 +2453,16 @@
                 let totalCost = 0;
                 let totalWoundDxCount = 0;
 
+                for (let i = 0; i < filteredPatients.length; i++) {
+                    const patient = filteredPatients[i];
+                    try {
+                        const trackingData = await apiCall('/patients/' + patient.id + '/tracking');
+                        
+                        trackingData.forEach(function(item) {
+                            const quantity = parseInt(item.quantity) || 0;
+                            let cost = 0;
+                            if (item.cost !== null && item.cost !== undefined) {
+                                const costValue = Number(item.cost);
                                 cost = isNaN(costValue) ? 0 : costValue;
                             }
                             
@@ -4627,30 +4377,31 @@
             }
         }
 
-       // Check for existing auth token on page load
-window.addEventListener('DOMContentLoaded', function() {
-    if (authToken) {
-        console.log('🔍 Checking stored auth token...');
-        
-        apiCall('/auth/verify').then(function(response) {
-            currentUser = response.user;
-            
-            console.log('✅ Token valid, auto-logging in user:', currentUser.email);
-            
-            document.getElementById('loginContainer').style.display = 'none';
-            document.getElementById('mainApp').style.display = 'block';
-            
-            return initApp();
-        }).catch(function(error) {
-            console.log('❌ Stored token invalid, showing login');
-            localStorage.removeItem('authToken');
-            authToken = null;
-            currentUser = null;
+        // Check for existing auth token on page load
+        window.addEventListener('DOMContentLoaded', async function() {
+            if (authToken) {
+                try {
+                    console.log('🔍 Checking stored auth token...');
+                    
+                    const response = await apiCall('/auth/verify');
+                    currentUser = response.user;
+                    
+                    console.log('✅ Token valid, auto-logging in user:', currentUser.email);
+                    
+                    document.getElementById('loginContainer').style.display = 'none';
+                    document.getElementById('mainApp').style.display = 'block';
+                    
+                    await initApp();
+                } catch (error) {
+                    console.log('❌ Stored token invalid, showing login');
+                    localStorage.removeItem('authToken');
+                    authToken = null;
+                    currentUser = null;
+                }
+            } else {
+                console.log('🔓 No stored token, showing login screen');
+            }
         });
-    } else {
-        console.log('🔓 No stored token, showing login screen');
-    }
-});
 
         // Handle Enter key for login
         document.addEventListener('DOMContentLoaded', function() {
