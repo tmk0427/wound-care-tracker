@@ -2712,17 +2712,17 @@ function debugSummaryReportSafe() {
                 let totalUnits = 0;
                 let totalCost = 0;
                 let totalWoundDxCount = 0;
-
-                for (let i = 0; i < filteredPatients.length; i++) {
-                    const patient = filteredPatients[i];
-                    try {
-                        const trackingData = await apiCall('/patients/' + patient.id + '/tracking');
-                        
-                        trackingData.forEach(function(item) {
-                            const quantity = parseInt(item.quantity) || 0;
-                            let cost = 0;
-                            if (item.cost !== null && item.cost !== undefined) {
-                                const costValue = Number(item.cost);
+//
+//                for (let i = 0; i < filteredPatients.length; i++) {
+//                    const patient = filteredPatients[i];
+//                    try {
+//                        const trackingData = await apiCall('/patients/' + patient.id + '/tracking');
+//                        
+//                        trackingData.forEach(function(item) {
+//                            const quantity = parseInt(item.quantity) || 0;
+//                            let cost = 0;
+//                            if (item.cost !== null && item.cost !== undefined) {
+//                                const costValue = Number(item.cost);
                                 cost = isNaN(costValue) ? 0 : costValue;
                             }
                             
