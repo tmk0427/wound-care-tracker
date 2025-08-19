@@ -4637,31 +4637,30 @@ function debugSummaryReportSafe() {
             }
         }
 
-        // Check for existing auth token on page load
-        window.addEventListener('DOMContentLoaded', async function() {
-            if (authToken) {
-                try {
-                    console.log('🔍 Checking stored auth token...');
-                    
-                    const response = await apiCall('/auth/verify');
-                    currentUser = response.user;
-                    
-                    console.log('✅ Token valid, auto-logging in user:', currentUser.email);
-                    
-                    document.getElementById('loginContainer').style.display = 'none';
-                    document.getElementById('mainApp').style.display = 'block';
-                    
-                    await initApp();
-                } catch (error) {
-                    console.log('❌ Stored token invalid, showing login');
-                    localStorage.removeItem('authToken');
-                    authToken = null;
-                    currentUser = null;
-                }
-            } else {
-                console.log('🔓 No stored token, showing login screen');
-            }
+       // Check for existing auth token on page load
+window.addEventListener('DOMContentLoaded', function() {
+    if (authToken) {
+        console.log('🔍 Checking stored auth token...');
+        
+        apiCall('/auth/verify').then(function(response) {
+            currentUser = response.user;
+            
+            console.log('✅ Token valid, auto-logging in user:', currentUser.email);
+            
+            document.getElementById('loginContainer').style.display = 'none';
+            document.getElementById('mainApp').style.display = 'block';
+            
+            return initApp();
+        }).catch(function(error) {
+            console.log('❌ Stored token invalid, showing login');
+            localStorage.removeItem('authToken');
+            authToken = null;
+            currentUser = null;
         });
+    } else {
+        console.log('🔓 No stored token, showing login screen');
+    }
+});
 
         // Handle Enter key for login
         document.addEventListener('DOMContentLoaded', function() {
