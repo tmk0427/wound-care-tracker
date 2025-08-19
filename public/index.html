@@ -1075,10 +1075,11 @@
                 </div>
 
                 <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: center;">
-                    <button class="btn btn-primary" onclick="applySummaryFilters()">📈 Apply Filters</button>
+                    <button class="btn btn-primary" onclick="applySummaryFiltersThrottled()">📈 Apply Filters (Safe)</button>
                     <button class="btn btn-success" onclick="downloadUserReport()">📊 Download My Report</button>
                     <button class="btn btn-success admin-only-controls" onclick="downloadAdminReport()">📊 Download Admin Report</button>
                     <button class="btn btn-secondary" onclick="clearSummaryFilters()">🔄 Clear Filters</button>
+<button class="btn btn-warning admin-only-controls" onclick="debugSummaryReportSafe()" style="margin-left: 10px;">🐌 Safe Debug</button>
                     <!-- Debug buttons for testing -->
                     <button class="btn btn-warning admin-only-controls" onclick="auditAllWoundDxData()" style="margin-left: 20px;">🔍 Debug: Audit Wound Dx</button>
                 </div>
@@ -2443,6 +2444,250 @@
         }
 
         async function updateSummary() {
+        }
+            // RATE-LIMIT SAFE: Throttled versions that wait between API calls
+
+// Utility function to add delays between API calls
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Throttled summary update with delays between requests
+async function updateSummaryThrottled() {
+    try {
+        showTrackingStatus('📄 Loading summary data slowly to avoid rate limits...', false);
+        
+        const filteredPatients = getFilteredPatients();
+        console.log(`📋 Processing ${filteredPatients.length} patients with throttling`);
+
+        document.getElementById('totalPatients').textContent = filteredPatients.length;
+        document.getElementById('activeSheets').textContent = filteredPatients.length;
+
+        let totalUnits = 0;
+        let totalCost = 0;
+        let totalWoundDxCount = 0;
+        let errorCount = 0;
+        let successCount = 0;
+
+        for (let i = 0; i < filteredPatients.length; i++) {
+            const patient = filteredPatients[i];
+            
+            // Show progress
+            showTrackingStatus(`📊 Processing patient ${i + 1}/${filteredPatients.length}: ${patient.name}`, false);
+            
+            try {
+                // Add delay before each patient (except the first)
+                if (i > 0) {
+                    await delay(1000); // Wait 1 second between patients
+                }
+                
+                console.log(`Processing patient ${i + 1}/${filteredPatients.length}: ${patient.name}`);
+                const trackingData = await apiCall('/patients/' + patient.id + '/tracking');
+                
+                trackingData.forEach(function(item) {
+                    const quantity = parseInt(item.quantity) || 0;
+                    let cost = 0;
+                    if (item.cost !== null && item.cost !== undefined) {
+                        const costValue = Number(item.cost);
+                        cost = isNaN(costValue) ? 0 : costValue;
+                    }
+                    
+                    totalUnits += quantity;
+                    totalCost += quantity * cost;
+                });
+
+                // Small delay before wound dx call
+                await delay(500);
+
+                // Get wound dx data for this patient
+                try {
+                    const woundDxResponse = await apiCall('/patients/' + patient.id + '/wound-dx');
+                    if (woundDxResponse && Array.isArray(woundDxResponse)) {
+                        const uniqueWoundDx = new Set();
+                        woundDxResponse.forEach(function(item) {
+                            if (item && item.wound_dx && item.wound_dx.trim()) {
+                                uniqueWoundDx.add(item.wound_dx.trim());
+                            }
+                        });
+                        totalWoundDxCount += uniqueWoundDx.size;
+                    }
+                } catch (error) {
+                    console.log(`⚠️ No wound dx data for patient: ${patient.name}`);
+                }
+
+                successCount++;
+
+            } catch (error) {
+                console.error(`❌ Failed to load data for patient ${patient.name}:`, error);
+                errorCount++;
+                
+                // If rate limited, wait longer
+                if (error.message.includes('rate') || error.message.includes('requests')) {
+                    showTrackingStatus('⏳ Rate limited - waiting 5 seconds...', true);
+                    await delay(5000);
+                }
+            }
+        }
+
+        document.getElementById('totalUnits').textContent = totalUnits.toLocaleString();
+        document.getElementById('totalWoundDx').textContent = totalWoundDxCount;
+        
+        const totalCostElement = document.getElementById('totalCost');
+        if (totalCostElement) {
+            totalCostElement.textContent = '$' + totalCost.toFixed(2);
+        }
+
+        if (errorCount > 0) {
+            showTrackingStatus(`⚠️ Summary completed: ${successCount} success, ${errorCount} errors`, true);
+        } else {
+            showTrackingStatus('✅ Summary updated successfully!');
+        }
+
+        // Update table with throttling
+        await updateSummaryTableThrottled(filteredPatients);
+        
+    } catch (error) {
+        console.error('❌ Failed to update summary:', error);
+        showTrackingStatus(`❌ Failed to update summary: ${error.message}`, true);
+    }
+}
+
+// Throttled table update
+async function updateSummaryTableThrottled(patients) {
+    const tbody = document.getElementById('summaryTableBody');
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #667eea;">Loading patient data with rate limiting...</td></tr>';
+
+    const patientsToShow = patients || getFilteredPatients();
+
+    if (patientsToShow.length === 0) {
+        const isAdmin = currentUser && currentUser.role === 'admin';
+        const colspan = isAdmin ? '8' : '6';
+        tbody.innerHTML = '<tr><td colspan="' + colspan + '" style="text-align: center; color: #718096;">No patients to display</td></tr>';
+        return;
+    }
+
+    const isAdmin = currentUser && currentUser.role === 'admin';
+    tbody.innerHTML = ''; // Clear loading message
+
+    for (let i = 0; i < patientsToShow.length; i++) {
+        const patient = patientsToShow[i];
+        
+        // Add delay between requests
+        if (i > 0) {
+            await delay(800);
+        }
+        
+        try {
+            const trackingData = await apiCall('/patients/' + patient.id + '/tracking');
+            
+            let totalUnits = 0;
+            let totalCost = 0;
+            const hcpcsCodes = new Set();
+            
+            trackingData.forEach(function(item) {
+                const quantity = parseInt(item.quantity) || 0;
+                
+                let cost = 0;
+                if (item.cost !== null && item.cost !== undefined) {
+                    const costValue = Number(item.cost);
+                    cost = isNaN(costValue) ? 0 : costValue;
+                }
+                
+                totalUnits += quantity;
+                totalCost += quantity * cost;
+                if (item.hcpcs) hcpcsCodes.add(item.hcpcs);
+            });
+
+            const yearPart = patient.month.split('-')[0];
+            const monthPart = patient.month.split('-')[1];
+            const displayMonth = monthPart + '-' + yearPart.slice(-2);
+            const lastUpdated = new Date(patient.updated_at).toLocaleDateString();
+
+            const row = document.createElement('tr');
+            row.innerHTML = 
+                '<td>' + patient.name + '</td>' +
+                '<td>' + displayMonth + '</td>' +
+                '<td>' + (patient.mrn || 'N/A') + '</td>' +
+                '<td>' + (patient.facility_name || 'Unknown') + '</td>' +
+                '<td><strong>' + totalUnits + '</strong></td>' +
+                '<td class="admin-only-column">' + (Array.from(hcpcsCodes).join(', ') || 'N/A') + '</td>' +
+                '<td class="admin-only-column"><strong>$' + totalCost.toFixed(2) + '</strong></td>' +
+                '<td>' + lastUpdated + '</td>';
+            tbody.appendChild(row);
+            
+        } catch (error) {
+            console.error('Failed to load data for patient ' + patient.name + ':', error);
+            
+            // Add error row
+            const errorRow = document.createElement('tr');
+            errorRow.style.backgroundColor = '#fed7d7';
+            errorRow.innerHTML = 
+                '<td>' + patient.name + '</td>' +
+                '<td colspan="' + (isAdmin ? '7' : '5') + '" style="color: #c53030;">Error loading data: ' + error.message + '</td>';
+            tbody.appendChild(errorRow);
+        }
+    }
+}
+
+// Safe debug function with heavy throttling
+async function debugSummaryReportSafe() {
+    const filteredPatients = getFilteredPatients();
+    
+    if (filteredPatients.length > 10) {
+        if (!confirm(`This will test ${filteredPatients.length} patients with 1-second delays between requests. This could take ${filteredPatients.length * 2} seconds. Continue?`)) {
+            return;
+        }
+    }
+    
+    console.log('🔍 SAFE DEBUGGING - WITH RATE LIMITING');
+    showTrackingStatus('🐌 Starting slow debug to avoid rate limits...', false);
+    
+    const errors = [];
+    const successes = [];
+    
+    for (let i = 0; i < Math.min(filteredPatients.length, 5); i++) { // Limit to 5 patients max
+        const patient = filteredPatients[i];
+        
+        showTrackingStatus(`🧪 Testing patient ${i + 1}/5: ${patient.name}`, false);
+        
+        try {
+            if (i > 0) await delay(2000); // 2 second delay between patients
+            
+            const trackingData = await apiCall('/patients/' + patient.id + '/tracking');
+            await delay(1000); // 1 second delay between calls
+            const woundDxData = await apiCall('/patients/' + patient.id + '/wound-dx');
+            
+            successes.push({
+                patient: patient.name,
+                trackingRecords: trackingData.length,
+                woundDxRecords: woundDxData ? woundDxData.length : 0
+            });
+            
+        } catch (error) {
+            errors.push({
+                patient: patient.name,
+                error: error.message
+            });
+        }
+    }
+    
+    console.log('✅ Safe debug complete:', { successes, errors });
+    showTrackingStatus(`🔍 Debug complete: ${successes.length} success, ${errors.length} errors`, false);
+    
+    if (errors.length > 0) {
+        alert(`Found ${errors.length} patients with errors:\n${errors.map(e => `• ${e.patient}: ${e.error}`).join('\n')}`);
+    }
+}
+    function applySummaryFiltersThrottled() {
+            const month = document.getElementById('summaryMonth').value;
+            const facility = document.getElementById('summaryFacility').value;
+
+            appData.currentFilters.month = month;
+            appData.currentFilters.facility = facility;
+
+            // Use throttled update instead of regular update
+            updateSummaryThrottled();
+        }
             try {
                 const filteredPatients = getFilteredPatients();
 
