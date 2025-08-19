@@ -2445,115 +2445,125 @@
 
         async function updateSummary() {
         }
-       // RATE-LIMIT SAFE: Throttled versions that wait between API calls
+   // RATE-LIMIT SAFE: Simple versions without async/await
 
 // Utility function to add delays between API calls
 function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// Throttled summary update with delays between requests
-async function updateSummaryThrottled() {
-    try {
-        showTrackingStatus('📄 Loading summary data slowly to avoid rate limits...', false);
-        
-        const filteredPatients = getFilteredPatients();
-        console.log(`📋 Processing ${filteredPatients.length} patients with throttling`);
+// Simple wrapper for throttled summary (no async/await)
+function applySummaryFiltersThrottled() {
+    const month = document.getElementById('summaryMonth').value;
+    const facility = document.getElementById('summaryFacility').value;
 
-        document.getElementById('totalPatients').textContent = filteredPatients.length;
-        document.getElementById('activeSheets').textContent = filteredPatients.length;
+    appData.currentFilters.month = month;
+    appData.currentFilters.facility = facility;
 
-        let totalUnits = 0;
-        let totalCost = 0;
-        let totalWoundDxCount = 0;
-        let errorCount = 0;
-        let successCount = 0;
-
-        for (let i = 0; i < filteredPatients.length; i++) {
-            const patient = filteredPatients[i];
-            
-            // Show progress
-            showTrackingStatus(`📊 Processing patient ${i + 1}/${filteredPatients.length}: ${patient.name}`, false);
-            
-            try {
-                // Add delay before each patient (except the first)
-                if (i > 0) {
-                    await delay(1000); // Wait 1 second between patients
-                }
-                
-                console.log(`Processing patient ${i + 1}/${filteredPatients.length}: ${patient.name}`);
-                const trackingData = await apiCall('/patients/' + patient.id + '/tracking');
-                
-                trackingData.forEach(function(item) {
-                    const quantity = parseInt(item.quantity) || 0;
-                    let cost = 0;
-                    if (item.cost !== null && item.cost !== undefined) {
-                        const costValue = Number(item.cost);
-                        cost = isNaN(costValue) ? 0 : costValue;
-                    }
-                    
-                    totalUnits += quantity;
-                    totalCost += quantity * cost;
-                });
-
-                // Small delay before wound dx call
-                await delay(500);
-
-                // Get wound dx data for this patient
-                try {
-                    const woundDxResponse = await apiCall('/patients/' + patient.id + '/wound-dx');
-                    if (woundDxResponse && Array.isArray(woundDxResponse)) {
-                        const uniqueWoundDx = new Set();
-                        woundDxResponse.forEach(function(item) {
-                            if (item && item.wound_dx && item.wound_dx.trim()) {
-                                uniqueWoundDx.add(item.wound_dx.trim());
-                            }
-                        });
-                        totalWoundDxCount += uniqueWoundDx.size;
-                    }
-                } catch (error) {
-                    console.log(`⚠️ No wound dx data for patient: ${patient.name}`);
-                }
-
-                successCount++;
-
-            } catch (error) {
-                console.error(`❌ Failed to load data for patient ${patient.name}:`, error);
-                errorCount++;
-                
-                // If rate limited, wait longer
-                if (error.message.includes('rate') || error.message.includes('requests')) {
-                    showTrackingStatus('⏳ Rate limited - waiting 5 seconds...', true);
-                    await delay(5000);
-                }
-            }
-        }
-
-        document.getElementById('totalUnits').textContent = totalUnits.toLocaleString();
-        document.getElementById('totalWoundDx').textContent = totalWoundDxCount;
-        
-        const totalCostElement = document.getElementById('totalCost');
-        if (totalCostElement) {
-            totalCostElement.textContent = '$' + totalCost.toFixed(2);
-        }
-
-        if (errorCount > 0) {
-            showTrackingStatus(`⚠️ Summary completed: ${successCount} success, ${errorCount} errors`, true);
-        } else {
-            showTrackingStatus('✅ Summary updated successfully!');
-        }
-
-        // Update table with throttling
-        await updateSummaryTableThrottled(filteredPatients);
-        
-    } catch (error) {
-        console.error('❌ Failed to update summary:', error);
-        showTrackingStatus(`❌ Failed to update summary: ${error.message}`, true);
-    }
+    // Use .then() instead of await
+    updateSummaryThrottledSimple().then(function() {
+        console.log('Summary update completed');
+    }).catch(function(error) {
+        console.error('Summary update failed:', error);
+        showTrackingStatus('❌ Failed to update summary: ' + error.message, true);
+    });
 }
 
-// Throttled table update
-async function updateSummaryTableThrottled(patients) {
+// Simplified throttled summary update using .then() chains
+function updateSummaryThrottledSimple() {
+    showTrackingStatus('📄 Loading summary data slowly to avoid rate limits...', false);
+    
+    const filteredPatients = getFilteredPatients();
+    console.log(`📋 Processing ${filteredPatients.length} patients with throttling`);
+
+    document.getElementById('totalPatients').textContent = filteredPatients.length;
+    document.getElementById('activeSheets').textContent = filteredPatients.length;
+
+    let totalUnits = 0;
+    let totalCost = 0;
+    let totalWoundDxCount = 0;
+    let errorCount = 0;
+    let successCount = 0;
+
+    // Process patients one by one with delays
+    function processPatient(index) {
+        if (index >= filteredPatients.length) {
+            // All patients processed
+            document.getElementById('totalUnits').textContent = totalUnits.toLocaleString();
+            document.getElementById('totalWoundDx').textContent = totalWoundDxCount;
+            
+            const totalCostElement = document.getElementById('totalCost');
+            if (totalCostElement) {
+                totalCostElement.textContent = '$' + totalCost.toFixed(2);
+            }
+
+            if (errorCount > 0) {
+                showTrackingStatus(`⚠️ Summary completed: ${successCount} success, ${errorCount} errors`, true);
+            } else {
+                showTrackingStatus('✅ Summary updated successfully!');
+            }
+
+            updateSummaryTableSimple(filteredPatients);
+            return Promise.resolve();
+        }
+
+        const patient = filteredPatients[index];
+        showTrackingStatus(`📊 Processing patient ${index + 1}/${filteredPatients.length}: ${patient.name}`, false);
+
+        // Add delay before processing (except first patient)
+        const delayPromise = index > 0 ? delay(1000) : Promise.resolve();
+
+        return delayPromise.then(function() {
+            console.log(`Processing patient ${index + 1}/${filteredPatients.length}: ${patient.name}`);
+            return apiCall('/patients/' + patient.id + '/tracking');
+        }).then(function(trackingData) {
+            trackingData.forEach(function(item) {
+                const quantity = parseInt(item.quantity) || 0;
+                let cost = 0;
+                if (item.cost !== null && item.cost !== undefined) {
+                    const costValue = Number(item.cost);
+                    cost = isNaN(costValue) ? 0 : costValue;
+                }
+                
+                totalUnits += quantity;
+                totalCost += quantity * cost;
+            });
+
+            // Small delay before wound dx call
+            return delay(500);
+        }).then(function() {
+            return apiCall('/patients/' + patient.id + '/wound-dx');
+        }).then(function(woundDxResponse) {
+            if (woundDxResponse && Array.isArray(woundDxResponse)) {
+                const uniqueWoundDx = new Set();
+                woundDxResponse.forEach(function(item) {
+                    if (item && item.wound_dx && item.wound_dx.trim()) {
+                        uniqueWoundDx.add(item.wound_dx.trim());
+                    }
+                });
+                totalWoundDxCount += uniqueWoundDx.size;
+            }
+            successCount++;
+        }).catch(function(error) {
+            console.error(`❌ Failed to load data for patient ${patient.name}:`, error);
+            errorCount++;
+            
+            // If rate limited, add extra delay
+            if (error.message.includes('rate') || error.message.includes('requests')) {
+                showTrackingStatus('⏳ Rate limited - waiting 5 seconds...', true);
+                return delay(5000);
+            }
+        }).then(function() {
+            // Process next patient
+            return processPatient(index + 1);
+        });
+    }
+
+    return processPatient(0);
+}
+
+// Simplified table update
+function updateSummaryTableSimple(patients) {
     const tbody = document.getElementById('summaryTableBody');
     tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #667eea;">Loading patient data with rate limiting...</td></tr>';
 
@@ -2569,17 +2579,19 @@ async function updateSummaryTableThrottled(patients) {
     const isAdmin = currentUser && currentUser.role === 'admin';
     tbody.innerHTML = ''; // Clear loading message
 
-    for (let i = 0; i < patientsToShow.length; i++) {
-        const patient = patientsToShow[i];
-        
-        // Add delay between requests
-        if (i > 0) {
-            await delay(800);
+    function processTablePatient(index) {
+        if (index >= patientsToShow.length) {
+            return Promise.resolve();
         }
+
+        const patient = patientsToShow[index];
         
-        try {
-            const trackingData = await apiCall('/patients/' + patient.id + '/tracking');
-            
+        // Add delay between requests (except first)
+        const delayPromise = index > 0 ? delay(800) : Promise.resolve();
+
+        return delayPromise.then(function() {
+            return apiCall('/patients/' + patient.id + '/tracking');
+        }).then(function(trackingData) {
             let totalUnits = 0;
             let totalCost = 0;
             const hcpcsCodes = new Set();
@@ -2614,8 +2626,7 @@ async function updateSummaryTableThrottled(patients) {
                 '<td class="admin-only-column"><strong>$' + totalCost.toFixed(2) + '</strong></td>' +
                 '<td>' + lastUpdated + '</td>';
             tbody.appendChild(row);
-            
-        } catch (error) {
+        }).catch(function(error) {
             console.error('Failed to load data for patient ' + patient.name + ':', error);
             
             // Add error row
@@ -2625,16 +2636,21 @@ async function updateSummaryTableThrottled(patients) {
                 '<td>' + patient.name + '</td>' +
                 '<td colspan="' + (isAdmin ? '7' : '5') + '" style="color: #c53030;">Error loading data: ' + error.message + '</td>';
             tbody.appendChild(errorRow);
-        }
+        }).then(function() {
+            // Process next patient
+            return processTablePatient(index + 1);
+        });
     }
+
+    return processTablePatient(0);
 }
 
-// Safe debug function with heavy throttling
-async function debugSummaryReportSafe() {
+// Simple debug function
+function debugSummaryReportSafe() {
     const filteredPatients = getFilteredPatients();
     
     if (filteredPatients.length > 10) {
-        if (!confirm(`This will test ${filteredPatients.length} patients with 1-second delays between requests. This could take ${filteredPatients.length * 2} seconds. Continue?`)) {
+        if (!confirm(`This will test ${filteredPatients.length} patients with delays. This could take a while. Continue?`)) {
             return;
         }
     }
@@ -2644,52 +2660,48 @@ async function debugSummaryReportSafe() {
     
     const errors = [];
     const successes = [];
-    
-    for (let i = 0; i < Math.min(filteredPatients.length, 5); i++) { // Limit to 5 patients max
-        const patient = filteredPatients[i];
-        
-        showTrackingStatus(`🧪 Testing patient ${i + 1}/5: ${patient.name}`, false);
-        
-        try {
-            if (i > 0) await delay(2000); // 2 second delay between patients
+    const maxPatients = Math.min(filteredPatients.length, 5);
+
+    function debugPatient(index) {
+        if (index >= maxPatients) {
+            console.log('✅ Safe debug complete:', { successes, errors });
+            showTrackingStatus(`🔍 Debug complete: ${successes.length} success, ${errors.length} errors`, false);
             
-            const trackingData = await apiCall('/patients/' + patient.id + '/tracking');
-            await delay(1000); // 1 second delay between calls
-            const woundDxData = await apiCall('/patients/' + patient.id + '/wound-dx');
-            
-            successes.push({
-                patient: patient.name,
-                trackingRecords: trackingData.length,
-                woundDxRecords: woundDxData ? woundDxData.length : 0
+            if (errors.length > 0) {
+                alert(`Found ${errors.length} patients with errors:\n${errors.map(e => `• ${e.patient}: ${e.error}`).join('\n')}`);
+            }
+            return;
+        }
+
+        const patient = filteredPatients[index];
+        showTrackingStatus(`🧪 Testing patient ${index + 1}/${maxPatients}: ${patient.name}`, false);
+
+        const delayPromise = index > 0 ? delay(2000) : Promise.resolve();
+
+        delayPromise.then(function() {
+            return apiCall('/patients/' + patient.id + '/tracking');
+        }).then(function(trackingData) {
+            return delay(1000).then(function() {
+                return apiCall('/patients/' + patient.id + '/wound-dx');
+            }).then(function(woundDxData) {
+                successes.push({
+                    patient: patient.name,
+                    trackingRecords: trackingData.length,
+                    woundDxRecords: woundDxData ? woundDxData.length : 0
+                });
             });
-            
-        } catch (error) {
+        }).catch(function(error) {
             errors.push({
                 patient: patient.name,
                 error: error.message
             });
-        }
+        }).then(function() {
+            debugPatient(index + 1);
+        });
     }
-    
-    console.log('✅ Safe debug complete:', { successes, errors });
-    showTrackingStatus(`🔍 Debug complete: ${successes.length} success, ${errors.length} errors`, false);
-    
-    if (errors.length > 0) {
-        alert(`Found ${errors.length} patients with errors:\n${errors.map(e => `• ${e.patient}: ${e.error}`).join('\n')}`);
-    }
-}
 
-// Safe version of applySummaryFilters
-async function applySummaryFiltersThrottled() {
-    const month = document.getElementById('summaryMonth').value;
-    const facility = document.getElementById('summaryFacility').value;
-
-    appData.currentFilters.month = month;
-    appData.currentFilters.facility = facility;
-
-    // Use throttled update instead of regular update
-    await updateSummaryThrottled();
-}   
+    debugPatient(0);
+}      
    
             try {
                 const filteredPatients = getFilteredPatients();
