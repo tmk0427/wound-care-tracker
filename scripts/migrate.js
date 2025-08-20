@@ -11,28 +11,28 @@ const pool = new Pool({
 
 async function runMigration() {
   try {
-    console.log('???? Starting database migration...');
+    console.log('🔄 Starting database migration...');
     
     // Test connection
     await pool.query('SELECT NOW()');
-    console.log('??? Database connection successful');
+    console.log('✅ Database connection successful');
 
-    // Read and execute the schema file
+    // Read and execute the schema file or use inline schema
     const schemaPath = path.join(__dirname, '..', 'schema.sql');
     
     if (fs.existsSync(schemaPath)) {
       const schema = fs.readFileSync(schemaPath, 'utf8');
       await pool.query(schema);
-      console.log('??? Database schema applied successfully');
+      console.log('✅ Database schema applied successfully');
     } else {
       // Inline schema if file doesn't exist
-      console.log('???? Applying inline database schema...');
+      console.log('🔧 Applying inline database schema...');
       
       const schema = `
         -- Enable UUID extension
         CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
-        -- Drop existing tables
+        -- Drop existing tables in correct order (respecting foreign keys)
         DROP TABLE IF EXISTS tracking CASCADE;
         DROP TABLE IF EXISTS patients CASCADE;
         DROP TABLE IF EXISTS users CASCADE;
@@ -84,7 +84,7 @@ async function runMigration() {
             UNIQUE(name, month, facility_id)
         );
 
-        -- Create tracking table
+        -- Create tracking table (with wound_dx column)
         CREATE TABLE tracking (
             id SERIAL PRIMARY KEY,
             patient_id INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
@@ -97,14 +97,17 @@ async function runMigration() {
             UNIQUE(patient_id, supply_id, day_of_month)
         );
 
-        -- Create indexes
+        -- Create indexes for better performance
         CREATE INDEX idx_users_email ON users(email);
         CREATE INDEX idx_users_facility ON users(facility_id);
+        CREATE INDEX idx_users_role ON users(role);
         CREATE INDEX idx_patients_facility ON patients(facility_id);
         CREATE INDEX idx_patients_month ON patients(month);
         CREATE INDEX idx_tracking_patient ON tracking(patient_id);
         CREATE INDEX idx_tracking_supply ON tracking(supply_id);
+        CREATE INDEX idx_tracking_patient_supply ON tracking(patient_id, supply_id);
         CREATE INDEX idx_supplies_code ON supplies(code);
+        CREATE INDEX idx_supplies_custom ON supplies(is_custom);
 
         -- Create update trigger function
         CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -115,7 +118,7 @@ async function runMigration() {
         END;
         $$ language 'plpgsql';
 
-        -- Create triggers
+        -- Create triggers for automatic updated_at
         CREATE TRIGGER update_facilities_updated_at BEFORE UPDATE ON facilities
             FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
         CREATE TRIGGER update_supplies_updated_at BEFORE UPDATE ON supplies
@@ -129,11 +132,11 @@ async function runMigration() {
       `;
 
       await pool.query(schema);
-      console.log('??? Database schema created successfully');
+      console.log('✅ Database schema created successfully');
     }
 
     // Insert default data
-    console.log('???? Inserting default data...');
+    console.log('🔧 Inserting default data...');
 
     // Insert facilities
     await pool.query(`
@@ -145,7 +148,7 @@ async function runMigration() {
       ON CONFLICT (name) DO NOTHING
     `);
 
-    // Insert supplies
+    // Insert comprehensive supplies list
     await pool.query(`
       INSERT INTO supplies (code, description, hcpcs, cost, is_custom) VALUES 
         (700, 'Foam Dressing 4x4', 'A6209', 5.50, false),
@@ -162,7 +165,23 @@ async function runMigration() {
         (711, 'Zinc Paste Bandage 3x10', 'A6456', 6.30, false),
         (712, 'Foam Dressing with Border 6x6', 'A6212', 11.95, false),
         (713, 'Transparent Film 6x7', 'A6258', 4.75, false),
-        (714, 'Alginate Rope 12 inch', 'A6199', 18.50, false)
+        (714, 'Alginate Rope 12 inch', 'A6199', 18.50, false),
+        (272, 'Med-Surgical Supplies', 'B4149', 0.00, false),
+        (400, 'HME filter holder for trach or vent', 'A7507', 3.49, false),
+        (401, 'HME housing & adhesive', 'A7509', 1.97, false),
+        (402, 'HMES-trach valve adhesive disk', 'A7506', 0.45, false),
+        (403, 'HMES filter holder or cap for tracheostoma', 'A7503', 15.85, false),
+        (404, 'HMES filter', 'A7504', 0.95, false),
+        (405, 'HMES-trach valve housing', 'A7505', 6.55, false),
+        (406, 'HME housing w-adhesive filter', 'A7508', 4.01, false),
+        (407, 'Lubricant per oz to insert trach', 'A4402', 1.90, false),
+        (408, 'Piston irrigation syringe irrigation trach ostomy uro', 'A4322', 4.16, false),
+        (409, 'Sterile saline 10ml and 15ml bullets', 'A4216', 0.62, false),
+        (410, 'Sterile saline 100ml 1000ml 120ml 250ml and 500ml', 'A4217', 4.38, false),
+        (411, 'Closed suction catheter for trach', 'A4605', 22.92, false),
+        (412, 'Open suction catheter for trach', 'A4624', 3.69, false),
+        (413, 'Tracheal suction catheter closed system (yankauers-ballards)', 'A4605', 22.92, false),
+        (414, 'Trach tube', 'A7520', 12.50, false)
       ON CONFLICT (code) DO NOTHING
     `);
 
@@ -190,7 +209,7 @@ async function runMigration() {
       ON CONFLICT (name, month, facility_id) DO NOTHING
     `);
 
-    // Insert sample tracking data
+    // Insert sample tracking data with wound dx
     await pool.query(`
       INSERT INTO tracking (patient_id, supply_id, day_of_month, quantity, wound_dx) VALUES 
         (1, 1, 1, 2, 'Pressure ulcer stage 2'),
@@ -203,7 +222,7 @@ async function runMigration() {
       ON CONFLICT (patient_id, supply_id, day_of_month) DO NOTHING
     `);
 
-    console.log('??? Default data inserted successfully');
+    console.log('✅ Default data inserted successfully');
 
     // Verify the setup
     const counts = await pool.query(`
@@ -215,21 +234,21 @@ async function runMigration() {
         (SELECT COUNT(*) FROM tracking) as tracking_records
     `);
 
-    console.log('???? Database setup complete:');
+    console.log('📊 Database setup complete:');
     console.log(`   - Facilities: ${counts.rows[0].facilities}`);
     console.log(`   - Supplies: ${counts.rows[0].supplies}`);
     console.log(`   - Users: ${counts.rows[0].users}`);
     console.log(`   - Patients: ${counts.rows[0].patients}`);
     console.log(`   - Tracking Records: ${counts.rows[0].tracking_records}`);
 
-    console.log('\n???? Default Login Credentials:');
+    console.log('\n🔑 Default Login Credentials:');
     console.log('   Admin: admin@system.com / admin123');
     console.log('   User:  user@demo.com / user123');
 
-    console.log('\n???? Migration completed successfully!');
+    console.log('\n🚀 Migration completed successfully!');
 
   } catch (error) {
-    console.error('??? Migration failed:', error);
+    console.error('❌ Migration failed:', error);
     throw error;
   } finally {
     await pool.end();
@@ -240,11 +259,11 @@ async function runMigration() {
 if (require.main === module) {
   runMigration()
     .then(() => {
-      console.log('??? Migration script completed');
+      console.log('✅ Migration script completed');
       process.exit(0);
     })
     .catch((error) => {
-      console.error('??? Migration script failed:', error);
+      console.error('❌ Migration script failed:', error);
       process.exit(1);
     });
 }
