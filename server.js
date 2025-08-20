@@ -920,8 +920,21 @@ app.use((error, req, res, next) => {
 
 // ==================== SERVER START ====================
 
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`📱 Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`🔗 App URL: ${process.env.NODE_ENV === 'production' ? 'https://your-app.herokuapp.com' : `http://localhost:${PORT}`}`);
+// Initialize database and start server
+async function startServer() {
+    await initializeDatabase();
+    
+    app.listen(PORT, '0.0.0.0', () => {
+        console.log(`🚀 Server running on port ${PORT}`);
+        console.log(`📱 Environment: ${process.env.NODE_ENV || 'development'}`);
+        console.log(`🔗 App URL: ${process.env.NODE_ENV === 'production' ? 'https://your-app.herokuapp.com' : `http://localhost:${PORT}`}`);
+        console.log('🎉 Wound Care RT Supply Tracker is ready!');
+        console.log('👑 Admin Login: admin@system.com / admin123');
+        console.log('👤 User Login: user@demo.com / user123');
+    });
+}
+
+startServer().catch(error => {
+    console.error('❌ Failed to start server:', error);
+    process.exit(1);
 });
