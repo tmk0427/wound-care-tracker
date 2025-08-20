@@ -1,4 +1,5 @@
 const express = require('express');
+app.set('trust proxy', 1);
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
@@ -27,10 +28,52 @@ pool.connect((err, client, release) => {
     }
 });
 
-// Rate limiting
+/// Rate limiting - fixed for Heroku proxy setup
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100 // limit each IP to 100 requests per windowMs
+    max: 100, // limit each IP to 100 requests per windowMs
+    standardHeaders: true,
+    legacyHeaders: false,
+    
+    // Custom key generator that handles Heroku's proxy setup
+    keyGenerator: (req) => {
+        // Skip rate limiting in development
+        if (process.env.NODE_ENV === 'development') {
+            return 'dev-key';
+        }
+        
+        // Get real IP from Heroku's proxy headers
+        const forwarded = req.headers['x-forwarded-for'];
+        const realIp = req.headers['x-real-ip'];
+        const remoteAddr = req.connection?.remoteAddress || req.socket?.remoteAddress;
+        
+        let clientIp;
+        
+        if (forwarded) {
+            // X-Forwarded-For can contain multiple IPs, get the first one
+            clientIp = forwarded.split(',')[0].trim();
+        } else if (realIp) {
+            clientIp = realIp;
+        } else {
+            clientIp = remoteAddr || 'unknown';
+        }
+        
+        // Clean up IPv6 mapped IPv4 addresses
+        if (clientIp.startsWith('::ffff:')) {
+            clientIp = clientIp.substring(7);
+        }
+        
+        return clientIp;
+    },
+    
+    // Disable proxy validation to fix Heroku error
+    validate: {
+        xForwardedForHeader: false,
+        trustProxy: false
+    },
+    
+    // Skip rate limiting in development
+    skip: (req) => process.env.NODE_ENV === 'development'
 });
 
 // Middleware
@@ -1544,3 +1587,4 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
