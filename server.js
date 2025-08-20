@@ -8,9 +8,30 @@ const path = require('path');
 const rateLimit = require('express-rate-limit');
 
 const app = express();
-app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+
+// Initialize database on startup
+async function initializeDatabase() {
+    try {
+        // Check if tables exist, if not run migration
+        const tablesExist = await pool.query(`
+            SELECT COUNT(*) FROM information_schema.tables 
+            WHERE table_schema = 'public' AND table_name IN ('users', 'facilities', 'supplies', 'patients', 'tracking')
+        `);
+        
+        if (parseInt(tablesExist.rows[0].count) < 5) {
+            console.log('🔧 Database tables missing, running initialization...');
+            const { runMigration } = require('./migrate');
+            await runMigration();
+        } else {
+            console.log('✅ Database tables verified');
+        }
+    } catch (error) {
+        console.error('❌ Database initialization failed:', error);
+        // Don't exit, let the app start anyway
+    }
+}
 
 // Database connection
 const pool = new Pool({
@@ -21,59 +42,17 @@ const pool = new Pool({
 // Test database connection
 pool.connect((err, client, release) => {
     if (err) {
-        console.error('Database connection failed:', err);
+        console.error('❌ Database connection failed:', err);
     } else {
-        console.log('Database connected successfully');
+        console.log('✅ Database connected successfully');
         release();
     }
 });
 
-// Rate limiting - fixed for Heroku proxy setup
+// Rate limiting
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // limit each IP to 100 requests per windowMs
-    standardHeaders: true,
-    legacyHeaders: false,
-    
-    // Custom key generator that handles Heroku's proxy setup
-    keyGenerator: (req) => {
-        // Skip rate limiting in development
-        if (process.env.NODE_ENV === 'development') {
-            return 'dev-key';
-        }
-        
-        // Get real IP from Heroku's proxy headers
-        const forwarded = req.headers['x-forwarded-for'];
-        const realIp = req.headers['x-real-ip'];
-        const remoteAddr = req.connection?.remoteAddress || req.socket?.remoteAddress;
-        
-        let clientIp;
-        
-        if (forwarded) {
-            // X-Forwarded-For can contain multiple IPs, get the first one
-            clientIp = forwarded.split(',')[0].trim();
-        } else if (realIp) {
-            clientIp = realIp;
-        } else {
-            clientIp = remoteAddr || 'unknown';
-        }
-        
-        // Clean up IPv6 mapped IPv4 addresses
-        if (clientIp.startsWith('::ffff:')) {
-            clientIp = clientIp.substring(7);
-        }
-        
-        return clientIp;
-    },
-    
-    // Disable proxy validation to fix Heroku error
-    validate: {
-        xForwardedForHeader: false,
-        trustProxy: false
-    },
-    
-    // Skip rate limiting in development
-    skip: (req) => process.env.NODE_ENV === 'development'
+    max: 100 // limit each IP to 100 requests per windowMs
 });
 
 // Middleware
@@ -93,63 +72,19 @@ app.use((req, res, next) => {
     }
 });
 
-// Serve static files from public directory
-app.use(express.static(path.join(__dirname, 'public')));
-
-// Serve index.html for root route
+// Static files - serve index.html from root
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    res.sendFile(path.join(__dirname, 'index.html'));
 });
+
+// Static files
+app.use(express.static('.'));
 
 // Multer for file uploads
 const upload = multer({ 
     storage: multer.memoryStorage(),
     limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
 });
-
-// Database initialization
-async function initializeDatabase() {
-    try {
-        console.log('Starting database initialization...');
-        
-        // Create patient_supply_dx table if it doesn't exist
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS patient_supply_dx (
-                id SERIAL PRIMARY KEY,
-                patient_id INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-                supply_id INTEGER NOT NULL REFERENCES supplies(id) ON DELETE CASCADE,
-                wound_dx TEXT NOT NULL,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(patient_id, supply_id)
-            )
-        `);
-        
-        await pool.query(`
-            CREATE OR REPLACE FUNCTION update_updated_at_column()
-            RETURNS TRIGGER AS $$
-            BEGIN
-                NEW.updated_at = CURRENT_TIMESTAMP;
-                RETURN NEW;
-            END;
-            $$ language 'plpgsql';
-        `);
-        
-        await pool.query(`
-            DROP TRIGGER IF EXISTS update_patient_supply_dx_updated_at ON patient_supply_dx;
-            CREATE TRIGGER update_patient_supply_dx_updated_at 
-                BEFORE UPDATE ON patient_supply_dx
-                FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-        `);
-        
-        console.log('Database initialization completed successfully');
-    } catch (error) {
-        console.error('Database initialization failed:', error);
-    }
-}
-
-// Initialize database on startup
-initializeDatabase();
 
 // Authentication middleware
 const authenticateToken = async (req, res, next) => {
@@ -199,13 +134,16 @@ app.post('/api/auth/register', async (req, res) => {
             return res.status(400).json({ error: 'Password must be at least 6 characters long' });
         }
 
+        // Check if user already exists
         const existingUser = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
         if (existingUser.rows.length > 0) {
             return res.status(400).json({ error: 'User already exists with this email' });
         }
 
+        // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
 
+        // Insert user
         const result = await pool.query(
             'INSERT INTO users (name, email, password, facility_id, is_approved) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, email',
             [name, email, hashedPassword, facilityId || null, false]
@@ -230,6 +168,7 @@ app.post('/api/auth/login', async (req, res) => {
             return res.status(400).json({ error: 'Email and password are required' });
         }
 
+        // Find user with facility info
         const result = await pool.query(`
             SELECT u.*, f.name as facility_name 
             FROM users u 
@@ -247,17 +186,20 @@ app.post('/api/auth/login', async (req, res) => {
             return res.status(401).json({ error: 'Account pending approval' });
         }
 
+        // Check password
         const isValidPassword = await bcrypt.compare(password, user.password);
         if (!isValidPassword) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
+        // Generate JWT token
         const token = jwt.sign(
             { userId: user.id, email: user.email, role: user.role },
             JWT_SECRET,
             { expiresIn: '24h' }
         );
 
+        // Remove password from response
         delete user.password;
 
         res.json({
@@ -307,6 +249,7 @@ app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
             return res.status(400).json({ error: 'New password must be at least 6 characters long' });
         }
 
+        // Verify current password
         const userResult = await pool.query('SELECT password FROM users WHERE id = $1', [req.user.id]);
         const isValidPassword = await bcrypt.compare(currentPassword, userResult.rows[0].password);
         
@@ -314,8 +257,10 @@ app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
             return res.status(400).json({ error: 'Current password is incorrect' });
         }
 
+        // Hash new password
         const hashedPassword = await bcrypt.hash(newPassword, 10);
 
+        // Update password
         await pool.query('UPDATE users SET password = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [hashedPassword, req.user.id]);
 
         res.json({ message: 'Password changed successfully' });
@@ -327,6 +272,7 @@ app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
 
 // ==================== FACILITIES ROUTES ====================
 
+// Get facilities (public for registration)
 app.get('/api/facilities/public', async (req, res) => {
     try {
         const result = await pool.query('SELECT id, name FROM facilities ORDER BY name');
@@ -337,11 +283,13 @@ app.get('/api/facilities/public', async (req, res) => {
     }
 });
 
+// Get facilities (authenticated)
 app.get('/api/facilities', authenticateToken, async (req, res) => {
     try {
         let query = 'SELECT * FROM facilities ORDER BY name';
         let queryParams = [];
 
+        // If user is not admin, filter by their facility
         if (req.user.role !== 'admin' && req.user.facility_id) {
             query = 'SELECT * FROM facilities WHERE id = $1 ORDER BY name';
             queryParams = [req.user.facility_id];
@@ -355,6 +303,7 @@ app.get('/api/facilities', authenticateToken, async (req, res) => {
     }
 });
 
+// Create facility (admin only)
 app.post('/api/facilities', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { name } = req.body;
@@ -370,7 +319,7 @@ app.post('/api/facilities', authenticateToken, requireAdmin, async (req, res) =>
 
         res.status(201).json(result.rows[0]);
     } catch (error) {
-        if (error.code === '23505') {
+        if (error.code === '23505') { // Unique constraint violation
             res.status(400).json({ error: 'Facility with this name already exists' });
         } else {
             console.error('Create facility error:', error);
@@ -379,10 +328,12 @@ app.post('/api/facilities', authenticateToken, requireAdmin, async (req, res) =>
     }
 });
 
+// Delete facility (admin only)
 app.delete('/api/facilities/:id', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         
+        // Check if facility has patients
         const patientCheck = await pool.query('SELECT COUNT(*) FROM patients WHERE facility_id = $1', [id]);
         if (parseInt(patientCheck.rows[0].count) > 0) {
             return res.status(400).json({ error: 'Cannot delete facility with existing patients' });
@@ -403,6 +354,7 @@ app.delete('/api/facilities/:id', authenticateToken, requireAdmin, async (req, r
 
 // ==================== SUPPLIES ROUTES ====================
 
+// Get supplies
 app.get('/api/supplies', authenticateToken, async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM supplies ORDER BY code');
@@ -413,9 +365,10 @@ app.get('/api/supplies', authenticateToken, async (req, res) => {
     }
 });
 
+// Create supply (admin only)
 app.post('/api/supplies', authenticateToken, requireAdmin, async (req, res) => {
     try {
-        const { code, description, hcpcs, cost } = req.body;
+        const { code, description, hcpcs, cost, is_custom } = req.body;
 
         if (!code || !description) {
             return res.status(400).json({ error: 'Code and description are required' });
@@ -423,12 +376,12 @@ app.post('/api/supplies', authenticateToken, requireAdmin, async (req, res) => {
 
         const result = await pool.query(
             'INSERT INTO supplies (code, description, hcpcs, cost, is_custom) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-            [code, description, hcpcs || null, cost || 0, true]
+            [code, description, hcpcs || null, cost || 0, is_custom !== undefined ? is_custom : true]
         );
 
         res.status(201).json(result.rows[0]);
     } catch (error) {
-        if (error.code === '23505') {
+        if (error.code === '23505') { // Unique constraint violation
             res.status(400).json({ error: 'Supply with this code already exists' });
         } else {
             console.error('Create supply error:', error);
@@ -437,6 +390,7 @@ app.post('/api/supplies', authenticateToken, requireAdmin, async (req, res) => {
     }
 });
 
+// Update supply (admin only)
 app.put('/api/supplies/:id', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
@@ -458,14 +412,15 @@ app.put('/api/supplies/:id', authenticateToken, requireAdmin, async (req, res) =
     }
 });
 
+// Delete supply (admin only)
 app.delete('/api/supplies/:id', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         
-        const result = await pool.query('DELETE FROM supplies WHERE id = $1 AND is_custom = true RETURNING *', [id]);
+        const result = await pool.query('DELETE FROM supplies WHERE id = $1 RETURNING *', [id]);
         
         if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Custom supply not found' });
+            return res.status(404).json({ error: 'Supply not found' });
         }
 
         res.json({ message: 'Supply deleted successfully' });
@@ -477,6 +432,7 @@ app.delete('/api/supplies/:id', authenticateToken, requireAdmin, async (req, res
 
 // ==================== PATIENTS ROUTES ====================
 
+// Get patients
 app.get('/api/patients', authenticateToken, async (req, res) => {
     try {
         let query = `
@@ -486,6 +442,7 @@ app.get('/api/patients', authenticateToken, async (req, res) => {
         `;
         let queryParams = [];
 
+        // If user is not admin, filter by their facility
         if (req.user.role !== 'admin' && req.user.facility_id) {
             query += ' WHERE p.facility_id = $1';
             queryParams = [req.user.facility_id];
@@ -501,6 +458,7 @@ app.get('/api/patients', authenticateToken, async (req, res) => {
     }
 });
 
+// Create patient
 app.post('/api/patients', authenticateToken, async (req, res) => {
     try {
         const { name, month, mrn, facilityId } = req.body;
@@ -509,6 +467,7 @@ app.post('/api/patients', authenticateToken, async (req, res) => {
             return res.status(400).json({ error: 'Name, month, and facility are required' });
         }
 
+        // Verify user has access to this facility
         if (req.user.role !== 'admin' && req.user.facility_id !== parseInt(facilityId)) {
             return res.status(403).json({ error: 'Access denied to this facility' });
         }
@@ -525,6 +484,7 @@ app.post('/api/patients', authenticateToken, async (req, res) => {
     }
 });
 
+// Update patient - FIXED: Added missing route
 app.put('/api/patients/:id', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
@@ -534,6 +494,7 @@ app.put('/api/patients/:id', authenticateToken, async (req, res) => {
             return res.status(400).json({ error: 'Name, month, and facility are required' });
         }
 
+        // Check if user has access to this patient
         if (req.user.role !== 'admin') {
             const patientCheck = await pool.query('SELECT facility_id FROM patients WHERE id = $1', [id]);
             if (patientCheck.rows.length === 0 || patientCheck.rows[0].facility_id !== req.user.facility_id) {
@@ -541,6 +502,7 @@ app.put('/api/patients/:id', authenticateToken, async (req, res) => {
             }
         }
 
+        // Verify user has access to the new facility
         if (req.user.role !== 'admin' && req.user.facility_id !== parseInt(facilityId)) {
             return res.status(403).json({ error: 'Access denied to this facility' });
         }
@@ -561,10 +523,12 @@ app.put('/api/patients/:id', authenticateToken, async (req, res) => {
     }
 });
 
+// Delete patient
 app.delete('/api/patients/:id', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
 
+        // Check if user has access to this patient
         if (req.user.role !== 'admin') {
             const patientCheck = await pool.query('SELECT facility_id FROM patients WHERE id = $1', [id]);
             if (patientCheck.rows.length === 0 || patientCheck.rows[0].facility_id !== req.user.facility_id) {
@@ -585,6 +549,7 @@ app.delete('/api/patients/:id', authenticateToken, async (req, res) => {
     }
 });
 
+// Excel import
 app.post('/api/patients/import-excel', authenticateToken, upload.single('excelFile'), async (req, res) => {
     try {
         if (!req.file) {
@@ -598,6 +563,7 @@ app.post('/api/patients/import-excel', authenticateToken, upload.single('excelFi
 
         const results = { success: [], errors: [] };
 
+        // Get facilities for validation
         const facilitiesResult = await pool.query('SELECT id, name FROM facilities');
         const facilitiesMap = {};
         facilitiesResult.rows.forEach(f => {
@@ -623,6 +589,7 @@ app.post('/api/patients/import-excel', authenticateToken, upload.single('excelFi
                     continue;
                 }
 
+                // Check facility access for non-admin users
                 if (req.user.role !== 'admin' && req.user.facility_id !== facilityId) {
                     results.errors.push(`Row ${i + 2}: Access denied to facility "${facilityName}"`);
                     continue;
@@ -651,10 +618,12 @@ app.post('/api/patients/import-excel', authenticateToken, upload.single('excelFi
 
 // ==================== TRACKING ROUTES ====================
 
+// Get tracking data for patient
 app.get('/api/patients/:id/tracking', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
 
+        // Check if user has access to this patient
         if (req.user.role !== 'admin') {
             const patientCheck = await pool.query('SELECT facility_id FROM patients WHERE id = $1', [id]);
             if (patientCheck.rows.length === 0 || patientCheck.rows[0].facility_id !== req.user.facility_id) {
@@ -677,11 +646,13 @@ app.get('/api/patients/:id/tracking', authenticateToken, async (req, res) => {
     }
 });
 
+// Update tracking data
 app.post('/api/patients/:id/tracking', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
         const { supplyId, dayOfMonth, quantity } = req.body;
 
+        // Check if user has access to this patient
         if (req.user.role !== 'admin') {
             const patientCheck = await pool.query('SELECT facility_id FROM patients WHERE id = $1', [id]);
             if (patientCheck.rows.length === 0 || patientCheck.rows[0].facility_id !== req.user.facility_id) {
@@ -690,6 +661,7 @@ app.post('/api/patients/:id/tracking', authenticateToken, async (req, res) => {
         }
 
         if (quantity > 0) {
+            // Insert or update tracking record
             await pool.query(`
                 INSERT INTO tracking (patient_id, supply_id, day_of_month, quantity)
                 VALUES ($1, $2, $3, $4)
@@ -697,6 +669,7 @@ app.post('/api/patients/:id/tracking', authenticateToken, async (req, res) => {
                 DO UPDATE SET quantity = $4, updated_at = CURRENT_TIMESTAMP
             `, [id, supplyId, dayOfMonth, quantity]);
         } else {
+            // Remove tracking record if quantity is 0
             await pool.query(
                 'DELETE FROM tracking WHERE patient_id = $1 AND supply_id = $2 AND day_of_month = $3',
                 [id, supplyId, dayOfMonth]
@@ -710,12 +683,14 @@ app.post('/api/patients/:id/tracking', authenticateToken, async (req, res) => {
     }
 });
 
-// ==================== WOUND DX ROUTES ====================
+// ==================== WOUND DX ROUTES - FIXED ====================
 
+// Get wound dx data for patient (using tracking table)
 app.get('/api/patients/:id/wound-dx', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
 
+        // Check if user has access to this patient
         if (req.user.role !== 'admin') {
             const patientCheck = await pool.query('SELECT facility_id FROM patients WHERE id = $1', [id]);
             if (patientCheck.rows.length === 0 || patientCheck.rows[0].facility_id !== req.user.facility_id) {
@@ -724,9 +699,10 @@ app.get('/api/patients/:id/wound-dx', authenticateToken, async (req, res) => {
         }
 
         const result = await pool.query(`
-            SELECT supply_id, wound_dx
-            FROM patient_supply_dx
-            WHERE patient_id = $1
+            SELECT DISTINCT supply_id, 
+                   COALESCE(wound_dx, '') as wound_dx
+            FROM tracking
+            WHERE patient_id = $1 AND wound_dx IS NOT NULL AND wound_dx != ''
         `, [id]);
 
         res.json(result.rows);
@@ -736,11 +712,13 @@ app.get('/api/patients/:id/wound-dx', authenticateToken, async (req, res) => {
     }
 });
 
+// Update wound dx data (using tracking table)
 app.post('/api/patients/:id/wound-dx', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
         const { supplyId, woundDx } = req.body;
 
+        // Check if user has access to this patient
         if (req.user.role !== 'admin') {
             const patientCheck = await pool.query('SELECT facility_id FROM patients WHERE id = $1', [id]);
             if (patientCheck.rows.length === 0 || patientCheck.rows[0].facility_id !== req.user.facility_id) {
@@ -749,17 +727,32 @@ app.post('/api/patients/:id/wound-dx', authenticateToken, async (req, res) => {
         }
 
         if (woundDx && woundDx.trim()) {
+            // Update all tracking records for this patient and supply with the wound dx
             await pool.query(`
-                INSERT INTO patient_supply_dx (patient_id, supply_id, wound_dx)
-                VALUES ($1, $2, $3)
-                ON CONFLICT (patient_id, supply_id)
-                DO UPDATE SET wound_dx = $3, updated_at = CURRENT_TIMESTAMP
+                UPDATE tracking 
+                SET wound_dx = $3, updated_at = CURRENT_TIMESTAMP 
+                WHERE patient_id = $1 AND supply_id = $2
             `, [id, supplyId, woundDx.trim()]);
-        } else {
-            await pool.query(
-                'DELETE FROM patient_supply_dx WHERE patient_id = $1 AND supply_id = $2',
+
+            // If no tracking records exist, create a placeholder
+            const existingRecords = await pool.query(
+                'SELECT COUNT(*) FROM tracking WHERE patient_id = $1 AND supply_id = $2',
                 [id, supplyId]
             );
+
+            if (parseInt(existingRecords.rows[0].count) === 0) {
+                await pool.query(`
+                    INSERT INTO tracking (patient_id, supply_id, day_of_month, quantity, wound_dx)
+                    VALUES ($1, $2, 1, 0, $3)
+                `, [id, supplyId, woundDx.trim()]);
+            }
+        } else {
+            // Clear wound dx from all tracking records for this patient and supply
+            await pool.query(`
+                UPDATE tracking 
+                SET wound_dx = NULL, updated_at = CURRENT_TIMESTAMP 
+                WHERE patient_id = $1 AND supply_id = $2
+            `, [id, supplyId]);
         }
 
         res.json({ message: 'Wound Dx updated successfully' });
@@ -769,8 +762,9 @@ app.post('/api/patients/:id/wound-dx', authenticateToken, async (req, res) => {
     }
 });
 
-// ==================== USER MANAGEMENT ROUTES ====================
+// ==================== USER MANAGEMENT ROUTES (ADMIN ONLY) ====================
 
+// Get all users
 app.get('/api/users', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const result = await pool.query(`
@@ -780,6 +774,7 @@ app.get('/api/users', authenticateToken, requireAdmin, async (req, res) => {
             ORDER BY u.created_at DESC
         `);
 
+        // Remove passwords from response
         const users = result.rows.map(user => {
             delete user.password;
             return user;
@@ -792,6 +787,7 @@ app.get('/api/users', authenticateToken, requireAdmin, async (req, res) => {
     }
 });
 
+// Get pending users
 app.get('/api/users/pending', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const result = await pool.query(`
@@ -802,6 +798,7 @@ app.get('/api/users/pending', authenticateToken, requireAdmin, async (req, res) 
             ORDER BY u.created_at DESC
         `);
 
+        // Remove passwords from response
         const users = result.rows.map(user => {
             delete user.password;
             return user;
@@ -814,6 +811,7 @@ app.get('/api/users/pending', authenticateToken, requireAdmin, async (req, res) 
     }
 });
 
+// Approve user
 app.post('/api/users/:id/approve', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
@@ -834,6 +832,7 @@ app.post('/api/users/:id/approve', authenticateToken, requireAdmin, async (req, 
     }
 });
 
+// Update user facility
 app.put('/api/users/:id/facility', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
@@ -855,10 +854,12 @@ app.put('/api/users/:id/facility', authenticateToken, requireAdmin, async (req, 
     }
 });
 
+// Delete user
 app.delete('/api/users/:id', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
 
+        // Prevent deleting the system admin
         const userCheck = await pool.query('SELECT email FROM users WHERE id = $1', [id]);
         if (userCheck.rows.length > 0 && userCheck.rows[0].email === 'admin@system.com') {
             return res.status(400).json({ error: 'Cannot delete system administrator' });
@@ -906,10 +907,12 @@ app.get('/api/statistics', authenticateToken, requireAdmin, async (req, res) => 
 
 // ==================== ERROR HANDLING ====================
 
+// 404 handler
 app.use((req, res) => {
     res.status(404).json({ error: 'Route not found' });
 });
 
+// Global error handler
 app.use((error, req, res, next) => {
     console.error('Global error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -918,6 +921,7 @@ app.use((error, req, res, next) => {
 // ==================== SERVER START ====================
 
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on port ${PORT}`);
-    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📱 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🔗 App URL: ${process.env.NODE_ENV === 'production' ? 'https://your-app.herokuapp.com' : `http://localhost:${PORT}`}`);
 });
