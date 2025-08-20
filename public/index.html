@@ -2931,7 +2931,7 @@
                 let rowStickyPos = 530;
                 if (finalAdminStatus) {
                     html += '<td style="position: sticky; left: ' + rowStickyPos + 'px; background: ' + rowBg + '; padding: 12px; border: 1px solid #e2e8f0; width: 100px; z-index: 50;">' + supplyHcpcs + '</td>';
-                    html += '<td style="position: sticky; left: ' + (rowStickyPos + 100) + 'px; background: ' + rowBg + '; padding: 12px; border: 1px solid #e2e8f0; width: 90px; color: #38a169; font-weight: 600; z-index: 50;">' + supplyCost.toFixed(2) + '</td>';
+                    html += '<td style="position: sticky; left: ' + (rowStickyPos + 100) + 'px; background: ' + rowBg + '; padding: 12px; border: 1px solid #e2e8f0; width: 90px; color: #38a169; font-weight: 600; z-index: 50;">$' + supplyCost.toFixed(2) + '</td>';
                     rowStickyPos += 190;
                 }
                 
@@ -2943,7 +2943,7 @@
                 // Total cost column for admin with proper z-index
                 if (finalAdminStatus) {
                     html += '<td style="position: sticky; left: ' + (rowStickyPos + 90) + 'px; background: ' + rowBg + '; padding: 12px; border: 1px solid #e2e8f0; width: 100px; color: #38a169; font-weight: 600; z-index: 50;" class="total-cost-' + supply.id + '">';
-                    html += '<strong>' + totalCost.toFixed(2) + '</strong>';
+                    html += '<strong> + totalCost.toFixed(2) + '</strong>';
                     html += '</td>';
                 }
                 
@@ -3146,10 +3146,10 @@
                 
                 const totalCostCell = document.querySelector('.total-cost-' + supplyId);
                 if (totalCostCell) {
-                    totalCostCell.innerHTML = '<strong>' + totalCost.toFixed(2) + '</strong>';
+                    totalCostCell.innerHTML = '<strong> + totalCost.toFixed(2) + '</strong>';
                 }
                 
-                console.log('💰 Cost updated for admin: ' + totalUnits + ' × ' + unitCost + ' = ' + totalCost.toFixed(2));
+                console.log('💰 Cost updated for admin: ' + totalUnits + ' ×  + unitCost + ' =  + totalCost.toFixed(2));
             } else {
                 console.log('📊 Units updated for user: ' + totalUnits + ' (no cost calculation)');
             }
@@ -4431,7 +4431,23 @@
             setupBatchSupplyDragAndDrop();
             
             // Pre-populate with the user's system supply data - FIXED FORMAT
-            const systemSupplyData = 'AR Code\tItem Description\tHCPCS Code\tUnit Cost\n272\tMed/Surgical Supplies\tB4149\t0.00\n400\tHME filter holder for trach or vent\tA7507\t3.49\n401\tHME housing & adhesive\tA7509\t1.97\n402\tHMES/trach valve adhesive disk\tA7506\t0.45\n403\tHMES filter holder or cap for tracheostoma\tA7503\t15.85\n404\tHMES filter\tA7504\t0.95\n405\tHMES/trach valve housing\tA7505\t6.55\n406\tHME housing w/adhesive filter\tA7508\t4.01\n407\tLubricant per oz to insert trach\tA4402\t1.90\n408\tPiston irrigation syringe irrigation trach ostomy, uro\tA4322\t4.16\n409\tSterile saline 10ml and 15ml bullets\tA4216\t0.62\n410\tSterile saline 100ml, 1000ml, 120ml, 250ml and 500ml\tA4217\t4.38\n411\tClosed suction catheter for trach\tA4605\t22.92\n412\tOpen suction catheter for trach\tA4624\t3.69\n413\tTracheal suction catheter closed system (yankauers/ballards)\tA4605\t22.92\n414\tTrach tube';
+            const systemSupplyData = 'AR Code\tItem Description\tHCPCS Code\tUnit Cost\n' +
+                '272\tMed-Surgical Supplies\tB4149\t0.00\n' +
+                '400\tHME filter holder for trach or vent\tA7507\t3.49\n' +
+                '401\tHME housing & adhesive\tA7509\t1.97\n' +
+                '402\tHMES-trach valve adhesive disk\tA7506\t0.45\n' +
+                '403\tHMES filter holder or cap for tracheostoma\tA7503\t15.85\n' +
+                '404\tHMES filter\tA7504\t0.95\n' +
+                '405\tHMES-trach valve housing\tA7505\t6.55\n' +
+                '406\tHME housing w-adhesive filter\tA7508\t4.01\n' +
+                '407\tLubricant per oz to insert trach\tA4402\t1.90\n' +
+                '408\tPiston irrigation syringe irrigation trach ostomy uro\tA4322\t4.16\n' +
+                '409\tSterile saline 10ml and 15ml bullets\tA4216\t0.62\n' +
+                '410\tSterile saline 100ml 1000ml 120ml 250ml and 500ml\tA4217\t4.38\n' +
+                '411\tClosed suction catheter for trach\tA4605\t22.92\n' +
+                '412\tOpen suction catheter for trach\tA4624\t3.69\n' +
+                '413\tTracheal suction catheter closed system (yankauers-ballards)\tA4605\t22.92\n' +
+                '414\tTrach tube\tA7520\t12.50';
 
             // Auto-switch to paste method and populate the data
             setTimeout(function() {
