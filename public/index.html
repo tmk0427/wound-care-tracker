@@ -2443,128 +2443,193 @@
         }
 
         async function updateSummary() {
+    try {
+        const filteredPatients = getFilteredPatients();
+
+        document.getElementById('totalPatients').textContent = filteredPatients.length;
+        document.getElementById('activeSheets').textContent = filteredPatients.length;
+
+        let totalUnits = 0;
+        let totalCost = 0;
+        let totalWoundDxCount = 0;
+        let successfulPatients = 0;
+        let errorPatients = 0;
+
+        for (let i = 0; i < filteredPatients.length; i++) {
+            const patient = filteredPatients[i];
             try {
-                const filteredPatients = getFilteredPatients();
-
-                document.getElementById('totalPatients').textContent = filteredPatients.length;
-                document.getElementById('activeSheets').textContent = filteredPatients.length;
-
-                let totalUnits = 0;
-                let totalCost = 0;
-                let totalWoundDxCount = 0;
-
-                for (let i = 0; i < filteredPatients.length; i++) {
-                    const patient = filteredPatients[i];
-                    try {
-                        const trackingData = await apiCall('/patients/' + patient.id + '/tracking');
-                        
-                        trackingData.forEach(function(item) {
-                            const quantity = parseInt(item.quantity) || 0;
-                            let cost = 0;
-                            if (item.cost !== null && item.cost !== undefined) {
-                                const costValue = Number(item.cost);
-                                cost = isNaN(costValue) ? 0 : costValue;
-                            }
-                            
-                            totalUnits += quantity;
-                            totalCost += quantity * cost;
-                        });
-
-                        // Get wound dx data for this patient
-                        try {
-                            const woundDxResponse = await apiCall('/patients/' + patient.id + '/wound-dx');
-                            if (woundDxResponse && Array.isArray(woundDxResponse)) {
-                                const uniqueWoundDx = new Set();
-                                woundDxResponse.forEach(function(item) {
-                                    if (item && item.wound_dx && item.wound_dx.trim()) {
-                                        uniqueWoundDx.add(item.wound_dx.trim());
-                                    }
-                                });
-                                totalWoundDxCount += uniqueWoundDx.size;
-                            }
-                        } catch (error) {
-                            console.log('No wound dx data for patient:', patient.name);
-                        }
-
-                    } catch (error) {
-                        console.error('Failed to load data for patient ' + patient.name + ':', error);
+                // ROBUST: Handle tracking data loading with error handling
+                let trackingData = [];
+                try {
+                    trackingData = await apiCall('/patients/' + patient.id + '/tracking');
+                    if (!Array.isArray(trackingData)) {
+                        console.warn('⚠️ Invalid tracking data format for', patient.name, '- using empty array');
+                        trackingData = [];
                     }
+                } catch (trackingError) {
+                    console.warn('⚠️ Failed to load tracking data for', patient.name + ':', trackingError.message);
+                    trackingData = []; // Continue with empty data
                 }
-
-                document.getElementById('totalUnits').textContent = totalUnits.toLocaleString();
-                document.getElementById('totalWoundDx').textContent = totalWoundDxCount;
                 
-                // Only update cost for admin users
-                const totalCostElement = document.getElementById('totalCost');
-                if (totalCostElement) {
-                    totalCostElement.textContent = '$' + totalCost.toFixed(2);
+                trackingData.forEach(function(item) {
+                    const quantity = parseInt(item.quantity) || 0;
+                    let cost = 0;
+                    if (item.cost !== null && item.cost !== undefined) {
+                        const costValue = Number(item.cost);
+                        cost = isNaN(costValue) ? 0 : costValue;
+                    }
+                    
+                    totalUnits += quantity;
+                    totalCost += quantity * cost;
+                });
+
+                // ROBUST: Get wound dx data for this patient with error handling
+                try {
+                    const woundDxResponse = await apiCall('/patients/' + patient.id + '/wound-dx');
+                    if (woundDxResponse && Array.isArray(woundDxResponse)) {
+                        const uniqueWoundDx = new Set();
+                        woundDxResponse.forEach(function(item) {
+                            if (item && item.wound_dx && item.wound_dx.trim()) {
+                                uniqueWoundDx.add(item.wound_dx.trim());
+                            }
+                        });
+                        totalWoundDxCount += uniqueWoundDx.size;
+                    }
+                } catch (woundDxError) {
+                    console.warn('⚠️ Failed to load wound dx data for', patient.name + ':', woundDxError.message);
+                    // Continue without wound dx data for this patient
                 }
 
-                updateSummaryTable(filteredPatients);
+                successfulPatients++;
             } catch (error) {
-                console.error('Failed to update summary:', error);
+                console.error('Failed to load data for patient ' + patient.name + ':', error);
+                errorPatients++;
+                // Continue processing other patients
             }
         }
+
+        document.getElementById('totalUnits').textContent = totalUnits.toLocaleString();
+        document.getElementById('totalWoundDx').textContent = totalWoundDxCount;
+        
+        // Only update cost for admin users
+        const totalCostElement = document.getElementById('totalCost');
+        if (totalCostElement) {
+            totalCostElement.textContent = '$' + totalCost.toFixed(2);
+        }
+
+        // Show status if there were errors
+        if (errorPatients > 0) {
+            console.warn('⚠️ Summary completed with errors:', successfulPatients, 'successful,', errorPatients, 'failed');
+            showTrackingStatus('⚠️ Summary updated - ' + errorPatients + ' patients had data loading errors', true);
+        } else if (successfulPatients > 0) {
+            console.log('✅ Summary completed successfully for', successfulPatients, 'patients');
+        }
+
+        updateSummaryTable(filteredPatients);
+    } catch (error) {
+        console.error('Failed to update summary:', error);
+        showTrackingStatus('❌ Failed to update summary: ' + error.message, true);
+    }
+}
 
         async function updateSummaryTable(patients) {
-            const tbody = document.getElementById('summaryTableBody');
-            tbody.innerHTML = '';
+    const tbody = document.getElementById('summaryTableBody');
+    tbody.innerHTML = '';
 
-            const patientsToShow = patients || getFilteredPatients();
+    const patientsToShow = patients || getFilteredPatients();
 
-            if (patientsToShow.length === 0) {
-                const isAdmin = currentUser && currentUser.role === 'admin';
-                const colspan = isAdmin ? '8' : '6';
-                tbody.innerHTML = '<tr><td colspan="' + colspan + '" style="text-align: center; color: #718096;">No patients to display</td></tr>';
-                return;
-            }
+    if (patientsToShow.length === 0) {
+        const isAdmin = currentUser && currentUser.role === 'admin';
+        const colspan = isAdmin ? '8' : '6';
+        tbody.innerHTML = '<tr><td colspan="' + colspan + '" style="text-align: center; color: #718096;">No patients to display</td></tr>';
+        return;
+    }
 
-            const isAdmin = currentUser && currentUser.role === 'admin';
+    const isAdmin = currentUser && currentUser.role === 'admin';
+    let successfulRows = 0;
+    let errorRows = 0;
 
-            for (let i = 0; i < patientsToShow.length; i++) {
-                const patient = patientsToShow[i];
-                try {
-                    const trackingData = await apiCall('/patients/' + patient.id + '/tracking');
-                    
-                    let totalUnits = 0;
-                    let totalCost = 0;
-                    const hcpcsCodes = new Set();
-                    
-                    trackingData.forEach(function(item) {
-                        const quantity = parseInt(item.quantity) || 0;
-                        
-                        let cost = 0;
-                        if (item.cost !== null && item.cost !== undefined) {
-                            const costValue = Number(item.cost);
-                            cost = isNaN(costValue) ? 0 : costValue;
-                        }
-                        
-                        totalUnits += quantity;
-                        totalCost += quantity * cost;
-                        if (item.hcpcs) hcpcsCodes.add(item.hcpcs);
-                    });
-
-                    const yearPart = patient.month.split('-')[0];
-                    const monthPart = patient.month.split('-')[1];
-                    const displayMonth = monthPart + '-' + yearPart.slice(-2);
-                    const lastUpdated = new Date(patient.updated_at).toLocaleDateString();
-
-                    const row = document.createElement('tr');
-                    row.innerHTML = 
-                        '<td>' + patient.name + '</td>' +
-                        '<td>' + displayMonth + '</td>' +
-                        '<td>' + (patient.mrn || 'N/A') + '</td>' +
-                        '<td>' + (patient.facility_name || 'Unknown') + '</td>' +
-                        '<td><strong>' + totalUnits + '</strong></td>' +
-                        '<td class="admin-only-column">' + (Array.from(hcpcsCodes).join(', ') || 'N/A') + '</td>' +
-                        '<td class="admin-only-column"><strong>$' + totalCost.toFixed(2) + '</strong></td>' +
-                        '<td>' + lastUpdated + '</td>';
-                    tbody.appendChild(row);
-                } catch (error) {
-                    console.error('Failed to load data for patient ' + patient.name + ':', error);
+    for (let i = 0; i < patientsToShow.length; i++) {
+        const patient = patientsToShow[i];
+        try {
+            // ROBUST: Handle tracking data with error handling
+            let trackingData = [];
+            try {
+                trackingData = await apiCall('/patients/' + patient.id + '/tracking');
+                if (!Array.isArray(trackingData)) {
+                    console.warn('⚠️ Invalid tracking data format for', patient.name, '- using empty array');
+                    trackingData = [];
                 }
+            } catch (trackingError) {
+                console.warn('⚠️ Failed to load tracking data for', patient.name + ':', trackingError.message);
+                trackingData = []; // Continue with empty data
             }
+            
+            let totalUnits = 0;
+            let totalCost = 0;
+            const hcpcsCodes = new Set();
+            
+            trackingData.forEach(function(item) {
+                const quantity = parseInt(item.quantity) || 0;
+                
+                let cost = 0;
+                if (item.cost !== null && item.cost !== undefined) {
+                    const costValue = Number(item.cost);
+                    cost = isNaN(costValue) ? 0 : costValue;
+                }
+                
+                totalUnits += quantity;
+                totalCost += quantity * cost;
+                if (item.hcpcs) hcpcsCodes.add(item.hcpcs);
+            });
+
+            const yearPart = patient.month.split('-')[0];
+            const monthPart = patient.month.split('-')[1];
+            const displayMonth = monthPart + '-' + yearPart.slice(-2);
+            const lastUpdated = new Date(patient.updated_at).toLocaleDateString();
+
+            const row = document.createElement('tr');
+            row.innerHTML = 
+                '<td>' + patient.name + '</td>' +
+                '<td>' + displayMonth + '</td>' +
+                '<td>' + (patient.mrn || 'N/A') + '</td>' +
+                '<td>' + (patient.facility_name || 'Unknown') + '</td>' +
+                '<td><strong>' + totalUnits + '</strong></td>' +
+                '<td class="admin-only-column">' + (Array.from(hcpcsCodes).join(', ') || 'N/A') + '</td>' +
+                '<td class="admin-only-column"><strong>$' + totalCost.toFixed(2) + '</strong></td>' +
+                '<td>' + lastUpdated + '</td>';
+            tbody.appendChild(row);
+            successfulRows++;
+            
+        } catch (error) {
+            console.error('Failed to load data for patient ' + patient.name + ':', error);
+            errorRows++;
+            
+            // Add error row to table
+            const yearPart = patient.month.split('-')[0];
+            const monthPart = patient.month.split('-')[1];
+            const displayMonth = monthPart + '-' + yearPart.slice(-2);
+            
+            const row = document.createElement('tr');
+            row.style.backgroundColor = '#fed7d7';
+            row.innerHTML = 
+                '<td>' + patient.name + '</td>' +
+                '<td>' + displayMonth + '</td>' +
+                '<td>' + (patient.mrn || 'N/A') + '</td>' +
+                '<td>' + (patient.facility_name || 'Unknown') + '</td>' +
+                '<td style="color: #e53e3e;"><strong>ERROR</strong></td>' +
+                '<td class="admin-only-column" style="color: #e53e3e;">Data loading failed</td>' +
+                '<td class="admin-only-column" style="color: #e53e3e;"><strong>$0.00</strong></td>' +
+                '<td>' + new Date(patient.updated_at).toLocaleDateString() + '</td>';
+            tbody.appendChild(row);
         }
+    }
+    
+    // Show status if there were errors in the table
+    if (errorRows > 0) {
+        console.warn('⚠️ Summary table completed with', successfulRows, 'successful rows and', errorRows, 'error rows');
+    }
+}
 
         async function downloadUserReport() {
             await downloadReport(false);
@@ -2574,68 +2639,84 @@
             await downloadReport(true);
         }
 
-        // FIXED: Enhanced downloadReport to capture ALL wound diagnosis entries
-        async function downloadReport(includeAdminData) {
+       // FIXED: Enhanced downloadReport with robust error handling
+async function downloadReport(includeAdminData) {
+    try {
+        showTrackingStatus('📄 Generating enhanced report...', false);
+        
+        const filteredPatients = getFilteredPatients();
+        const reportData = [];
+        let processedPatients = 0;
+        let errorCount = 0;
+        
+        let fileName = 'Supply_Report_Enhanced';
+        if (appData.currentFilters.month) {
+            const monthName = new Date(appData.currentFilters.month + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+            fileName = 'Supply_Report_Enhanced_' + monthName.replace(' ', '_');
+        }
+        if (appData.currentFilters.facility) {
+            const facility = appData.facilities.find(function(f) { return f.id == appData.currentFilters.facility; });
+            if (facility) {
+                fileName += '_' + facility.name.replace(/[^a-zA-Z0-9]/g, '_');
+            }
+        }
+        
+        const header = ['Patient Name', 'MRN', 'Month/Year', 'Facility', 'AR Code', 'Item Description', 'All Wound Dx'];
+        if (includeAdminData) {
+            header.push('HCPCS Code', 'Unit Cost');
+        }
+        header.push('Total Units');
+        if (includeAdminData) {
+            header.push('Total Cost');
+        }
+        
+        reportData.push(['ENHANCED REPORT - ' + (includeAdminData ? 'Admin' : 'User') + ' - Generated ' + new Date().toLocaleDateString() + ' - Includes ALL wound diagnosis entries']);
+        reportData.push(header);
+        
+        console.log('🔍 Processing', filteredPatients.length, 'patients for enhanced report...');
+        
+        for (let i = 0; i < filteredPatients.length; i++) {
+            const patient = filteredPatients[i];
             try {
-                showTrackingStatus('📄 Generating enhanced report...', false);
+                console.log('📊 Processing patient:', patient.name);
                 
-                const filteredPatients = getFilteredPatients();
-                const reportData = [];
-                
-                let fileName = 'Supply_Report_Enhanced';
-                if (appData.currentFilters.month) {
-                    const monthName = new Date(appData.currentFilters.month + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-                    fileName = 'Supply_Report_Enhanced_' + monthName.replace(' ', '_');
-                }
-                if (appData.currentFilters.facility) {
-                    const facility = appData.facilities.find(function(f) { return f.id == appData.currentFilters.facility; });
-                    if (facility) {
-                        fileName += '_' + facility.name.replace(/[^a-zA-Z0-9]/g, '_');
+                // ROBUST: Try to get tracking data with proper error handling
+                let trackingData = [];
+                try {
+                    trackingData = await apiCall('/patients/' + patient.id + '/tracking');
+                    if (!Array.isArray(trackingData)) {
+                        console.warn('⚠️ Invalid tracking data format for', patient.name, '- using empty array');
+                        trackingData = [];
                     }
+                } catch (trackingError) {
+                    console.warn('⚠️ Failed to load tracking data for', patient.name + ':', trackingError.message);
+                    trackingData = []; // Continue with empty tracking data
                 }
                 
-                const header = ['Patient Name', 'MRN', 'Month/Year', 'Facility', 'AR Code', 'Item Description', 'All Wound Dx'];
-                if (includeAdminData) {
-                    header.push('HCPCS Code', 'Unit Cost');
-                }
-                header.push('Total Units');
-                if (includeAdminData) {
-                    header.push('Total Cost');
-                }
-                
-                reportData.push(['ENHANCED REPORT - ' + (includeAdminData ? 'Admin' : 'User') + ' - Generated ' + new Date().toLocaleDateString() + ' - Includes ALL wound diagnosis entries']);
-                reportData.push(header);
-                
-                console.log('🔍 Processing', filteredPatients.length, 'patients for enhanced report...');
-                
-                for (let i = 0; i < filteredPatients.length; i++) {
-                    const patient = filteredPatients[i];
-                    try {
-                        console.log('📊 Processing patient:', patient.name);
-                        const trackingData = await apiCall('/patients/' + patient.id + '/tracking');
-                        
-                        // FIXED: Load wound dx data with consistent data types
-                        let woundDxData = {};
-                        try {
-                            const woundDxResponse = await apiCall('/patients/' + patient.id + '/wound-dx');
-                            console.log('💊 Wound Dx data for', patient.name + ':', woundDxResponse);
-                            if (woundDxResponse && Array.isArray(woundDxResponse)) {
-                                woundDxResponse.forEach(function(item) {
-                                    if (item && typeof item.supply_id !== 'undefined' && typeof item.wound_dx !== 'undefined') {
-                                        // FIXED: Ensure consistent data types - convert to string for comparison
-                                        const supplyIdKey = String(item.supply_id);
-                                        woundDxData[supplyIdKey] = item.wound_dx || '';
-                                    }
-                                });
+                // ROBUST: Load wound dx data with proper error handling
+                let woundDxData = {};
+                try {
+                    const woundDxResponse = await apiCall('/patients/' + patient.id + '/wound-dx');
+                    console.log('💊 Wound Dx data for', patient.name + ':', woundDxResponse);
+                    if (woundDxResponse && Array.isArray(woundDxResponse)) {
+                        woundDxResponse.forEach(function(item) {
+                            if (item && typeof item.supply_id !== 'undefined' && typeof item.wound_dx !== 'undefined') {
+                                // FIXED: Ensure consistent data types - convert to string for comparison
+                                const supplyIdKey = String(item.supply_id);
+                                woundDxData[supplyIdKey] = item.wound_dx || '';
                             }
-                        } catch (error) {
-                            console.warn('⚠️ No wound dx data found for patient:', patient.name, error);
-                            // Continue processing - don't skip this patient
-                        }
-                        
-                        // Group tracking data by supply
-                        const supplyTotals = {};
-                        trackingData.forEach(function(item) {
+                        });
+                    }
+                } catch (woundDxError) {
+                    console.warn('⚠️ Failed to load wound dx data for', patient.name + ':', woundDxError.message);
+                    woundDxData = {}; // Continue with empty wound dx data
+                }
+                
+                // Group tracking data by supply (handle empty tracking data gracefully)
+                const supplyTotals = {};
+                if (trackingData && trackingData.length > 0) {
+                    trackingData.forEach(function(item) {
+                        if (item && item.code) {
                             const key = item.code;
                             if (!supplyTotals[key]) {
                                 supplyTotals[key] = {
@@ -2644,135 +2725,183 @@
                                 };
                             }
                             supplyTotals[key].totalUnits += parseInt(item.quantity) || 0;
+                        }
+                    });
+                }
+                
+                // NEW: Create a comprehensive list of ALL supplies that have either tracking data OR wound dx data
+                const allRelevantSupplies = new Map();
+                
+                // Add supplies from tracking data
+                Object.values(supplyTotals).forEach(function(supplyTotal) {
+                    const supply = supplyTotal.supply;
+                    const supplyIdKey = String(supply.id);
+                    allRelevantSupplies.set(supplyIdKey, {
+                        supply: supply,
+                        totalUnits: supplyTotal.totalUnits,
+                        hasWoundDx: woundDxData.hasOwnProperty(supplyIdKey),
+                        woundDx: woundDxData[supplyIdKey] || ''
+                    });
+                });
+                
+                // NEW: Add supplies that have wound dx but no tracking data
+                Object.keys(woundDxData).forEach(function(supplyIdKey) {
+                    if (!allRelevantSupplies.has(supplyIdKey) && woundDxData[supplyIdKey] && woundDxData[supplyIdKey].trim()) {
+                        // Find the supply in the global supplies list
+                        const supply = appData.supplies.find(function(s) { 
+                            return String(s.id) === supplyIdKey; 
                         });
-                        
-                        // NEW: Create a comprehensive list of ALL supplies that have either tracking data OR wound dx data
-                        const allRelevantSupplies = new Map();
-                        
-                        // Add supplies from tracking data
-                        Object.values(supplyTotals).forEach(function(supplyTotal) {
-                            const supply = supplyTotal.supply;
-                            const supplyIdKey = String(supply.id);
+                        if (supply) {
                             allRelevantSupplies.set(supplyIdKey, {
                                 supply: supply,
-                                totalUnits: supplyTotal.totalUnits,
-                                hasWoundDx: woundDxData.hasOwnProperty(supplyIdKey),
-                                woundDx: woundDxData[supplyIdKey] || ''
+                                totalUnits: 0, // No quantities tracked, but wound dx exists
+                                hasWoundDx: true,
+                                woundDx: woundDxData[supplyIdKey]
                             });
-                        });
-                        
-                        // NEW: Add supplies that have wound dx but no tracking data
-                        Object.keys(woundDxData).forEach(function(supplyIdKey) {
-                            if (!allRelevantSupplies.has(supplyIdKey) && woundDxData[supplyIdKey].trim()) {
-                                // Find the supply in the global supplies list
-                                const supply = appData.supplies.find(function(s) { 
-                                    return String(s.id) === supplyIdKey; 
-                                });
-                                if (supply) {
-                                    allRelevantSupplies.set(supplyIdKey, {
-                                        supply: supply,
-                                        totalUnits: 0, // No quantities tracked, but wound dx exists
-                                        hasWoundDx: true,
-                                        woundDx: woundDxData[supplyIdKey]
-                                    });
-                                    console.log('✅ Added supply with wound dx only:', supply.description, 'Dx:', woundDxData[supplyIdKey]);
-                                }
-                            }
-                        });
-                        
-                        const yearPart = patient.month.split('-')[0];
-                        const monthPart = patient.month.split('-')[1];
-                        const displayMonth = monthPart + '-' + yearPart.slice(-2);
-                        
-                        console.log('🎯 Patient', patient.name, 'has', allRelevantSupplies.size, 'relevant supplies');
-                        
-                        // Process all relevant supplies (those with tracking data OR wound dx data)
-                        allRelevantSupplies.forEach(function(supplyInfo) {
-                            const supply = supplyInfo.supply;
-                            const totalUnits = supplyInfo.totalUnits;
-                            const woundDx = supplyInfo.woundDx;
-                            
-                            // FIXED: Include in report if it has either quantities OR wound dx data
-                            if (totalUnits > 0 || (woundDx && woundDx.trim())) {
-                                const unitCost = includeAdminData ? (parseFloat(supply.cost) || 0) : 0;
-                                const totalCost = totalUnits * unitCost;
-                                
-                                const row = [
-                                    patient.name || 'Unknown',
-                                    patient.mrn || 'N/A',
-                                    displayMonth,
-                                    patient.facility_name || 'Unknown',
-                                    supply.code || 'N/A',
-                                    supply.description || 'Unknown',
-                                    woundDx || ''  // Now includes wound dx even if no quantities
-                                ];
-                                
-                                if (includeAdminData) {
-                                    row.push(supply.hcpcs || 'N/A', '$' + unitCost.toFixed(2));
-                                }
-                                
-                                row.push(totalUnits);
-                                
-                                if (includeAdminData) {
-                                    row.push('$' + totalCost.toFixed(2));
-                                }
-                                
-                                reportData.push(row);
-                                
-                                if (woundDx && woundDx.trim() && totalUnits === 0) {
-                                    console.log('✅ FIXED: Including wound dx without quantities:', supply.description, '- Dx:', woundDx);
-                                }
-                            }
-                        });
-                        
-                    } catch (error) {
-                        console.error('Error processing patient ' + patient.name + ':', error);
-                        // Add an error row to the report so users know this patient had issues
-                        const errorRow = [
-                            patient.name || 'Unknown',
-                            'ERROR: ' + error.message,
-                            '', '', '', '', ''
-                        ];
-                        if (includeAdminData) {
-                            errorRow.push('', '');
+                            console.log('✅ Added supply with wound dx only:', supply.description, 'Dx:', woundDxData[supplyIdKey]);
                         }
-                        errorRow.push('');
-                        if (includeAdminData) {
-                            errorRow.push('');
-                        }
-                        reportData.push(errorRow);
                     }
+                });
+                
+                const yearPart = patient.month.split('-')[0];
+                const monthPart = patient.month.split('-')[1];
+                const displayMonth = monthPart + '-' + yearPart.slice(-2);
+                
+                console.log('🎯 Patient', patient.name, 'has', allRelevantSupplies.size, 'relevant supplies');
+                
+                // Process all relevant supplies (those with tracking data OR wound dx data)
+                allRelevantSupplies.forEach(function(supplyInfo) {
+                    const supply = supplyInfo.supply;
+                    const totalUnits = supplyInfo.totalUnits;
+                    const woundDx = supplyInfo.woundDx;
+                    
+                    // FIXED: Include in report if it has either quantities OR wound dx data
+                    if (totalUnits > 0 || (woundDx && woundDx.trim())) {
+                        const unitCost = includeAdminData ? (parseFloat(supply.cost) || 0) : 0;
+                        const totalCost = totalUnits * unitCost;
+                        
+                        const row = [
+                            patient.name || 'Unknown',
+                            patient.mrn || 'N/A',
+                            displayMonth,
+                            patient.facility_name || 'Unknown',
+                            supply.code || 'N/A',
+                            supply.description || 'Unknown',
+                            woundDx || ''  // Now includes wound dx even if no quantities
+                        ];
+                        
+                        if (includeAdminData) {
+                            row.push(supply.hcpcs || 'N/A', '$' + unitCost.toFixed(2));
+                        }
+                        
+                        row.push(totalUnits);
+                        
+                        if (includeAdminData) {
+                            row.push('$' + totalCost.toFixed(2));
+                        }
+                        
+                        reportData.push(row);
+                        
+                        if (woundDx && woundDx.trim() && totalUnits === 0) {
+                            console.log('✅ FIXED: Including wound dx without quantities:', supply.description, '- Dx:', woundDx);
+                        }
+                    }
+                });
+                
+                // IMPROVEMENT: Always include patients in report even if they have no data
+                if (allRelevantSupplies.size === 0) {
+                    // Add a placeholder row for patients with no data
+                    const row = [
+                        patient.name || 'Unknown',
+                        patient.mrn || 'N/A',
+                        displayMonth,
+                        patient.facility_name || 'Unknown',
+                        'N/A',
+                        'No tracking data found',
+                        ''
+                    ];
+                    
+                    if (includeAdminData) {
+                        row.push('N/A', '$0.00');
+                    }
+                    
+                    row.push(0);
+                    
+                    if (includeAdminData) {
+                        row.push('$0.00');
+                    }
+                    
+                    reportData.push(row);
+                    console.log('📋 Added placeholder row for patient with no data:', patient.name);
                 }
                 
-                console.log('📊 Report data contains', reportData.length - 2, 'entries (excluding headers)');
-                
-                const worksheet = XLSX.utils.aoa_to_sheet(reportData);
-                const workbook = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(workbook, worksheet, 'Enhanced Report');
-                
-                const colWidths = [
-                    { width: 20 }, { width: 15 }, { width: 12 }, { width: 20 }, 
-                    { width: 10 }, { width: 35 }, { width: 30 } // Increased width for All Wound Dx
-                ];
-                if (includeAdminData) {
-                    colWidths.push({ width: 12 }, { width: 12 });
-                }
-                colWidths.push({ width: 12 });
-                if (includeAdminData) {
-                    colWidths.push({ width: 12 });
-                }
-                
-                worksheet['!cols'] = colWidths;
-                
-                XLSX.writeFile(workbook, fileName + '.xlsx');
-                
-                showTrackingStatus('✅ ENHANCED report downloaded with ALL wound diagnosis data - including entries without quantities!');
+                processedPatients++;
                 
             } catch (error) {
-                console.error('Failed to generate enhanced report:', error);
-                showTrackingStatus('❌ Failed to generate enhanced report: ' + error.message, true);
+                console.error('Error processing patient ' + patient.name + ':', error);
+                errorCount++;
+                
+                // Add an error row to the report so users know this patient had issues
+                const yearPart = patient.month.split('-')[0];
+                const monthPart = patient.month.split('-')[1];
+                const displayMonth = monthPart + '-' + yearPart.slice(-2);
+                
+                const errorRow = [
+                    patient.name || 'Unknown',
+                    patient.mrn || 'ERROR',
+                    displayMonth,
+                    patient.facility_name || 'Unknown',
+                    'ERROR',
+                    'Failed to load data: ' + error.message,
+                    ''
+                ];
+                if (includeAdminData) {
+                    errorRow.push('ERROR', '$0.00');
+                }
+                errorRow.push(0);
+                if (includeAdminData) {
+                    errorRow.push('$0.00');
+                }
+                reportData.push(errorRow);
             }
         }
+        
+        console.log('📊 Report generation complete - Processed:', processedPatients, 'Errors:', errorCount, 'Total entries:', reportData.length - 2);
+        
+        const worksheet = XLSX.utils.aoa_to_sheet(reportData);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Enhanced Report');
+        
+        const colWidths = [
+            { width: 20 }, { width: 15 }, { width: 12 }, { width: 20 }, 
+            { width: 10 }, { width: 35 }, { width: 30 } // Increased width for All Wound Dx
+        ];
+        if (includeAdminData) {
+            colWidths.push({ width: 12 }, { width: 12 });
+        }
+        colWidths.push({ width: 12 });
+        if (includeAdminData) {
+            colWidths.push({ width: 12 });
+        }
+        
+        worksheet['!cols'] = colWidths;
+        
+        XLSX.writeFile(workbook, fileName + '.xlsx');
+        
+        // Show appropriate success message based on results
+        if (errorCount === 0) {
+            showTrackingStatus('✅ ENHANCED report downloaded successfully - ' + processedPatients + ' patients processed!');
+        } else if (errorCount < filteredPatients.length) {
+            showTrackingStatus('⚠️ ENHANCED report downloaded with some issues - ' + processedPatients + ' patients processed, ' + errorCount + ' had errors (see report for details)');
+        } else {
+            showTrackingStatus('❌ ENHANCED report downloaded but all patients had data loading errors - check your network connection and try again', true);
+        }
+        
+    } catch (error) {
+        console.error('Failed to generate enhanced report:', error);
+        showTrackingStatus('❌ Failed to generate enhanced report: ' + error.message, true);
+    }
+}
 
         function showTrackingStatus(message, isError) {
             const statusDiv = document.getElementById('trackingStatus');
