@@ -1,567 +1,71 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wound Care RT Supply Tracker</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
-        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; }
-        .hidden { display: none !important; }
-        .btn { padding: 10px 20px; margin: 5px; border: none; border-radius: 5px; cursor: pointer; }
-        .btn-primary { background: #007bff; color: white; }
-        .btn-danger { background: #dc3545; color: white; }
-        .btn:hover { opacity: 0.8; }
-        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
-        th { background: #f8f9fa; font-weight: bold; }
-        input, select { padding: 8px; margin: 5px; border: 1px solid #ddd; border-radius: 4px; }
-        .tabs { display: flex; margin: 20px 0; }
-        .tab { padding: 15px 25px; background: #e9ecef; margin-right: 5px; cursor: pointer; border-radius: 5px 5px 0 0; }
-        .tab.active { background: #007bff; color: white; }
-        .tab-content { background: white; padding: 20px; border: 1px solid #ddd; min-height: 400px; }
-        .form-row { display: flex; gap: 15px; margin: 15px 0; align-items: end; }
-        .form-group { flex: 1; }
-        label { display: block; margin-bottom: 5px; font-weight: bold; }
-    </style>
+    <title>Ultra-Minimal Test</title>
 </head>
 <body>
-    <!-- Login Screen -->
-    <div id="loginContainer" class="container">
-        <h1>🏥 Wound Care RT Supply Tracker</h1>
-        <div id="loginForm">
-            <h2>Sign In</h2>
-            <div class="form-group">
-                <label>Email Address</label>
-                <input type="email" id="loginEmail" placeholder="Enter email">
-            </div>
-            <div class="form-group">
-                <label>Password</label>
-                <input type="password" id="loginPassword" placeholder="Enter password">
-            </div>
-            <button class="btn btn-primary" onclick="login()">Sign In</button>
-            <div id="loginError" style="color: red; margin-top: 10px; display: none;"></div>
-        </div>
-    </div>
-
-    <!-- Main App -->
-    <div id="mainApp" class="container hidden">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <div>
-                <h1>🏥 Wound Care RT Supply Tracker</h1>
-                <div id="currentUserInfo" style="color: #666;"></div>
-            </div>
-            <div>
-                <button class="btn btn-danger" onclick="logout()">Logout</button>
-            </div>
-        </div>
-
-        <!-- Tabs -->
-        <div class="tabs">
-            <div class="tab active" onclick="showTab('patients', this)">Patient Management</div>
-            <div class="tab" onclick="showTab('tracking', this)">Supply Tracking</div>
-            <div class="tab" onclick="showTab('summary', this)">Summary Report</div>
-            <div class="tab" id="adminTab" onclick="showTab('admin', this)">Admin Panel</div>
-        </div>
-
-        <!-- Patient Management Tab -->
-        <div id="patientsTab" class="tab-content">
-            <h2>Patient Management</h2>
-            
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Patient Name</label>
-                    <input type="text" id="patientName" placeholder="Last, First">
-                </div>
-                <div class="form-group">
-                    <label>Month/Year</label>
-                    <input type="month" id="patientMonth">
-                </div>
-                <div class="form-group">
-                    <label>MRN</label>
-                    <input type="text" id="mrnNumber" placeholder="Medical Record Number">
-                </div>
-                <div class="form-group">
-                    <label>Facility</label>
-                    <select id="patientFacility">
-                        <option value="">Select Facility</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <button class="btn btn-primary" onclick="addPatient()">Add Patient</button>
-                </div>
-            </div>
-
-            <table>
-                <thead>
-                    <tr>
-                        <th>Patient Name</th>
-                        <th>MRN</th>
-                        <th>Month/Year</th>
-                        <th>Facility</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="patientTableBody">
-                    <tr><td colspan="5">Loading patients...</td></tr>
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Supply Tracking Tab -->
-        <div id="trackingTab" class="tab-content hidden">
-            <h2>Supply Tracking</h2>
-            
-            <div class="form-group">
-                <label>Select Patient</label>
-                <select id="patientSelect" onchange="loadPatientTracking()">
-                    <option value="">Select Patient</option>
-                </select>
-            </div>
-
-            <div id="trackingContent">
-                <p>Please select a patient to begin tracking supplies</p>
-            </div>
-        </div>
-
-        <!-- Summary Tab -->
-        <div id="summaryTab" class="tab-content hidden">
-            <h2>Summary Report</h2>
-            
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin: 20px 0;">
-                <div style="background: #007bff; color: white; padding: 20px; border-radius: 10px; text-align: center;">
-                    <h3>Total Patients</h3>
-                    <div style="font-size: 2em;" id="totalPatients">0</div>
-                </div>
-                <div style="background: #28a745; color: white; padding: 20px; border-radius: 10px; text-align: center;">
-                    <h3>Total Units</h3>
-                    <div style="font-size: 2em;" id="totalUnits">0</div>
-                </div>
-                <div style="background: #ffc107; color: white; padding: 20px; border-radius: 10px; text-align: center;">
-                    <h3>Total Cost</h3>
-                    <div style="font-size: 2em;" id="totalCost">$0.00</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Admin Panel Tab -->
-        <div id="adminTab" class="tab-content hidden">
-            <h2>🔧 Admin Panel</h2>
-            <div id="adminContent">
-                <p>Loading admin panel...</p>
-            </div>
-        </div>
-    </div>
+    <h1>Ultra-Minimal Test</h1>
+    <button onclick="testAllFunctions()">Test All Functions</button>
+    <div id="result"></div>
 
     <script>
-        console.log('🚀 MINIMAL VERSION - JavaScript starting...');
+        console.log('🧪 ULTRA-MINIMAL TEST STARTING...');
 
-        // Global variables
-        let currentUser = null;
-        let authToken = localStorage.getItem('authToken');
-        let appData = { facilities: [], patients: [], supplies: [] };
-        const API_BASE = window.location.origin + '/api';
-
-        console.log('✅ Global variables set');
-
-        // API function
-        async function apiCall(endpoint, options = {}) {
-            const url = API_BASE + endpoint;
-            const defaultOptions = { headers: { 'Content-Type': 'application/json' } };
-            if (authToken) defaultOptions.headers['Authorization'] = 'Bearer ' + authToken;
-            
-            const finalOptions = Object.assign({}, defaultOptions, options);
-            if (options.body && typeof options.body === 'object') {
-                finalOptions.body = JSON.stringify(options.body);
-            }
-
-            const response = await fetch(url, finalOptions);
-            if (response.status === 401) { logout(); throw new Error('Authentication required'); }
-            
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.error || 'Server error');
-            return data;
+        // Test function 1
+        function showTab() {
+            console.log('✅ showTab works');
+            return 'showTab works';
         }
+        console.log('✅ showTab defined');
 
-        console.log('✅ API function defined');
-
-        // Login function
-        async function login() {
-            const email = document.getElementById('loginEmail').value.trim();
-            const password = document.getElementById('loginPassword').value.trim();
-            
-            if (!email || !password) {
-                showError('Please enter both email and password');
-                return;
-            }
-
-            try {
-                const response = await apiCall('/auth/login', {
-                    method: 'POST',
-                    body: { email, password }
-                });
-
-                authToken = response.token;
-                currentUser = response.user;
-                localStorage.setItem('authToken', authToken);
-
-                document.getElementById('loginContainer').classList.add('hidden');
-                document.getElementById('mainApp').classList.remove('hidden');
-
-                console.log('✅ Login successful:', currentUser.email);
-                await initApp();
-            } catch (error) {
-                showError(error.message);
-            }
-        }
-
-        console.log('✅ Login function defined');
-
-        // Logout function
-        function logout() {
-            authToken = null;
-            currentUser = null;
-            localStorage.removeItem('authToken');
-            
-            document.getElementById('loginContainer').classList.remove('hidden');
-            document.getElementById('mainApp').classList.add('hidden');
-            
-            console.log('✅ Logged out');
-        }
-
-        console.log('✅ Logout function defined');
-
-        // Show error
-        function showError(message) {
-            const errorEl = document.getElementById('loginError');
-            errorEl.textContent = message;
-            errorEl.style.display = 'block';
-            setTimeout(() => errorEl.style.display = 'none', 5000);
-        }
-
-        console.log('✅ ShowError function defined');
-
-        // Initialize app
-        async function initApp() {
-            try {
-                console.log('🔄 Initializing app for:', currentUser.email);
-                
-                // Set user info
-                document.getElementById('currentUserInfo').innerHTML = 
-                    `<strong>${currentUser.name}</strong> - ${currentUser.role} ${currentUser.facility_name ? '• ' + currentUser.facility_name : ''}`;
-                
-                // Show/hide admin tab
-                const adminTab = document.getElementById('adminTab');
-                if (currentUser.role === 'admin') {
-                    adminTab.style.display = 'block';
-                } else {
-                    adminTab.style.display = 'none';
-                }
-
-                await loadAllData();
-                console.log('✅ App initialized successfully');
-            } catch (error) {
-                console.error('❌ App initialization failed:', error);
-                alert('Failed to initialize app: ' + error.message);
-            }
-        }
-
-        console.log('✅ InitApp function defined');
-
-        // Load all data
-        async function loadAllData() {
-            try {
-                console.log('📊 Loading data...');
-                
-                appData.facilities = await apiCall('/facilities');
-                appData.supplies = await apiCall('/supplies');
-                
-                const allPatients = await apiCall('/patients');
-                if (currentUser.role === 'admin') {
-                    appData.patients = allPatients;
-                } else if (currentUser.facility_id) {
-                    appData.patients = allPatients.filter(p => p.facility_id === currentUser.facility_id);
-                } else {
-                    appData.patients = [];
-                }
-                
-                console.log(`✅ Data loaded - Facilities: ${appData.facilities.length}, Patients: ${appData.patients.length}, Supplies: ${appData.supplies.length}`);
-                
-                populateDropdowns();
-                refreshPatientList();
-                updateSummary();
-            } catch (error) {
-                console.error('❌ Failed to load data:', error);
-                alert('Failed to load data: ' + error.message);
-            }
-        }
-
-        console.log('✅ LoadAllData function defined');
-
-        // Populate dropdowns
-        function populateDropdowns() {
-            // Populate facility dropdown
-            const facilitySelect = document.getElementById('patientFacility');
-            const patientSelect = document.getElementById('patientSelect');
-            
-            facilitySelect.innerHTML = '<option value="">Select Facility</option>';
-            patientSelect.innerHTML = '<option value="">Select Patient</option>';
-            
-            appData.facilities.forEach(facility => {
-                const option = document.createElement('option');
-                option.value = facility.id;
-                option.textContent = facility.name;
-                facilitySelect.appendChild(option);
-            });
-            
-            appData.patients.forEach(patient => {
-                const option = document.createElement('option');
-                option.value = patient.id;
-                option.textContent = `${patient.name} (${patient.month}) - ${patient.facility_name || 'Unknown'}`;
-                patientSelect.appendChild(option);
-            });
-            
-            console.log('✅ Dropdowns populated');
-        }
-
-        console.log('✅ PopulateDropdowns function defined');
-
-        // Refresh patient list
+        // Test function 2  
         function refreshPatientList() {
-            const tbody = document.getElementById('patientTableBody');
+            console.log('✅ refreshPatientList works');
+            return 'refreshPatientList works';
+        }
+        console.log('✅ refreshPatientList defined');
+
+        // Test function 3
+        function loadPatientTracking() {
+            console.log('✅ loadPatientTracking works');
+            return 'loadPatientTracking works';
+        }
+        console.log('✅ loadPatientTracking defined');
+
+        // Test function 4
+        function login() {
+            console.log('✅ login works');
+            return 'login works';
+        }
+        console.log('✅ login defined');
+
+        // Test function 5
+        function logout() {
+            console.log('✅ logout works');
+            return 'logout works';
+        }
+        console.log('✅ logout defined');
+
+        // Test all functions
+        function testAllFunctions() {
+            const results = [];
+            results.push('showTab: ' + typeof showTab);
+            results.push('refreshPatientList: ' + typeof refreshPatientList);
+            results.push('loadPatientTracking: ' + typeof loadPatientTracking);
+            results.push('login: ' + typeof login);
+            results.push('logout: ' + typeof logout);
             
-            if (appData.patients.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5">No patients found. Add your first patient above.</td></tr>';
-                return;
-            }
-
-            tbody.innerHTML = '';
-            appData.patients.forEach(patient => {
-                const row = document.createElement('tr');
-                const monthDate = new Date(patient.month + '-01');
-                const displayMonth = monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-                
-                row.innerHTML = `
-                    <td>${patient.name}</td>
-                    <td>${patient.mrn || 'N/A'}</td>
-                    <td>${displayMonth}</td>
-                    <td>${patient.facility_name || 'Unknown'}</td>
-                    <td>
-                        <button class="btn btn-primary" onclick="viewTracking(${patient.id})">Track</button>
-                        <button class="btn btn-danger" onclick="deletePatient(${patient.id})">Delete</button>
-                    </td>
-                `;
-                tbody.appendChild(row);
-            });
-            
-            console.log(`✅ Patient list refreshed with ${appData.patients.length} patients`);
+            document.getElementById('result').innerHTML = results.join('<br>');
+            console.log('🧪 Test results:', results);
         }
 
-        console.log('✅ RefreshPatientList function defined');
-
-        // Add patient
-        async function addPatient() {
-            const name = document.getElementById('patientName').value.trim();
-            const month = document.getElementById('patientMonth').value;
-            const mrn = document.getElementById('mrnNumber').value.trim();
-            const facilityId = parseInt(document.getElementById('patientFacility').value);
-
-            if (!name || !month || !facilityId) {
-                alert('Please fill in all required fields');
-                return;
-            }
-
-            try {
-                await apiCall('/patients', {
-                    method: 'POST',
-                    body: { name, month, mrn, facilityId }
-                });
-
-                document.getElementById('patientName').value = '';
-                document.getElementById('patientMonth').value = '';
-                document.getElementById('mrnNumber').value = '';
-                document.getElementById('patientFacility').value = '';
-
-                await loadAllData();
-                alert('Patient added successfully!');
-            } catch (error) {
-                alert('Failed to add patient: ' + error.message);
-            }
-        }
-
-        console.log('✅ AddPatient function defined');
-
-        // Delete patient
-        async function deletePatient(patientId) {
-            if (!confirm('Are you sure you want to delete this patient?')) return;
-
-            try {
-                await apiCall(`/patients/${patientId}`, { method: 'DELETE' });
-                await loadAllData();
-                alert('Patient deleted successfully!');
-            } catch (error) {
-                alert('Failed to delete patient: ' + error.message);
-            }
-        }
-
-        console.log('✅ DeletePatient function defined');
-
-        // View tracking
-        function viewTracking(patientId) {
-            showTab('tracking', document.querySelector('.tab:nth-child(2)'));
-            document.getElementById('patientSelect').value = patientId;
-            loadPatientTracking();
-        }
-
-        console.log('✅ ViewTracking function defined');
-
-        // Load patient tracking
-        async function loadPatientTracking() {
-            const patientId = document.getElementById('patientSelect').value;
-            const container = document.getElementById('trackingContent');
-
-            if (!patientId) {
-                container.innerHTML = '<p>Please select a patient to begin tracking supplies</p>';
-                return;
-            }
-
-            try {
-                const patient = appData.patients.find(p => p.id == patientId);
-                const trackingData = await apiCall(`/patients/${patientId}/tracking`);
-                
-                container.innerHTML = `
-                    <h3>Patient: ${patient.name}</h3>
-                    <p>Tracking data loaded: ${trackingData.length} records</p>
-                    <div style="background: #f8f9fa; padding: 15px; border-radius: 5px;">
-                        <p><strong>✅ Tracking interface loaded successfully!</strong></p>
-                        <p>Found ${trackingData.length} tracking records for this patient.</p>
-                    </div>
-                `;
-                
-                console.log(`✅ Tracking loaded for ${patient.name}: ${trackingData.length} records`);
-            } catch (error) {
-                container.innerHTML = `<div style="color: red; padding: 15px;">Failed to load tracking: ${error.message}</div>`;
-            }
-        }
-
-        console.log('✅ LoadPatientTracking function defined');
-
-        // Update summary
-        async function updateSummary() {
-            try {
-                document.getElementById('totalPatients').textContent = appData.patients.length;
-                
-                let totalUnits = 0;
-                let totalCost = 0;
-
-                for (const patient of appData.patients) {
-                    try {
-                        const trackingData = await apiCall(`/patients/${patient.id}/tracking`);
-                        trackingData.forEach(item => {
-                            const quantity = parseInt(item.quantity) || 0;
-                            const cost = parseFloat(item.cost) || 0;
-                            totalUnits += quantity;
-                            totalCost += quantity * cost;
-                        });
-                    } catch (error) {
-                        console.warn(`Failed to load tracking for ${patient.name}:`, error);
-                    }
-                }
-
-                document.getElementById('totalUnits').textContent = totalUnits;
-                document.getElementById('totalCost').textContent = '$' + totalCost.toFixed(2);
-                
-                console.log(`✅ Summary updated - Units: ${totalUnits}, Cost: $${totalCost.toFixed(2)}`);
-            } catch (error) {
-                console.error('❌ Failed to update summary:', error);
-            }
-        }
-
-        console.log('✅ UpdateSummary function defined');
-
-        // Show tab
-        function showTab(tabName, element) {
-            // Hide all tabs
-            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add('hidden'));
-            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
-
-            // Show selected tab
-            document.getElementById(tabName + 'Tab').classList.remove('hidden');
-            if (element) element.classList.add('active');
-
-            console.log(`✅ Switched to ${tabName} tab`);
-
-            // Load tab-specific data
-            if (tabName === 'summary') updateSummary();
-            if (tabName === 'admin') loadAdminPanel();
-        }
-
-        console.log('✅ ShowTab function defined');
-
-        // Load admin panel
-        function loadAdminPanel() {
-            const adminContent = document.getElementById('adminContent');
-            
-            if (currentUser.role !== 'admin') {
-                adminContent.innerHTML = '<div style="color: red;">❌ Access Denied: Admin privileges required</div>';
-                return;
-            }
-
-            adminContent.innerHTML = `
-                <div style="background: #f8f9fa; padding: 20px; border-radius: 5px; margin: 10px 0;">
-                    <h3>📊 System Statistics</h3>
-                    <p><strong>Total Users:</strong> Loading...</p>
-                    <p><strong>Total Facilities:</strong> ${appData.facilities.length}</p>
-                    <p><strong>Total Patients:</strong> ${appData.patients.length}</p>
-                    <p><strong>Total Supplies:</strong> ${appData.supplies.length}</p>
-                </div>
-                <div style="background: #d4edda; padding: 15px; border-radius: 5px; border-left: 4px solid #28a745;">
-                    <p style="margin: 0;"><strong>✅ Admin panel loaded successfully!</strong> Full admin interface will be implemented here.</p>
-                </div>
-            `;
-            
-            console.log('✅ Admin panel loaded');
-        }
-
-        console.log('✅ LoadAdminPanel function defined');
-
-        // Auto-login check
-        window.addEventListener('DOMContentLoaded', async function() {
-            console.log('🚀 Page loaded, checking auth...');
-            
-            if (authToken) {
-                try {
-                    const response = await apiCall('/auth/verify');
-                    currentUser = response.user;
-                    
-                    document.getElementById('loginContainer').classList.add('hidden');
-                    document.getElementById('mainApp').classList.remove('hidden');
-                    
-                    console.log('✅ Auto-login successful:', currentUser.email);
-                    await initApp();
-                } catch (error) {
-                    console.log('❌ Auto-login failed, showing login screen');
-                    localStorage.removeItem('authToken');
-                    authToken = null;
-                }
-            } else {
-                console.log('🔓 No stored token, showing login screen');
-            }
-        });
-
-        // Handle Enter key
-        document.addEventListener('DOMContentLoaded', function() {
-            ['loginEmail', 'loginPassword'].forEach(id => {
-                const input = document.getElementById(id);
-                if (input) {
-                    input.addEventListener('keypress', function(e) {
-                        if (e.key === 'Enter') login();
-                    });
-                }
-            });
-        });
-
-        console.log('✅ ALL FUNCTIONS DEFINED SUCCESSFULLY - READY TO GO!');
+        console.log('🧪 ALL TEST FUNCTIONS DEFINED SUCCESSFULLY!');
+        console.log('🧪 Testing function types...');
+        console.log('showTab:', typeof showTab);
+        console.log('refreshPatientList:', typeof refreshPatientList);
+        console.log('loadPatientTracking:', typeof loadPatientTracking);
+        console.log('login:', typeof login);
+        console.log('logout:', typeof logout);
     </script>
 </body>
 </html>
