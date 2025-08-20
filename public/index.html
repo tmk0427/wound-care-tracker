@@ -2506,7 +2506,174 @@
             container.appendChild(gridContainer);
             updateSelectedCount();
         }
+// Enhanced tracking filters - ADD THESE FUNCTIONS BEFORE refreshPatientSelect
+        function populateTrackingFacilitySelector() {
+            const select = document.getElementById('trackingFacilitySelect');
+            if (!select) return;
+            
+            select.innerHTML = '<option value="">All Facilities</option>';
 
+            appData.facilities.forEach(function(facility) {
+                const option = document.createElement('option');
+                option.value = facility.id;
+                option.textContent = facility.name;
+                select.appendChild(option);
+            });
+
+            // Add event listener for facility changes
+            select.addEventListener('change', function() {
+                updateTrackingFilters();
+            });
+        }
+
+        function setupTrackingMonthSelector() {
+            const monthSelect = document.getElementById('trackingMonthSelect');
+            if (!monthSelect) return;
+            
+            // Set default to current month
+            const currentDate = new Date();
+            const currentYearMonth = currentDate.getFullYear() + '-' + String(currentDate.getMonth() + 1).padStart(2, '0');
+            monthSelect.value = currentYearMonth;
+            
+            // Add event listener for month changes
+            monthSelect.addEventListener('change', function() {
+                updateTrackingFilters();
+            });
+        }
+
+        function updateTrackingFilters() {
+            const facilitySelect = document.getElementById('trackingFacilitySelect');
+            const monthSelect = document.getElementById('trackingMonthSelect');
+            const facilityDisplay = document.getElementById('selectedFacilityDisplay');
+            const monthDisplay = document.getElementById('selectedMonthDisplay');
+            const filteredCountDisplay = document.getElementById('filteredPatientsCount');
+            
+            if (!facilitySelect || !monthSelect) return;
+            
+            const selectedFacilityId = facilitySelect.value;
+            const selectedMonth = monthSelect.value;
+            
+            // Update display text
+            if (selectedFacilityId) {
+                const facility = appData.facilities.find(function(f) { return f.id == selectedFacilityId; });
+                facilityDisplay.textContent = facility ? facility.name : 'Unknown Facility';
+            } else {
+                facilityDisplay.textContent = 'All Facilities';
+            }
+            
+            if (selectedMonth) {
+                const monthDate = new Date(selectedMonth + '-01');
+                monthDisplay.textContent = monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+            } else {
+                monthDisplay.textContent = 'All Months';
+            }
+            
+            // Filter and update patient dropdown
+            updateFilteredPatientSelect(selectedFacilityId, selectedMonth);
+            
+            // Update filtered count
+            const filteredPatients = getFilteredTrackingPatients(selectedFacilityId, selectedMonth);
+            filteredCountDisplay.textContent = filteredPatients.length;
+            
+            console.log('🔄 Tracking filters updated:', {
+                facility: selectedFacilityId || 'All',
+                month: selectedMonth || 'All',
+                filteredCount: filteredPatients.length
+            });
+        }
+
+        function getFilteredTrackingPatients(facilityId, monthFilter) {
+            let filteredPatients = appData.patients.slice();
+            
+            // Apply facility filter
+            if (facilityId) {
+                filteredPatients = filteredPatients.filter(function(patient) {
+                    return patient.facility_id == facilityId;
+                });
+            }
+            
+            // Apply month filter
+            if (monthFilter) {
+                // Convert month filter (YYYY-MM) to patient month format (YYYY-MM)
+                filteredPatients = filteredPatients.filter(function(patient) {
+                    return patient.month === monthFilter;
+                });
+            }
+            
+            // Sort by name
+            filteredPatients.sort(function(a, b) {
+                const nameA = (a.name || '').toLowerCase();
+                const nameB = (b.name || '').toLowerCase();
+                return nameA.localeCompare(nameB);
+            });
+            
+            return filteredPatients;
+        }
+
+        function updateFilteredPatientSelect(facilityId, monthFilter) {
+            const select = document.getElementById('patientSelect');
+            if (!select) return;
+            
+            // Clear current selection
+            select.innerHTML = '<option value="">Select Patient</option>';
+            
+            const filteredPatients = getFilteredTrackingPatients(facilityId, monthFilter);
+            
+            console.log('👥 Filtered patients:', filteredPatients.length, 'of', appData.patients.length, 'total patients');
+            
+            if (filteredPatients.length === 0) {
+                if (!facilityId && !monthFilter) {
+                    select.innerHTML = '<option value="">No patients available</option>';
+                } else {
+                    select.innerHTML = '<option value="">No patients match selected filters</option>';
+                }
+                return;
+            }
+
+            filteredPatients.forEach(function(patient) {
+                const option = document.createElement('option');
+                option.value = patient.id;
+
+                const yearPart = patient.month.split('-')[0];
+                const monthPart = patient.month.split('-')[1];
+                const displayMonth = monthPart + '-' + yearPart.slice(-2);
+
+                option.textContent = patient.name + ' (' + displayMonth + ') - ' + (patient.facility_name || 'Unknown Facility');
+                select.appendChild(option);
+            });
+
+            // Clear tracking content when filters change
+            const trackingContent = document.getElementById('trackingContent');
+            if (trackingContent) {
+                trackingContent.innerHTML = '<p style="text-align: center; color: #718096; font-size: 18px; margin-top: 100px;">Please select a patient from the filtered list to begin tracking supplies</p>';
+            }
+        }
+
+        function enhancedUpdateUserAccessInfo() {
+            if (!currentUser) return;
+
+            const accessLevel = document.getElementById('userAccessLevel');
+            const facilityInfo = document.getElementById('userFacilityInfo');
+            const totalPatientsCount = document.getElementById('totalPatientsCount');
+
+            if (accessLevel) {
+                accessLevel.textContent = currentUser.role === 'admin' ? 'Administrator (Full Access)' : 'User (Facility-Based Access)';
+            }
+
+            if (facilityInfo) {
+                if (currentUser.role === 'admin') {
+                    facilityInfo.textContent = 'All Facilities';
+                } else if (currentUser.facility_id && currentUser.facility_name) {
+                    facilityInfo.textContent = currentUser.facility_name;
+                } else {
+                    facilityInfo.innerHTML = '<span style="color: #e53e3e;">⚠️ No facility assigned</span>';
+                }
+            }
+
+            if (totalPatientsCount) {
+                totalPatientsCount.textContent = appData.patients ? appData.patients.length : 0;
+            }
+        }
         function refreshPatientSelect() {
             console.log('🔄 Enhanced patient select refresh with', appData.patients.length, 'patients');
             
