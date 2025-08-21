@@ -392,76 +392,77 @@
             border: 1px solid #e2e8f0;
             padding: 10px;
             text-align: center;
-            min-width: 80px;
             position: relative;
         }
 
-        /* Freeze first 7 columns with specific positioning */
+        /* Enhanced Frozen Columns - First 7 columns */
         .tracking-table th:nth-child(1),
         .tracking-table td:nth-child(1) {
             position: sticky;
             left: 0;
-            background: white;
+            background: inherit;
             z-index: 5;
-            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+            min-width: 80px;
         }
 
         .tracking-table th:nth-child(2),
         .tracking-table td:nth-child(2) {
             position: sticky;
             left: 80px;
-            background: white;
+            background: inherit;
             z-index: 5;
-            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+            min-width: 200px;
+            text-align: left;
         }
 
         .tracking-table th:nth-child(3),
         .tracking-table td:nth-child(3) {
             position: sticky;
             left: 280px;
-            background: white;
+            background: inherit;
             z-index: 5;
-            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+            min-width: 150px;
+            text-align: left;
         }
 
         .tracking-table th:nth-child(4),
         .tracking-table td:nth-child(4) {
             position: sticky;
-            left: 480px;
-            background: white;
+            left: 430px;
+            background: inherit;
             z-index: 5;
-            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+            min-width: 80px;
         }
 
         .tracking-table th:nth-child(5),
         .tracking-table td:nth-child(5) {
             position: sticky;
-            left: 560px;
-            background: white;
+            left: 510px;
+            background: inherit;
             z-index: 5;
-            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+            min-width: 100px;
         }
 
         .tracking-table th:nth-child(6),
         .tracking-table td:nth-child(6) {
             position: sticky;
-            left: 640px;
-            background: white;
+            left: 610px;
+            background: inherit;
             z-index: 5;
-            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+            min-width: 100px;
         }
 
         .tracking-table th:nth-child(7),
         .tracking-table td:nth-child(7) {
             position: sticky;
-            left: 720px;
-            background: white;
+            left: 710px;
+            background: inherit;
             z-index: 5;
-            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+            min-width: 100px;
         }
 
         .tracking-table th {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
             color: white;
             font-weight: 600;
             position: sticky;
@@ -474,30 +475,13 @@
             z-index: 15;
         }
 
-        .tracking-table .ar-code-cell {
-            text-align: left;
-            min-width: 80px;
-            font-weight: bold;
-            color: #667eea;
-        }
-
-        .tracking-table .description-cell {
-            text-align: left;
-            min-width: 200px;
-            max-width: 250px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .tracking-table .wound-dx-cell {
-            text-align: left;
-            min-width: 150px;
-            max-width: 200px;
+        .tracking-table td:nth-child(-n+7) {
+            background: white;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.05);
         }
 
         .tracking-input {
-            width: 80px;
+            width: 70px;
             padding: 6px;
             border: 1px solid #e2e8f0;
             border-radius: 4px;
@@ -517,7 +501,7 @@
             padding: 6px;
             border: 1px solid #e2e8f0;
             border-radius: 4px;
-            font-size: 12px;
+            font-size: 11px;
             resize: vertical;
             min-height: 35px;
         }
@@ -753,7 +737,6 @@
             .tracking-table th,
             .tracking-table td {
                 padding: 8px;
-                min-width: 60px;
             }
 
             .tracking-input {
@@ -848,7 +831,9 @@
                     </div>
                     <div class="form-group">
                         <label for="dashboardMonthFilter">Filter by Month/Year</label>
-                        <input type="month" id="dashboardMonthFilter" onchange="loadDashboard()">
+                        <select id="dashboardMonthFilter" onchange="loadDashboard()">
+                            <option value="">All Months</option>
+                        </select>
                     </div>
                 </div>
             </div>
@@ -955,7 +940,7 @@
                 </div>
                 <div class="form-group">
                     <label>&nbsp;</label>
-                    <button class="btn btn-primary" onclick="addPatient()" id="addPatientBtn" style="margin-top: 0;">➕ Add Patient</button>
+                    <button class="btn btn-primary" onclick="addPatient()" id="addPatientBtn" style="margin-top: 0; width: 100%;">➕ Add Patient</button>
                 </div>
             </div>
 
@@ -993,7 +978,9 @@
                     </div>
                     <div class="form-group">
                         <label for="trackingMonthFilter">Filter by Month/Year</label>
-                        <input type="month" id="trackingMonthFilter" onchange="refreshPatientSelect()">
+                        <select id="trackingMonthFilter" onchange="refreshPatientSelect()">
+                            <option value="">All Months</option>
+                        </select>
                     </div>
                     <div class="form-group">
                         <label for="patientSelect">Select Patient</label>
@@ -1053,7 +1040,9 @@
                     </div>
                     <div class="form-group">
                         <label for="summaryMonthFilter">Filter by Month/Year</label>
-                        <input type="month" id="summaryMonthFilter" onchange="updateSummaryReport()">
+                        <select id="summaryMonthFilter" onchange="updateSummaryReport()">
+                            <option value="">All Months</option>
+                        </select>
                     </div>
                 </div>
                 
@@ -1127,10 +1116,10 @@
                     <input type="number" id="supplyUnitCost" placeholder="0.00" step="0.01" min="0">
                 </div>
                 <div class="form-group">
-                    <label></label>
+                    <label>&nbsp;</label>
                     <div class="supply-actions">
-                        <button class="btn btn-primary" onclick="addSupply()" id="addSupplyBtn">➕ Add Supply</button>
-                        <button class="btn btn-secondary" onclick="clearSupplyForm()" id="clearSupplyBtn">🗑️ Clear Form</button>
+                        <button class="btn btn-primary" onclick="addSupply()" id="addSupplyBtn" style="width: 100%;">➕ Add Supply</button>
+                        <button class="btn btn-secondary" onclick="clearSupplyForm()" id="clearSupplyBtn" style="width: 100%; margin-top: 10px;">🗑️ Clear Form</button>
                     </div>
                 </div>
             </div>
@@ -1214,6 +1203,7 @@
         let supplyExcelData = null;
         let allSupplies = [];
         let filteredSupplies = [];
+        let editingSupplyId = null;
 
         // Utility functions
         function formatCurrency(amount) {
@@ -1716,9 +1706,9 @@
             // Generate header with new structure - 7 frozen columns
             let headerHTML = `
                 <tr>
-                    <th class="ar-code-cell">AR Code</th>
-                    <th class="description-cell">Item Description</th>
-                    <th class="wound-dx-cell">All Wound Dx</th>
+                    <th>AR Code</th>
+                    <th>Item Description</th>
+                    <th>All Wound Dx</th>
                     <th>HCPCS</th>
                     <th>Unit Cost</th>
                     <th>Total Units</th>
@@ -1760,9 +1750,9 @@
                 grandTotalCost += totalCost;
 
                 let rowHTML = `
-                    <td class="ar-code-cell">${supply.code}</td>
-                    <td class="description-cell" title="${supply.description}">${supply.description}</td>
-                    <td class="wound-dx-cell">
+                    <td style="font-weight: bold; color: #667eea;">${supply.code}</td>
+                    <td style="text-align: left;" title="${supply.description}">${supply.description}</td>
+                    <td style="text-align: left;">
                         <textarea class="wound-dx-input" 
                                   onchange="updateWoundDx(${patientId}, ${supply.id}, this.value)"
                                   placeholder="Enter wound diagnosis">${allWoundDx}</textarea>
@@ -1801,9 +1791,9 @@
             totalsRow.style.fontWeight = 'bold';
             
             let totalsHTML = `
-                <td class="ar-code-cell"><strong>TOTALS</strong></td>
-                <td class="description-cell"></td>
-                <td class="wound-dx-cell"></td>
+                <td style="font-weight: bold;">TOTALS</td>
+                <td></td>
+                <td></td>
                 <td></td>
                 <td></td>
                 <td class="total-cell" id="grand-total-units">${grandTotalUnits}</td>
@@ -1932,8 +1922,6 @@
         }
 
         // ===== SUPPLY MANAGEMENT =====
-        let editingSupplyId = null;
-
         async function addSupply() {
             const code = document.getElementById('supplyArCode').value.trim();
             const description = document.getElementById('supplyDescription').value.trim();
@@ -2018,7 +2006,7 @@
                     const editButton = supply.is_custom ? 
                         `<button class="btn btn-secondary btn-sm" onclick="editSupply(${supply.id}, ${supply.code}, '${supply.description.replace(/'/g, "\\'")}', '${supply.hcpcs || ''}', ${supply.cost})">Edit</button>` : '';
                     const deleteButton = supply.is_custom ? 
-                        `<button class="btn btn-danger btn-sm" onclick="deleteSupply(${supply.id})">Delete</button>` : 'System Supply';
+                        `<button class="btn btn-danger btn-sm" onclick="deleteSupply(${supply.id})">Delete</button>` : '';
                     
                     row.innerHTML = `
                         <td><strong>${supply.code}</strong></td>
@@ -2031,9 +2019,9 @@
                             </span>
                         </td>
                         <td>
-                            <div style="display: flex; gap: 5px;">
+                            <div style="display: flex; gap: 5px; flex-wrap: wrap;">
                                 ${editButton}
-                                ${deleteButton}
+                                ${deleteButton || '<span style="color: #718096;">System Supply</span>'}
                             </div>
                         </td>
                     `;
@@ -2087,7 +2075,14 @@
                     console.warn('Dashboard summary endpoint not available, using basic patient data');
                     // Fallback to basic patient data if dashboard/summary endpoint fails
                     const patients = await apiCall('/patients');
-                    dashboardData = patients.map(patient => ({
+                    let filteredPatients = patients;
+                    if (facilityFilter) {
+                        filteredPatients = filteredPatients.filter(p => p.facility_id === parseInt(facilityFilter));
+                    }
+                    if (monthFilter) {
+                        filteredPatients = filteredPatients.filter(p => p.month === monthFilter);
+                    }
+                    dashboardData = filteredPatients.map(patient => ({
                         ...patient,
                         total_units: 0,
                         total_cost: 0,
