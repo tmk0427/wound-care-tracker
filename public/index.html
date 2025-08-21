@@ -395,7 +395,7 @@
             position: relative;
         }
 
-        /* Enhanced Frozen Columns - First 7 columns */
+        /* Enhanced Frozen Columns - Dynamic based on user role */
         .tracking-table th:nth-child(1),
         .tracking-table td:nth-child(1) {
             position: sticky;
@@ -431,31 +431,32 @@
             left: 430px;
             background: inherit;
             z-index: 5;
-            min-width: 80px;
+            min-width: 100px;
         }
 
-        .tracking-table th:nth-child(5),
-        .tracking-table td:nth-child(5) {
+        /* Admin-only frozen columns */
+        .tracking-table.admin-view th:nth-child(5),
+        .tracking-table.admin-view td:nth-child(5) {
             position: sticky;
-            left: 510px;
+            left: 530px;
             background: inherit;
             z-index: 5;
             min-width: 100px;
         }
 
-        .tracking-table th:nth-child(6),
-        .tracking-table td:nth-child(6) {
+        .tracking-table.admin-view th:nth-child(6),
+        .tracking-table.admin-view td:nth-child(6) {
             position: sticky;
-            left: 610px;
+            left: 630px;
             background: inherit;
             z-index: 5;
             min-width: 100px;
         }
 
-        .tracking-table th:nth-child(7),
-        .tracking-table td:nth-child(7) {
+        .tracking-table.admin-view th:nth-child(7),
+        .tracking-table.admin-view td:nth-child(7) {
             position: sticky;
-            left: 710px;
+            left: 730px;
             background: inherit;
             z-index: 5;
             min-width: 100px;
@@ -471,11 +472,20 @@
             font-size: 12px;
         }
 
-        .tracking-table th:nth-child(-n+7) {
+        .tracking-table th:nth-child(-n+4) {
             z-index: 15;
         }
 
-        .tracking-table td:nth-child(-n+7) {
+        .tracking-table.admin-view th:nth-child(-n+7) {
+            z-index: 15;
+        }
+
+        .tracking-table td:nth-child(-n+4) {
+            background: white;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.05);
+        }
+
+        .tracking-table.admin-view td:nth-child(-n+7) {
             background: white;
             box-shadow: 2px 0 5px rgba(0,0,0,0.05);
         }
@@ -770,6 +780,36 @@
     <!-- Status Banner -->
     <div class="status-banner">
         🚀 Enhanced Wound Care RT Supply Tracker - Professional Edition
+        <!-- User Management Tab (Admin Only) -->
+        <div id="usersTab" class="tab-content hidden">
+            <h2 style="margin-bottom: 30px; color: #4a5568;">👤 User Management</h2>
+
+            <div class="filter-section">
+                <h3 style="margin-bottom: 15px; color: #4a5568;">User Account Management</h3>
+                <div class="filter-actions">
+                    <button class="btn btn-primary" onclick="refreshUsersList()">🔄 Refresh Users</button>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table class="data-table" id="usersTable">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Facility</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th>Registered</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usersTableBody">
+                        <!-- Users will be populated here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
     <!-- Login/Register Screen -->
@@ -789,6 +829,55 @@
                 </div>
                 <button class="auth-btn" onclick="login()" id="loginBtn">Sign In</button>
                 <div id="loginError" class="error-message hidden">Invalid credentials</div>
+                
+                <div style="margin-top: 20px; text-align: center;">
+                    <button type="button" class="btn btn-secondary" onclick="showRegisterForm()" style="margin-right: 10px;">Register</button>
+                    <button type="button" class="btn btn-secondary" onclick="showResetForm()">Reset Password</button>
+                </div>
+            </div>
+
+            <!-- Registration Form -->
+            <div id="registerForm" class="hidden">
+                <div class="form-group">
+                    <label for="registerName">Full Name</label>
+                    <input type="text" id="registerName" placeholder="Enter your full name">
+                </div>
+                <div class="form-group">
+                    <label for="registerEmail">Email Address</label>
+                    <input type="email" id="registerEmail" placeholder="Enter your email">
+                </div>
+                <div class="form-group">
+                    <label for="registerPassword">Password</label>
+                    <input type="password" id="registerPassword" placeholder="Create a password">
+                </div>
+                <div class="form-group">
+                    <label for="registerFacility">Select Facility</label>
+                    <select id="registerFacility">
+                        <option value="">Select Facility</option>
+                    </select>
+                </div>
+                <button class="auth-btn" onclick="register()" id="registerBtn">Register</button>
+                <div id="registerError" class="error-message hidden"></div>
+                <div id="registerSuccess" class="success-message hidden"></div>
+                
+                <div style="margin-top: 20px; text-align: center;">
+                    <button type="button" class="btn btn-secondary" onclick="showLoginForm()">Back to Login</button>
+                </div>
+            </div>
+
+            <!-- Password Reset Form -->
+            <div id="resetForm" class="hidden">
+                <div class="form-group">
+                    <label for="resetEmail">Email Address</label>
+                    <input type="email" id="resetEmail" placeholder="Enter your email">
+                </div>
+                <button class="auth-btn" onclick="resetPassword()" id="resetBtn">Reset Password</button>
+                <div id="resetError" class="error-message hidden"></div>
+                <div id="resetSuccess" class="success-message hidden"></div>
+                
+                <div style="margin-top: 20px; text-align: center;">
+                    <button type="button" class="btn btn-secondary" onclick="showLoginForm()">Back to Login</button>
+                </div>
             </div>
         </div>
     </div>
@@ -813,6 +902,7 @@
             <div class="tab" onclick="showTab('tracking', this)">📊 Supply Tracking</div>
             <div class="tab" onclick="showTab('summary', this)">📋 Summary Report</div>
             <div class="tab" id="suppliesTabButton" onclick="showTab('supplies', this)">🛠️ Supply Management</div>
+            <div class="tab" id="usersTabButton" onclick="showTab('users', this)">👤 User Management</div>
         </div>
 
         <!-- Dashboard Tab -->
@@ -1331,6 +1421,164 @@
         }
 
         // ===== AUTHENTICATION FUNCTIONS =====
+        function showLoginForm() {
+            document.getElementById('loginForm').classList.remove('hidden');
+            document.getElementById('registerForm').classList.add('hidden');
+            document.getElementById('resetForm').classList.add('hidden');
+            clearAuthForms();
+        }
+
+        function showRegisterForm() {
+            document.getElementById('loginForm').classList.add('hidden');
+            document.getElementById('registerForm').classList.remove('hidden');
+            document.getElementById('resetForm').classList.add('hidden');
+            loadFacilitiesForRegistration();
+            clearAuthForms();
+        }
+
+        function showResetForm() {
+            document.getElementById('loginForm').classList.add('hidden');
+            document.getElementById('registerForm').classList.add('hidden');
+            document.getElementById('resetForm').classList.remove('hidden');
+            clearAuthForms();
+        }
+
+        function clearAuthForms() {
+            // Clear login form
+            document.getElementById('loginEmail').value = '';
+            document.getElementById('loginPassword').value = '';
+            document.getElementById('loginError').classList.add('hidden');
+
+            // Clear register form
+            document.getElementById('registerName').value = '';
+            document.getElementById('registerEmail').value = '';
+            document.getElementById('registerPassword').value = '';
+            document.getElementById('registerFacility').value = '';
+            document.getElementById('registerError').classList.add('hidden');
+            document.getElementById('registerSuccess').classList.add('hidden');
+
+            // Clear reset form
+            document.getElementById('resetEmail').value = '';
+            document.getElementById('resetError').classList.add('hidden');
+            document.getElementById('resetSuccess').classList.add('hidden');
+        }
+
+        async function loadFacilitiesForRegistration() {
+            try {
+                const facilities = await apiCall('/facilities/public');
+                const select = document.getElementById('registerFacility');
+                select.innerHTML = '<option value="">Select Facility</option>';
+                
+                facilities.forEach(facility => {
+                    const option = document.createElement('option');
+                    option.value = facility.id;
+                    option.textContent = facility.name;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Failed to load facilities for registration:', error);
+            }
+        }
+
+        async function register() {
+            const name = document.getElementById('registerName').value.trim();
+            const email = document.getElementById('registerEmail').value.trim();
+            const password = document.getElementById('registerPassword').value.trim();
+            const facilityId = document.getElementById('registerFacility').value;
+            const registerBtn = document.getElementById('registerBtn');
+            const registerError = document.getElementById('registerError');
+            const registerSuccess = document.getElementById('registerSuccess');
+
+            if (!name || !email || !password || !facilityId) {
+                showRegisterError('Please fill in all fields');
+                return;
+            }
+
+            if (password.length < 6) {
+                showRegisterError('Password must be at least 6 characters long');
+                return;
+            }
+
+            registerBtn.disabled = true;
+            registerBtn.innerHTML = '<span class="loading"></span>Registering...';
+            registerError.classList.add('hidden');
+            registerSuccess.classList.add('hidden');
+
+            try {
+                await apiCall('/auth/register', {
+                    method: 'POST',
+                    body: { name, email, password, facilityId: parseInt(facilityId) }
+                });
+
+                registerSuccess.textContent = 'Registration successful! Please wait for admin approval before logging in.';
+                registerSuccess.classList.remove('hidden');
+                
+                // Clear form
+                clearAuthForms();
+                
+                // Switch back to login after delay
+                setTimeout(() => {
+                    showLoginForm();
+                }, 3000);
+                
+            } catch (error) {
+                showRegisterError(error.message);
+            } finally {
+                registerBtn.disabled = false;
+                registerBtn.innerHTML = 'Register';
+            }
+        }
+
+        async function resetPassword() {
+            const email = document.getElementById('resetEmail').value.trim();
+            const resetBtn = document.getElementById('resetBtn');
+            const resetError = document.getElementById('resetError');
+            const resetSuccess = document.getElementById('resetSuccess');
+
+            if (!email) {
+                showResetError('Please enter your email address');
+                return;
+            }
+
+            resetBtn.disabled = true;
+            resetBtn.innerHTML = '<span class="loading"></span>Sending...';
+            resetError.classList.add('hidden');
+            resetSuccess.classList.add('hidden');
+
+            try {
+                await apiCall('/auth/reset-password', {
+                    method: 'POST',
+                    body: { email }
+                });
+
+                resetSuccess.textContent = 'Password reset instructions sent to your email address.';
+                resetSuccess.classList.remove('hidden');
+                
+                // Switch back to login after delay
+                setTimeout(() => {
+                    showLoginForm();
+                }, 3000);
+                
+            } catch (error) {
+                showResetError(error.message);
+            } finally {
+                resetBtn.disabled = false;
+                resetBtn.innerHTML = 'Reset Password';
+            }
+        }
+
+        function showRegisterError(message) {
+            const registerError = document.getElementById('registerError');
+            registerError.textContent = message;
+            registerError.classList.remove('hidden');
+        }
+
+        function showResetError(message) {
+            const resetError = document.getElementById('resetError');
+            resetError.textContent = message;
+            resetError.classList.remove('hidden');
+        }
+
         async function login() {
             const email = document.getElementById('loginEmail').value.trim();
             const password = document.getElementById('loginPassword').value.trim();
@@ -1431,10 +1679,12 @@
                 `<div>${currentUser.role === 'admin' ? '🔑 System Administrator' : '👤 User'} • ${facilityName}</div>`;
 
             const suppliesTabButton = document.getElementById('suppliesTabButton');
+            const usersTabButton = document.getElementById('usersTabButton');
             const dashboardCostCard = document.getElementById('dashboardCostCard');
 
             if (currentUser.role === 'admin') {
                 suppliesTabButton.style.display = 'block';
+                usersTabButton.style.display = 'block';
                 dashboardCostCard.style.display = 'block';
                 
                 // Update table headers for admin
@@ -1463,6 +1713,7 @@
                     '<th>Last Updated</th>';
             } else {
                 suppliesTabButton.style.display = 'none';
+                usersTabButton.style.display = 'none';
                 dashboardCostCard.style.display = 'none';
                 
                 // Update table headers for regular users
@@ -1481,8 +1732,7 @@
                     '<th>Wound Dx</th>' +
                     '<th>Month/Year</th>' +
                     '<th>Facility</th>' +
-                    '<th>Total Units</th>' +
-                    '<th>Last Updated</th>';
+                    '<th>Total Units</th>';
             }
         }
 
@@ -1545,6 +1795,76 @@
                 updateSummaryReport();
             } else if (tabName === 'tracking') {
                 refreshPatientSelect();
+            } else if (tabName === 'users') {
+                refreshUsersList();
+            }
+        }
+
+        // ===== USER MANAGEMENT FUNCTIONS =====
+        async function refreshUsersList() {
+            if (currentUser.role !== 'admin') return;
+            
+            try {
+                const users = await apiCall('/users');
+                const tbody = document.getElementById('usersTableBody');
+                tbody.innerHTML = '';
+
+                users.forEach(user => {
+                    const row = document.createElement('tr');
+                    const statusClass = user.is_approved ? 'btn-success' : 'btn-warning';
+                    const statusText = user.is_approved ? 'Approved' : 'Pending';
+                    const actionButton = user.is_approved ? 
+                        `<button class="btn btn-warning btn-sm" onclick="toggleUserApproval(${user.id}, false)">Suspend</button>` :
+                        `<button class="btn btn-success btn-sm" onclick="toggleUserApproval(${user.id}, true)">Approve</button>`;
+                    
+                    row.innerHTML = `
+                        <td>${user.name}</td>
+                        <td>${user.email}</td>
+                        <td>${user.facility_name || 'N/A'}</td>
+                        <td>${user.role}</td>
+                        <td>
+                            <span class="btn btn-sm ${statusClass}">
+                                ${statusText}
+                            </span>
+                        </td>
+                        <td>${formatDate(user.created_at)}</td>
+                        <td>
+                            <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                                ${actionButton}
+                                ${user.role !== 'admin' ? `<button class="btn btn-danger btn-sm" onclick="deleteUser(${user.id})">Delete</button>` : ''}
+                            </div>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            } catch (error) {
+                showNotification('Failed to load users', true);
+            }
+        }
+
+        async function toggleUserApproval(userId, approve) {
+            try {
+                await apiCall(`/users/${userId}/approval`, {
+                    method: 'PUT',
+                    body: { isApproved: approve }
+                });
+
+                await refreshUsersList();
+                showNotification(`User ${approve ? 'approved' : 'suspended'} successfully`);
+            } catch (error) {
+                showNotification('Failed to update user status: ' + error.message, true);
+            }
+        }
+
+        async function deleteUser(userId) {
+            if (confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
+                try {
+                    await apiCall(`/users/${userId}`, { method: 'DELETE' });
+                    await refreshUsersList();
+                    showNotification('User deleted successfully');
+                } catch (error) {
+                    showNotification('Failed to delete user: ' + error.message, true);
+                }
             }
         }
 
@@ -1703,9 +2023,19 @@
             const thead = document.getElementById('trackingTableHead');
             const tbody = document.getElementById('trackingTableBody');
 
-            // Generate header with new structure - 7 frozen columns
-            let headerHTML = `
-                <tr>
+            // Add CSS class based on user role
+            if (currentUser.role === 'admin') {
+                table.classList.add('admin-view');
+            } else {
+                table.classList.remove('admin-view');
+            }
+
+            // Generate header based on user role
+            let headerHTML = `<tr>`;
+            
+            if (currentUser.role === 'admin') {
+                // Admin sees all columns
+                headerHTML += `
                     <th>AR Code</th>
                     <th>Item Description</th>
                     <th>All Wound Dx</th>
@@ -1713,9 +2043,18 @@
                     <th>Unit Cost</th>
                     <th>Total Units</th>
                     <th>Total Costs</th>
-            `;
+                `;
+            } else {
+                // Regular users see limited columns
+                headerHTML += `
+                    <th>AR Code</th>
+                    <th>Item Description</th>
+                    <th>All Wound Dx</th>
+                    <th>Total Units</th>
+                `;
+            }
 
-            // Add day columns (1-31)
+            // Add day columns (1-31) for both user types
             for (let day = 1; day <= 31; day++) {
                 headerHTML += `<th>${day}</th>`;
             }
@@ -1749,21 +2088,38 @@
                 grandTotalUnits += totalUnits;
                 grandTotalCost += totalCost;
 
-                let rowHTML = `
-                    <td style="font-weight: bold; color: #667eea;">${supply.code}</td>
-                    <td style="text-align: left;" title="${supply.description}">${supply.description}</td>
-                    <td style="text-align: left;">
-                        <textarea class="wound-dx-input" 
-                                  onchange="updateWoundDx(${patientId}, ${supply.id}, this.value)"
-                                  placeholder="Enter wound diagnosis">${allWoundDx}</textarea>
-                    </td>
-                    <td>${supply.hcpcs || 'N/A'}</td>
-                    <td>${formatCurrency(supply.cost)}</td>
-                    <td class="total-cell" id="total-${supply.id}">${totalUnits}</td>
-                    <td class="cost-cell" id="cost-${supply.id}">${formatCurrency(totalCost)}</td>
-                `;
+                let rowHTML = '';
+                
+                if (currentUser.role === 'admin') {
+                    // Admin sees all columns
+                    rowHTML = `
+                        <td style="font-weight: bold; color: #667eea;">${supply.code}</td>
+                        <td style="text-align: left;" title="${supply.description}">${supply.description}</td>
+                        <td style="text-align: left;">
+                            <textarea class="wound-dx-input" 
+                                      onchange="updateWoundDx(${patientId}, ${supply.id}, this.value)"
+                                      placeholder="Enter wound diagnosis">${allWoundDx}</textarea>
+                        </td>
+                        <td>${supply.hcpcs || 'N/A'}</td>
+                        <td>${formatCurrency(supply.cost)}</td>
+                        <td class="total-cell" id="total-${supply.id}">${totalUnits}</td>
+                        <td class="cost-cell" id="cost-${supply.id}">${formatCurrency(totalCost)}</td>
+                    `;
+                } else {
+                    // Regular users see limited columns
+                    rowHTML = `
+                        <td style="font-weight: bold; color: #667eea;">${supply.code}</td>
+                        <td style="text-align: left;" title="${supply.description}">${supply.description}</td>
+                        <td style="text-align: left;">
+                            <textarea class="wound-dx-input" 
+                                      onchange="updateWoundDx(${patientId}, ${supply.id}, this.value)"
+                                      placeholder="Enter wound diagnosis">${allWoundDx}</textarea>
+                        </td>
+                        <td class="total-cell" id="total-${supply.id}">${totalUnits}</td>
+                    `;
+                }
 
-                // Add day columns
+                // Add day columns for both user types
                 for (let day = 1; day <= 31; day++) {
                     const tracking = trackingForSupply.find(t => t.day_of_month === day);
                     const quantity = tracking ? tracking.quantity : 0;
@@ -1790,15 +2146,26 @@
             totalsRow.style.background = '#f0f8ff';
             totalsRow.style.fontWeight = 'bold';
             
-            let totalsHTML = `
-                <td style="font-weight: bold;">TOTALS</td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td class="total-cell" id="grand-total-units">${grandTotalUnits}</td>
-                <td class="cost-cell" id="grand-total-cost">${formatCurrency(grandTotalCost)}</td>
-            `;
+            let totalsHTML = '';
+            
+            if (currentUser.role === 'admin') {
+                totalsHTML = `
+                    <td style="font-weight: bold;">TOTALS</td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td class="total-cell" id="grand-total-units">${grandTotalUnits}</td>
+                    <td class="cost-cell" id="grand-total-cost">${formatCurrency(grandTotalCost)}</td>
+                `;
+            } else {
+                totalsHTML = `
+                    <td style="font-weight: bold;">TOTALS</td>
+                    <td></td>
+                    <td></td>
+                    <td class="total-cell" id="grand-total-units">${grandTotalUnits}</td>
+                `;
+            }
 
             // Calculate daily totals
             for (let day = 1; day <= 31; day++) {
@@ -2157,7 +2524,6 @@
                         <td>${formatMonthForDisplay(patient.month)}</td>
                         <td>${patient.facility_name || 'Unknown'}</td>
                         <td>${patient.total_units || 0}</td>
-                        <td>${formatDate(patient.updated_at)}</td>
                     `;
                 }
                 
