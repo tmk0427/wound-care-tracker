@@ -941,9 +941,9 @@ app.get('/', (req, res) => {
 
     <script>
         // Global variables and application state
-        let currentUser = null;
-        let authToken = localStorage.getItem('authToken');
-        let appData = {
+        var currentUser = null;
+        var authToken = localStorage.getItem('authToken');
+        var appData = {
             facilities: [],
             patients: [],
             supplies: [],
@@ -954,17 +954,17 @@ app.get('/', (req, res) => {
                 facility: ''
             }
         };
-        let excelData = null;
+        var excelData = null;
 
         // API Configuration
-        const API_BASE = window.location.origin + '/api';
+        var API_BASE = window.location.origin + '/api';
 
         /**
          * Utility function for making API calls with authentication
          */
-        async function apiCall(endpoint, options = {}) {
-            const url = API_BASE + endpoint;
-            const defaultOptions = {
+        function apiCall(endpoint, options) {
+            var url = API_BASE + endpoint;
+            var defaultOptions = {
                 headers: {
                     'Content-Type': 'application/json'
                 }
@@ -974,38 +974,35 @@ app.get('/', (req, res) => {
                 defaultOptions.headers['Authorization'] = 'Bearer ' + authToken;
             }
 
-            const finalOptions = Object.assign({}, defaultOptions, options);
-            if (options.body && typeof options.body === 'object') {
+            var finalOptions = Object.assign({}, defaultOptions, options || {});
+            if (options && options.body && typeof options.body === 'object') {
                 finalOptions.body = JSON.stringify(options.body);
             }
 
-            try {
-                const response = await fetch(url, finalOptions);
-
+            return fetch(url, finalOptions).then(function(response) {
                 if (response.status === 401) {
                     logout();
                     throw new Error('Authentication required');
                 }
 
-                const data = await response.json();
-
-                if (!response.ok) {
-                    throw new Error(data.error || 'Server error');
-                }
-
-                return data;
-            } catch (error) {
+                return response.json().then(function(data) {
+                    if (!response.ok) {
+                        throw new Error(data.error || 'Server error');
+                    }
+                    return data;
+                });
+            }).catch(function(error) {
                 console.error('API call failed:', error);
                 throw error;
-            }
+            });
         }
 
         /**
          * Show notification
          */
-        function showNotification(message, isError = false) {
-            const notification = document.getElementById('notification');
-            const text = document.getElementById('notificationText');
+        function showNotification(message, isError) {
+            var notification = document.getElementById('notification');
+            var text = document.getElementById('notificationText');
             
             text.textContent = message;
             notification.className = 'notification' + (isError ? ' error' : '');
@@ -1020,66 +1017,69 @@ app.get('/', (req, res) => {
          * Populate month/year dropdowns with MM-YYYY format
          */
         function populateMonthYearDropdowns() {
-            const currentDate = new Date();
-            const currentMonth = currentDate.getMonth();
-            const currentYear = currentDate.getFullYear();
+            var currentDate = new Date();
+            var currentMonth = currentDate.getMonth();
+            var currentYear = currentDate.getFullYear();
             
             // Generate months from 2 years ago to 2 years in the future
-            const months = [];
-            for (let year = currentYear - 2; year <= currentYear + 2; year++) {
-                for (let month = 0; month < 12; month++) {
-                    const monthStr = String(month + 1).padStart(2, '0');
-                    const value = monthStr + '-' + year;
-                    const label = new Date(year, month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+            var months = [];
+            for (var year = currentYear - 2; year <= currentYear + 2; year++) {
+                for (var month = 0; month < 12; month++) {
+                    var monthStr = String(month + 1).padStart(2, '0');
+                    var value = monthStr + '-' + year;
+                    var label = new Date(year, month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
                     months.push({ value: value, label: label });
                 }
             }
             
             // Sort by date (newest first for recent months)
-            months.sort((a, b) => {
-                const [aMonth, aYear] = a.value.split('-').map(Number);
-                const [bMonth, bYear] = b.value.split('-').map(Number);
-                const aDate = new Date(aYear, aMonth - 1);
-                const bDate = new Date(bYear, bMonth - 1);
+            months.sort(function(a, b) {
+                var aMonthParts = a.value.split('-').map(Number);
+                var bMonthParts = b.value.split('-').map(Number);
+                var aDate = new Date(aMonthParts[1], aMonthParts[0] - 1);
+                var bDate = new Date(bMonthParts[1], bMonthParts[0] - 1);
                 return bDate - aDate;
             });
             
             // Populate all month dropdowns
-            ['patientMonth', 'trackingMonthSelect', 'summaryMonth'].forEach(function(selectId) {
-                const select = document.getElementById(selectId);
+            var selectIds = ['patientMonth', 'trackingMonthSelect', 'summaryMonth'];
+            for (var i = 0; i < selectIds.length; i++) {
+                var selectId = selectIds[i];
+                var select = document.getElementById(selectId);
                 if (select) {
-                    const currentOption = select.querySelector('option[value=""]').textContent;
+                    var currentOption = select.querySelector('option[value=""]').textContent;
                     select.innerHTML = '<option value="">' + currentOption + '</option>';
-                    months.forEach(function(month) {
-                        const option = document.createElement('option');
+                    for (var j = 0; j < months.length; j++) {
+                        var month = months[j];
+                        var option = document.createElement('option');
                         option.value = month.value;
                         option.textContent = month.label;
                         select.appendChild(option);
-                    });
+                    }
                     
                     // Set default to current month for patient month
                     if (selectId === 'patientMonth') {
-                        const currentMonthValue = String(currentMonth + 1).padStart(2, '0') + '-' + currentYear;
+                        var currentMonthValue = String(currentMonth + 1).padStart(2, '0') + '-' + currentYear;
                         select.value = currentMonthValue;
                     }
                 }
-            });
+            }
         }
 
         /**
          * Setup user interface based on user role and permissions
          */
         function setupUserInterface() {
-            const user = currentUser;
+            var user = currentUser;
             if (!user) return;
             
-            const facilityName = user.role === 'admin' ? "All Facilities" : (user.facility_name || "User");
+            var facilityName = user.role === 'admin' ? "All Facilities" : (user.facility_name || "User");
             document.getElementById('currentUserInfo').innerHTML = 
                 '<div style="font-weight: 600;">' + (user.name || user.email) + '</div>' +
                 '<div>' + (user.role === 'admin' ? 'System Administrator' : 'User') + ' • ' + facilityName + '</div>';
 
-            const adminTabButton = document.getElementById('adminTabButton');
-            const summaryFacilityGroup = document.getElementById('summaryFacilityGroup');
+            var adminTabButton = document.getElementById('adminTabButton');
+            var summaryFacilityGroup = document.getElementById('summaryFacilityGroup');
 
             if (user.role === 'admin') {
                 adminTabButton.style.display = 'block';
@@ -1093,59 +1093,71 @@ app.get('/', (req, res) => {
         /**
          * Initialize the application
          */
-        async function initApp() {
-            try {
-                setupUserInterface();
-                populateMonthYearDropdowns();
-                await loadAllData();
-                populateSummaryFacilities();
-            } catch (error) {
-                console.error('App initialization error:', error);
-                showNotification('Failed to initialize application. Please refresh the page.', true);
-            }
+        function initApp() {
+            return new Promise(function(resolve, reject) {
+                try {
+                    setupUserInterface();
+                    populateMonthYearDropdowns();
+                    loadAllData().then(function() {
+                        populateSummaryFacilities();
+                        resolve();
+                    }).catch(reject);
+                } catch (error) {
+                    console.error('App initialization error:', error);
+                    showNotification('Failed to initialize application. Please refresh the page.', true);
+                    reject(error);
+                }
+            });
         }
 
         /**
          * Load all application data
          */
-        async function loadAllData() {
-            try {
+        function loadAllData() {
+            return new Promise(function(resolve, reject) {
                 console.log('🔄 Loading all data...');
                 
-                appData.facilities = await apiCall('/facilities');
-                appData.supplies = await apiCall('/supplies');
-                
-                // Load patients based on user permissions
-                const allPatients = await apiCall('/patients');
-                if (currentUser.role === 'admin') {
-                    appData.patients = allPatients;
-                } else if (currentUser.facility_id) {
-                    appData.patients = allPatients.filter(function(patient) {
-                        return patient.facility_id === currentUser.facility_id;
-                    });
-                } else {
-                    appData.patients = [];
-                }
-                
-                if (appData.patients && Array.isArray(appData.patients)) {
-                    appData.patients.sort(function(a, b) {
-                        const nameA = (a.name || '').toLowerCase();
-                        const nameB = (b.name || '').toLowerCase();
-                        return nameA.localeCompare(nameB);
-                    });
-                }
+                Promise.all([
+                    apiCall('/facilities'),
+                    apiCall('/supplies'),
+                    apiCall('/patients')
+                ]).then(function(results) {
+                    appData.facilities = results[0];
+                    appData.supplies = results[1];
+                    
+                    var allPatients = results[2];
+                    if (currentUser.role === 'admin') {
+                        appData.patients = allPatients;
+                    } else if (currentUser.facility_id) {
+                        appData.patients = allPatients.filter(function(patient) {
+                            return patient.facility_id === currentUser.facility_id;
+                        });
+                    } else {
+                        appData.patients = [];
+                    }
+                    
+                    if (appData.patients && Array.isArray(appData.patients)) {
+                        appData.patients.sort(function(a, b) {
+                            var nameA = (a.name || '').toLowerCase();
+                            var nameB = (b.name || '').toLowerCase();
+                            return nameA.localeCompare(nameB);
+                        });
+                    }
 
-                populatePatientFacilityDropdown();
-                populateTrackingFacilitySelector();
-                refreshPatientList();
-                refreshPatientSelect();
-                updateSummary();
-                
-                console.log('✅ Data loading complete');
-            } catch (error) {
-                console.error('Failed to load data:', error);
-                showNotification('❌ Failed to load data: ' + error.message, true);
-            }
+                    populatePatientFacilityDropdown();
+                    populateTrackingFacilitySelector();
+                    refreshPatientList();
+                    refreshPatientSelect();
+                    updateSummary();
+                    
+                    console.log('✅ Data loading complete');
+                    resolve();
+                }).catch(function(error) {
+                    console.error('Failed to load data:', error);
+                    showNotification('❌ Failed to load data: ' + error.message, true);
+                    reject(error);
+                });
+            });
         }
 
         // ========== AUTHENTICATION FUNCTIONS ==========
@@ -1154,7 +1166,10 @@ app.get('/', (req, res) => {
          * Show authentication tab (login/register)
          */
         function showAuthTab(tab, element) {
-            document.querySelectorAll('.auth-tab').forEach(function(t) { t.classList.remove('active'); });
+            var tabs = document.querySelectorAll('.auth-tab');
+            for (var i = 0; i < tabs.length; i++) {
+                tabs[i].classList.remove('active');
+            }
             element.classList.add('active');
 
             if (tab === 'login') {
@@ -1170,36 +1185,36 @@ app.get('/', (req, res) => {
         /**
          * Load facilities for registration dropdown
          */
-        async function loadFacilitiesForRegistration() {
-            try {
-                const response = await fetch(API_BASE + '/facilities/public');
-                const facilities = await response.json();
-                
-                const select = document.getElementById('registerFacility');
+        function loadFacilitiesForRegistration() {
+            fetch(API_BASE + '/facilities/public').then(function(response) {
+                return response.json();
+            }).then(function(facilities) {
+                var select = document.getElementById('registerFacility');
                 select.innerHTML = '<option value="">Select a facility (optional)</option>';
                 
-                facilities.forEach(function(facility) {
-                    const option = document.createElement('option');
+                for (var i = 0; i < facilities.length; i++) {
+                    var facility = facilities[i];
+                    var option = document.createElement('option');
                     option.value = facility.id;
                     option.textContent = facility.name;
                     select.appendChild(option);
-                });
-            } catch (error) {
+                }
+            }).catch(function(error) {
                 console.log('Could not load facilities for registration:', error);
-            }
+            });
         }
 
         /**
          * User registration
          */
-        async function register() {
-            const name = document.getElementById('registerName').value.trim();
-            const email = document.getElementById('registerEmail').value.trim();
-            const password = document.getElementById('registerPassword').value.trim();
-            const facilityId = document.getElementById('registerFacility').value;
-            const registerBtn = document.getElementById('registerBtn');
-            const errorEl = document.getElementById('registerError');
-            const successEl = document.getElementById('registerSuccess');
+        function register() {
+            var name = document.getElementById('registerName').value.trim();
+            var email = document.getElementById('registerEmail').value.trim();
+            var password = document.getElementById('registerPassword').value.trim();
+            var facilityId = document.getElementById('registerFacility').value;
+            var registerBtn = document.getElementById('registerBtn');
+            var errorEl = document.getElementById('registerError');
+            var successEl = document.getElementById('registerSuccess');
 
             errorEl.classList.add('hidden');
             successEl.classList.add('hidden');
@@ -1216,15 +1231,13 @@ app.get('/', (req, res) => {
                 return;
             }
 
-            try {
-                registerBtn.disabled = true;
-                registerBtn.innerHTML = '<span class="loading"></span>Creating Account...';
+            registerBtn.disabled = true;
+            registerBtn.innerHTML = '<span class="loading"></span>Creating Account...';
 
-                const response = await apiCall('/auth/register', {
-                    method: 'POST',
-                    body: { name: name, email: email, password: password, facilityId: facilityId || null }
-                });
-
+            apiCall('/auth/register', {
+                method: 'POST',
+                body: { name: name, email: email, password: password, facilityId: facilityId || null }
+            }).then(function(response) {
                 successEl.textContent = response.message;
                 successEl.classList.remove('hidden');
 
@@ -1237,40 +1250,37 @@ app.get('/', (req, res) => {
                     showAuthTab('login', document.querySelector('.auth-tab'));
                     document.getElementById('loginEmail').value = email;
                 }, 2000);
-
-            } catch (error) {
+            }).catch(function(error) {
                 errorEl.textContent = error.message;
                 errorEl.classList.remove('hidden');
-            } finally {
+            }).finally(function() {
                 registerBtn.disabled = false;
                 registerBtn.innerHTML = 'Create Account';
-            }
+            });
         }
 
         /**
          * User login
          */
-        async function login() {
-            const email = document.getElementById('loginEmail').value.trim();
-            const password = document.getElementById('loginPassword').value.trim();
-            const loginBtn = document.getElementById('loginBtn');
-            const loginError = document.getElementById('loginError');
+        function login() {
+            var email = document.getElementById('loginEmail').value.trim();
+            var password = document.getElementById('loginPassword').value.trim();
+            var loginBtn = document.getElementById('loginBtn');
+            var loginError = document.getElementById('loginError');
 
             if (!email || !password) {
                 showError('Please enter both email and password');
                 return;
             }
 
-            try {
-                loginBtn.disabled = true;
-                loginBtn.innerHTML = '<span class="loading"></span>Signing In...';
-                loginError.classList.add('hidden');
+            loginBtn.disabled = true;
+            loginBtn.innerHTML = '<span class="loading"></span>Signing In...';
+            loginError.classList.add('hidden');
 
-                const response = await apiCall('/auth/login', {
-                    method: 'POST',
-                    body: { email: email, password: password }
-                });
-
+            apiCall('/auth/login', {
+                method: 'POST',
+                body: { email: email, password: password }
+            }).then(function(response) {
                 authToken = response.token;
                 currentUser = response.user;
                 localStorage.setItem('authToken', authToken);
@@ -1278,13 +1288,13 @@ app.get('/', (req, res) => {
                 document.getElementById('loginContainer').style.display = 'none';
                 document.getElementById('mainApp').style.display = 'block';
 
-                await initApp();
-            } catch (error) {
+                return initApp();
+            }).catch(function(error) {
                 showError(error.message);
-            } finally {
+            }).finally(function() {
                 loginBtn.disabled = false;
                 loginBtn.innerHTML = 'Sign In';
-            }
+            });
         }
 
         /**
@@ -1305,7 +1315,7 @@ app.get('/', (req, res) => {
          * Show error message
          */
         function showError(message) {
-            const loginError = document.getElementById('loginError');
+            var loginError = document.getElementById('loginError');
             loginError.textContent = message;
             loginError.classList.remove('hidden');
             setTimeout(function() {
@@ -1327,12 +1337,12 @@ app.get('/', (req, res) => {
             document.getElementById('passwordMessage').innerHTML = '';
         }
 
-        async function changePassword() {
-            const current = document.getElementById('currentPassword').value;
-            const newPass = document.getElementById('newPassword').value;
-            const confirm = document.getElementById('confirmPassword').value;
-            const messageEl = document.getElementById('passwordMessage');
-            const changeBtn = document.getElementById('changePasswordBtn');
+        function changePassword() {
+            var current = document.getElementById('currentPassword').value;
+            var newPass = document.getElementById('newPassword').value;
+            var confirm = document.getElementById('confirmPassword').value;
+            var messageEl = document.getElementById('passwordMessage');
+            var changeBtn = document.getElementById('changePasswordBtn');
 
             if (!current || !newPass || !confirm) {
                 messageEl.innerHTML = '<div class="error-message">Please fill in all fields</div>';
@@ -1349,26 +1359,24 @@ app.get('/', (req, res) => {
                 return;
             }
 
-            try {
-                changeBtn.disabled = true;
-                changeBtn.innerHTML = '<span class="loading"></span>Changing...';
+            changeBtn.disabled = true;
+            changeBtn.innerHTML = '<span class="loading"></span>Changing...';
 
-                await apiCall('/auth/change-password', {
-                    method: 'POST',
-                    body: { currentPassword: current, newPassword: newPass }
-                });
-
+            apiCall('/auth/change-password', {
+                method: 'POST',
+                body: { currentPassword: current, newPassword: newPass }
+            }).then(function() {
                 messageEl.innerHTML = '<div class="success-message">Password changed successfully!</div>';
 
                 setTimeout(function() {
                     closeChangePasswordModal();
                 }, 2000);
-            } catch (error) {
+            }).catch(function(error) {
                 messageEl.innerHTML = '<div class="error-message">' + error.message + '</div>';
-            } finally {
+            }).finally(function() {
                 changeBtn.disabled = false;
                 changeBtn.innerHTML = 'Change Password';
-            }
+            });
         }
 
         // ========== NAVIGATION FUNCTIONS ==========
@@ -1377,16 +1385,18 @@ app.get('/', (req, res) => {
          * Show tab content
          */
         function showTab(tabName, clickedElement) {
-            document.querySelectorAll('.tab-content').forEach(function(tab) {
-                tab.classList.add('hidden');
-                tab.style.display = 'none';
-            });
+            var tabContents = document.querySelectorAll('.tab-content');
+            for (var i = 0; i < tabContents.length; i++) {
+                tabContents[i].classList.add('hidden');
+                tabContents[i].style.display = 'none';
+            }
 
-            document.querySelectorAll('.tab').forEach(function(tab) {
-                tab.classList.remove('active');
-            });
+            var tabs = document.querySelectorAll('.tab');
+            for (var i = 0; i < tabs.length; i++) {
+                tabs[i].classList.remove('active');
+            }
 
-            const targetTab = document.getElementById(tabName + 'Tab');
+            var targetTab = document.getElementById(tabName + 'Tab');
             if (targetTab) {
                 targetTab.classList.remove('hidden');
                 targetTab.style.display = 'block';
@@ -1419,26 +1429,27 @@ app.get('/', (req, res) => {
          * Populate patient facility dropdown
          */
         function populatePatientFacilityDropdown() {
-            const select = document.getElementById('patientFacility');
+            var select = document.getElementById('patientFacility');
             select.innerHTML = '<option value="">Select Facility</option>';
 
-            appData.facilities.forEach(function(facility) {
-                const option = document.createElement('option');
+            for (var i = 0; i < appData.facilities.length; i++) {
+                var facility = appData.facilities[i];
+                var option = document.createElement('option');
                 option.value = facility.id;
                 option.textContent = facility.name;
                 select.appendChild(option);
-            });
+            }
         }
 
         /**
          * Add a new patient
          */
-        async function addPatient() {
-            const name = document.getElementById('patientName').value.trim();
-            const monthInput = document.getElementById('patientMonth').value.trim();
-            const mrn = document.getElementById('mrnNumber').value.trim();
-            const facilityId = parseInt(document.getElementById('patientFacility').value);
-            const addBtn = document.getElementById('addPatientBtn');
+        function addPatient() {
+            var name = document.getElementById('patientName').value.trim();
+            var monthInput = document.getElementById('patientMonth').value.trim();
+            var mrn = document.getElementById('mrnNumber').value.trim();
+            var facilityId = parseInt(document.getElementById('patientFacility').value);
+            var addBtn = document.getElementById('addPatientBtn');
 
             if (!name || !monthInput || !facilityId) {
                 showNotification('Please fill in all required fields including facility selection', true);
@@ -1446,43 +1457,42 @@ app.get('/', (req, res) => {
             }
 
             // Convert MM-YYYY to YYYY-MM format for storage
-            const monthParts = monthInput.split('-');
+            var monthParts = monthInput.split('-');
             if (monthParts.length !== 2) {
                 showNotification('Invalid month format selected', true);
                 return;
             }
             
-            const month = monthParts[1] + '-' + monthParts[0]; // Convert to YYYY-MM
+            var month = monthParts[1] + '-' + monthParts[0]; // Convert to YYYY-MM
 
-            try {
-                addBtn.disabled = true;
-                addBtn.innerHTML = '<span class="loading"></span>Adding...';
+            addBtn.disabled = true;
+            addBtn.innerHTML = '<span class="loading"></span>Adding...';
 
-                await apiCall('/patients', {
-                    method: 'POST',
-                    body: { name: name, month: month, mrn: mrn, facilityId: facilityId }
-                });
-
+            apiCall('/patients', {
+                method: 'POST',
+                body: { name: name, month: month, mrn: mrn, facilityId: facilityId }
+            }).then(function() {
                 document.getElementById('patientName').value = '';
                 document.getElementById('mrnNumber').value = '';
                 document.getElementById('patientFacility').value = '';
                 populateMonthYearDropdowns(); // Reset month to current
 
-                await loadAllData();
+                return loadAllData();
+            }).then(function() {
                 showNotification('✅ Patient added successfully!');
-            } catch (error) {
+            }).catch(function(error) {
                 showNotification(error.message, true);
-            } finally {
+            }).finally(function() {
                 addBtn.disabled = false;
                 addBtn.innerHTML = 'Add Patient';
-            }
+            });
         }
 
         /**
          * Refresh patient list
          */
         function refreshPatientList() {
-            const tableBody = document.getElementById('patientTableBody');
+            var tableBody = document.getElementById('patientTableBody');
             
             if (!tableBody) return;
 
@@ -1493,12 +1503,13 @@ app.get('/', (req, res) => {
 
             tableBody.innerHTML = '';
 
-            appData.patients.forEach(function(patient) {
-                const row = document.createElement('tr');
+            for (var i = 0; i < appData.patients.length; i++) {
+                var patient = appData.patients[i];
+                var row = document.createElement('tr');
                 
                 // Convert YYYY-MM to MM-YYYY for display
-                const monthParts = patient.month.split('-');
-                const displayMonth = monthParts[1] + '-' + monthParts[0];
+                var monthParts = patient.month.split('-');
+                var displayMonth = monthParts[1] + '-' + monthParts[0];
                 
                 row.innerHTML = 
                     '<td>' + patient.name + '</td>' +
@@ -1512,7 +1523,7 @@ app.get('/', (req, res) => {
                     '</td>';
 
                 tableBody.appendChild(row);
-            });
+            }
         }
 
         /**
@@ -1527,18 +1538,17 @@ app.get('/', (req, res) => {
         /**
          * Remove a patient
          */
-        async function removePatient(patientId) {
+        function removePatient(patientId) {
             if (confirm('Are you sure you want to remove this patient and all tracking data?')) {
-                try {
-                    await apiCall('/patients/' + patientId, {
-                        method: 'DELETE'
-                    });
-
-                    await loadAllData();
+                apiCall('/patients/' + patientId, {
+                    method: 'DELETE'
+                }).then(function() {
+                    return loadAllData();
+                }).then(function() {
                     showNotification('✅ Patient removed successfully!');
-                } catch (error) {
+                }).catch(function(error) {
                     showNotification('Failed to remove patient: ' + error.message, true);
-                }
+                });
             }
         }
 
@@ -1548,14 +1558,14 @@ app.get('/', (req, res) => {
          * Download Excel template for patient import
          */
         function downloadExcelTemplate() {
-            const worksheet = XLSX.utils.aoa_to_sheet([
+            var worksheet = XLSX.utils.aoa_to_sheet([
                 ['Name', 'Month', 'MRN', 'Facility'],
                 ['Smith, John', '12-2024', 'MRN12345', 'Main Hospital'],
                 ['Doe, Jane', '12-2024', 'MRN67890', 'Main Hospital'],
                 ['Johnson, Bob', '12-2024', '', 'Main Hospital']
             ]);
 
-            const workbook = XLSX.utils.book_new();
+            var workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, 'Patients');
             XLSX.writeFile(workbook, 'patient_import_template.xlsx');
         }
@@ -1589,13 +1599,13 @@ app.get('/', (req, res) => {
                 return;
             }
 
-            const reader = new FileReader();
+            var reader = new FileReader();
             reader.onload = function(e) {
                 try {
-                    const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const sheetName = workbook.SheetNames[0];
-                    const worksheet = workbook.Sheets[sheetName];
+                    var data = new Uint8Array(e.target.result);
+                    var workbook = XLSX.read(data, { type: 'array' });
+                    var sheetName = workbook.SheetNames[0];
+                    var worksheet = workbook.Sheets[sheetName];
                     excelData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
                     showExcelPreview(excelData, file.name);
@@ -1612,7 +1622,7 @@ app.get('/', (req, res) => {
          * Show Excel file preview
          */
         function showExcelPreview(data, fileName) {
-            const resultsDiv = document.getElementById('importResults');
+            var resultsDiv = document.getElementById('importResults');
             
             if (data.length < 2) {
                 resultsDiv.innerHTML = '<p style="color: #e53e3e;"><strong>Error:</strong> Excel file must contain at least a header row and one data row.</p>';
@@ -1620,10 +1630,10 @@ app.get('/', (req, res) => {
                 return;
             }
 
-            const headers = data[0];
-            const dataRows = data.slice(1);
+            var headers = data[0];
+            var dataRows = data.slice(1);
 
-            let html = '<h4>📄 File Preview: ' + fileName + '</h4>';
+            var html = '<h4>📄 File Preview: ' + fileName + '</h4>';
             html += '<p><strong>Rows to import:</strong> ' + dataRows.length + '</p>';
             html += '<p><strong>Columns found:</strong> ' + headers.join(', ') + '</p>';
 
@@ -1634,78 +1644,75 @@ app.get('/', (req, res) => {
         /**
          * Process Excel import
          */
-        async function processExcelImport() {
-            const processBtn = document.getElementById('processImportBtn');
-            const resultsDiv = document.getElementById('importResults');
+        function processExcelImport() {
+            var processBtn = document.getElementById('processImportBtn');
+            var resultsDiv = document.getElementById('importResults');
 
             if (!excelData) {
                 showNotification('No Excel data to process', true);
                 return;
             }
 
-            try {
-                processBtn.disabled = true;
-                processBtn.innerHTML = '<span class="loading"></span>Processing...';
+            processBtn.disabled = true;
+            processBtn.innerHTML = '<span class="loading"></span>Processing...';
 
-                const worksheet = XLSX.utils.aoa_to_sheet(excelData);
-                const workbook = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(workbook, worksheet, 'Patients');
-                const excelBuffer = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' });
+            var worksheet = XLSX.utils.aoa_to_sheet(excelData);
+            var workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Patients');
+            var excelBuffer = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' });
 
-                const formData = new FormData();
-                const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-                formData.append('excelFile', blob, 'patients.xlsx');
+            var formData = new FormData();
+            var blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            formData.append('excelFile', blob, 'patients.xlsx');
 
-                const response = await fetch(API_BASE + '/patients/import-excel', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': 'Bearer ' + authToken
-                    },
-                    body: formData
+            fetch(API_BASE + '/patients/import-excel', {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + authToken
+                },
+                body: formData
+            }).then(function(response) {
+                return response.json().then(function(result) {
+                    if (!response.ok) {
+                        throw new Error(result.error || 'Import failed');
+                    }
+                    return result;
                 });
-
-                const result = await response.json();
-
-                if (!response.ok) {
-                    throw new Error(result.error || 'Import failed');
-                }
-
-                let resultsHtml = '<h4 style="color: #38a169;">✅ Import Complete</h4><p>' + result.message + '</p>';
+            }).then(function(result) {
+                var resultsHtml = '<h4 style="color: #38a169;">✅ Import Complete</h4><p>' + result.message + '</p>';
                 
                 if (result.results && result.results.success && result.results.success.length > 0) {
                     resultsHtml += '<h5 style="color: #38a169; margin-top: 15px;">Successfully Added:</h5><ul>';
-                    result.results.success.forEach(function(msg) {
-                        resultsHtml += '<li style="color: #38a169;">' + msg + '</li>';
-                    });
+                    for (var i = 0; i < result.results.success.length; i++) {
+                        resultsHtml += '<li style="color: #38a169;">' + result.results.success[i] + '</li>';
+                    }
                     resultsHtml += '</ul>';
                 }
 
                 if (result.results && result.results.errors && result.results.errors.length > 0) {
                     resultsHtml += '<h5 style="color: #e53e3e; margin-top: 15px;">Errors:</h5><ul>';
-                    result.results.errors.forEach(function(msg) {
-                        resultsHtml += '<li style="color: #e53e3e;">' + msg + '</li>';
-                    });
+                    for (var i = 0; i < result.results.errors.length; i++) {
+                        resultsHtml += '<li style="color: #e53e3e;">' + result.results.errors[i] + '</li>';
+                    }
                     resultsHtml += '</ul>';
                 }
 
                 resultsDiv.innerHTML = resultsHtml;
                 resultsDiv.style.display = 'block';
 
-                await loadAllData();
-
-                if (!result.results || !result.results.errors || result.results.errors.length === 0) {
-                    setTimeout(function() {
-                        closeExcelImportModal();
-                    }, 3000);
-                }
-
-            } catch (error) {
+                return loadAllData();
+            }).then(function() {
+                // Auto-close modal after successful import
+                setTimeout(function() {
+                    closeExcelImportModal();
+                }, 3000);
+            }).catch(function(error) {
                 resultsDiv.innerHTML = '<h4 style="color: #e53e3e;">❌ Import Failed</h4><p style="color: #e53e3e;">' + error.message + '</p>';
                 resultsDiv.style.display = 'block';
-            } finally {
+            }).finally(function() {
                 processBtn.disabled = false;
                 processBtn.innerHTML = 'Import Data';
-            }
+            });
         }
 
         // ========== SUPPLY TRACKING FUNCTIONS ==========
@@ -1714,17 +1721,18 @@ app.get('/', (req, res) => {
          * Populate tracking facility selector
          */
         function populateTrackingFacilitySelector() {
-            const select = document.getElementById('trackingFacilitySelect');
+            var select = document.getElementById('trackingFacilitySelect');
             if (!select) return;
             
             select.innerHTML = '<option value="">All Facilities</option>';
 
-            appData.facilities.forEach(function(facility) {
-                const option = document.createElement('option');
+            for (var i = 0; i < appData.facilities.length; i++) {
+                var facility = appData.facilities[i];
+                var option = document.createElement('option');
                 option.value = facility.id;
                 option.textContent = facility.name;
                 select.appendChild(option);
-            });
+            }
 
             select.addEventListener('change', function() {
                 updateTrackingFilters();
@@ -1735,13 +1743,13 @@ app.get('/', (req, res) => {
          * Update tracking filters
          */
         function updateTrackingFilters() {
-            const facilitySelect = document.getElementById('trackingFacilitySelect');
-            const monthSelect = document.getElementById('trackingMonthSelect');
+            var facilitySelect = document.getElementById('trackingFacilitySelect');
+            var monthSelect = document.getElementById('trackingMonthSelect');
             
             if (!facilitySelect || !monthSelect) return;
             
-            const selectedFacilityId = facilitySelect.value;
-            const selectedMonth = monthSelect.value;
+            var selectedFacilityId = facilitySelect.value;
+            var selectedMonth = monthSelect.value;
             
             updateFilteredPatientSelect(selectedFacilityId, selectedMonth);
         }
@@ -1750,7 +1758,7 @@ app.get('/', (req, res) => {
          * Get filtered tracking patients
          */
         function getFilteredTrackingPatients(facilityId, monthFilter) {
-            let filteredPatients = appData.patients.slice();
+            var filteredPatients = appData.patients.slice();
             
             if (facilityId) {
                 filteredPatients = filteredPatients.filter(function(patient) {
@@ -1759,16 +1767,16 @@ app.get('/', (req, res) => {
             }
             
             if (monthFilter) {
-                const monthParts = monthFilter.split('-');
-                const storageFormat = monthParts[1] + '-' + monthParts[0];
+                var monthParts = monthFilter.split('-');
+                var storageFormat = monthParts[1] + '-' + monthParts[0];
                 filteredPatients = filteredPatients.filter(function(patient) {
                     return patient.month === storageFormat;
                 });
             }
             
             filteredPatients.sort(function(a, b) {
-                const nameA = (a.name || '').toLowerCase();
-                const nameB = (b.name || '').toLowerCase();
+                var nameA = (a.name || '').toLowerCase();
+                var nameB = (b.name || '').toLowerCase();
                 return nameA.localeCompare(nameB);
             });
             
@@ -1779,30 +1787,31 @@ app.get('/', (req, res) => {
          * Update filtered patient select dropdown
          */
         function updateFilteredPatientSelect(facilityId, monthFilter) {
-            const select = document.getElementById('patientSelect');
+            var select = document.getElementById('patientSelect');
             if (!select) return;
             
             select.innerHTML = '<option value="">Select Patient</option>';
             
-            const filteredPatients = getFilteredTrackingPatients(facilityId, monthFilter);
+            var filteredPatients = getFilteredTrackingPatients(facilityId, monthFilter);
             
             if (filteredPatients.length === 0) {
                 select.innerHTML = '<option value="">No patients match selected filters</option>';
                 return;
             }
 
-            filteredPatients.forEach(function(patient) {
-                const option = document.createElement('option');
+            for (var i = 0; i < filteredPatients.length; i++) {
+                var patient = filteredPatients[i];
+                var option = document.createElement('option');
                 option.value = patient.id;
 
-                const monthParts = patient.month.split('-');
-                const displayMonth = monthParts[1] + '-' + monthParts[0];
+                var monthParts = patient.month.split('-');
+                var displayMonth = monthParts[1] + '-' + monthParts[0];
 
                 option.textContent = patient.name + ' (' + displayMonth + ') - ' + (patient.facility_name || 'Unknown Facility');
                 select.appendChild(option);
-            });
+            }
 
-            const trackingContent = document.getElementById('trackingContent');
+            var trackingContent = document.getElementById('trackingContent');
             if (trackingContent) {
                 trackingContent.innerHTML = '<p style="text-align: center; color: #718096; font-size: 18px; margin-top: 100px;">Please select a patient from the filtered list to begin tracking supplies</p>';
             }
@@ -1814,7 +1823,7 @@ app.get('/', (req, res) => {
         function refreshPatientSelect() {
             populateTrackingFacilitySelector();
             
-            const monthSelect = document.getElementById('trackingMonthSelect');
+            var monthSelect = document.getElementById('trackingMonthSelect');
             if (monthSelect) {
                 monthSelect.addEventListener('change', function() {
                     updateTrackingFilters();
@@ -1823,7 +1832,7 @@ app.get('/', (req, res) => {
             
             updateTrackingFilters();
             
-            const patientSelect = document.getElementById('patientSelect');
+            var patientSelect = document.getElementById('patientSelect');
             if (patientSelect) {
                 patientSelect.removeEventListener('change', loadPatientTracking);
                 patientSelect.addEventListener('change', loadPatientTracking);
@@ -1833,25 +1842,24 @@ app.get('/', (req, res) => {
         /**
          * Load patient tracking data
          */
-        async function loadPatientTracking() {
-            const patientId = document.getElementById('patientSelect').value;
-            const container = document.getElementById('trackingContent');
+        function loadPatientTracking() {
+            var patientId = document.getElementById('patientSelect').value;
+            var container = document.getElementById('trackingContent');
 
             if (!patientId) {
                 container.innerHTML = '<p style="text-align: center; color: #718096; font-size: 18px; margin-top: 100px;">Please select a patient to begin tracking supplies</p>';
                 return;
             }
 
-            try {
-                const patient = appData.patients.find(function(p) { return p.id == patientId; });
-                if (!patient) {
-                    throw new Error('Patient not found');
-                }
+            var patient = appData.patients.find(function(p) { return p.id == patientId; });
+            if (!patient) {
+                container.innerHTML = '<div style="text-align: center; margin-top: 50px; padding: 20px; background: #fed7d7; border-radius: 10px; border-left: 4px solid #e53e3e;"><p style="color: #c53030; font-size: 16px; margin: 0;">Patient not found</p></div>';
+                return;
+            }
 
-                container.innerHTML = '<p style="text-align: center; color: #667eea; font-size: 18px; margin-top: 100px;">Loading tracking data...</p>';
+            container.innerHTML = '<p style="text-align: center; color: #667eea; font-size: 18px; margin-top: 100px;">Loading tracking data...</p>';
 
-                const trackingData = await apiCall('/patients/' + patientId + '/tracking');
-                
+            apiCall('/patients/' + patientId + '/tracking').then(function(trackingData) {
                 container.innerHTML = 
                     '<div style="text-align: center; margin-top: 50px; padding: 40px; background: #f0f4ff; border-radius: 15px; border-left: 4px solid #667eea;">' +
                     '<h3 style="color: #667eea; margin-bottom: 20px;">🏗️ Supply Tracking Interface</h3>' +
@@ -1861,18 +1869,17 @@ app.get('/', (req, res) => {
                     '<p style="color: #718096;">Advanced supply tracking interface will be implemented here.</p>' +
                     '<p style="color: #718096; margin-top: 10px;">This will include day-by-day supply usage tracking, wound diagnoses, and cost calculations.</p>' +
                     '</div>';
-                
-            } catch (error) {
+            }).catch(function(error) {
                 console.error('Failed to load tracking data:', error);
                 
-                let errorMessage = 'Failed to load tracking data: ' + error.message;
+                var errorMessage = 'Failed to load tracking data: ' + error.message;
                 
-                if (error.message.includes('Access denied') || error.message.includes('Unauthorized')) {
+                if (error.message.indexOf('Access denied') !== -1 || error.message.indexOf('Unauthorized') !== -1) {
                     errorMessage = '❌ Access Denied: You may not have permission to view this patient\'s data.';
                 }
                 
                 container.innerHTML = '<div style="text-align: center; margin-top: 50px; padding: 20px; background: #fed7d7; border-radius: 10px; border-left: 4px solid #e53e3e;"><p style="color: #c53030; font-size: 16px; margin: 0;">' + errorMessage + '</p></div>';
-            }
+            });
         }
 
         // ========== SUMMARY REPORT FUNCTIONS ==========
@@ -1881,25 +1888,26 @@ app.get('/', (req, res) => {
          * Populate summary facilities dropdown
          */
         function populateSummaryFacilities() {
-            const select = document.getElementById('summaryFacility');
+            var select = document.getElementById('summaryFacility');
             if (!select) return;
             
             select.innerHTML = '<option value="">All Facilities</option>';
 
-            appData.facilities.forEach(function(facility) {
-                const option = document.createElement('option');
+            for (var i = 0; i < appData.facilities.length; i++) {
+                var facility = appData.facilities[i];
+                var option = document.createElement('option');
                 option.value = facility.id;
                 option.textContent = facility.name;
                 select.appendChild(option);
-            });
+            }
         }
 
         /**
          * Apply summary filters
          */
         function applySummaryFilters() {
-            const month = document.getElementById('summaryMonth').value;
-            const facility = document.getElementById('summaryFacility').value;
+            var month = document.getElementById('summaryMonth').value;
+            var facility = document.getElementById('summaryFacility') ? document.getElementById('summaryFacility').value : '';
 
             appData.currentFilters.month = month;
             appData.currentFilters.facility = facility;
@@ -1926,11 +1934,11 @@ app.get('/', (req, res) => {
          * Get filtered patients for summary
          */
         function getFilteredPatients() {
-            let filteredPatients = appData.patients.slice();
+            var filteredPatients = appData.patients.slice();
 
             if (appData.currentFilters.month) {
-                const monthParts = appData.currentFilters.month.split('-');
-                const storageFormat = monthParts[1] + '-' + monthParts[0];
+                var monthParts = appData.currentFilters.month.split('-');
+                var storageFormat = monthParts[1] + '-' + monthParts[0];
                 filteredPatients = filteredPatients.filter(function(patient) { 
                     return patient.month === storageFormat; 
                 });
@@ -1948,9 +1956,9 @@ app.get('/', (req, res) => {
         /**
          * Update summary data
          */
-        async function updateSummary() {
+        function updateSummary() {
             try {
-                const filteredPatients = getFilteredPatients();
+                var filteredPatients = getFilteredPatients();
 
                 document.getElementById('totalPatients').textContent = filteredPatients.length;
                 document.getElementById('totalUnits').textContent = '0';
@@ -1967,23 +1975,24 @@ app.get('/', (req, res) => {
         /**
          * Update summary table
          */
-        async function updateSummaryTable(patients) {
-            const tbody = document.getElementById('summaryTableBody');
+        function updateSummaryTable(patients) {
+            var tbody = document.getElementById('summaryTableBody');
             tbody.innerHTML = '';
 
-            const patientsToShow = patients || getFilteredPatients();
+            var patientsToShow = patients || getFilteredPatients();
 
             if (patientsToShow.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #718096;">No patients to display</td></tr>';
                 return;
             }
 
-            patientsToShow.forEach(function(patient) {
-                const monthParts = patient.month.split('-');
-                const displayMonth = monthParts[1] + '-' + monthParts[0];
-                const lastUpdated = new Date(patient.updated_at).toLocaleDateString();
+            for (var i = 0; i < patientsToShow.length; i++) {
+                var patient = patientsToShow[i];
+                var monthParts = patient.month.split('-');
+                var displayMonth = monthParts[1] + '-' + monthParts[0];
+                var lastUpdated = new Date(patient.updated_at).toLocaleDateString();
 
-                const row = document.createElement('tr');
+                var row = document.createElement('tr');
                 row.innerHTML = 
                     '<td>' + patient.name + '</td>' +
                     '<td>' + displayMonth + '</td>' +
@@ -1991,36 +2000,37 @@ app.get('/', (req, res) => {
                     '<td>' + (patient.facility_name || 'Unknown') + '</td>' +
                     '<td>' + lastUpdated + '</td>';
                 tbody.appendChild(row);
-            });
+            }
         }
 
         /**
          * Download user report
          */
-        async function downloadUserReport() {
+        function downloadUserReport() {
             try {
                 showNotification('📄 Generating report...');
                 
-                const filteredPatients = getFilteredPatients();
-                const reportData = [];
+                var filteredPatients = getFilteredPatients();
+                var reportData = [];
                 
-                let fileName = 'Supply_Report';
+                var fileName = 'Supply_Report';
                 if (appData.currentFilters.month) {
-                    const monthParts = appData.currentFilters.month.split('-');
-                    const monthName = new Date(monthParts[1], monthParts[0] - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                    var monthParts = appData.currentFilters.month.split('-');
+                    var monthName = new Date(monthParts[1], monthParts[0] - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
                     fileName = 'Supply_Report_' + monthName.replace(' ', '_');
                 }
                 
-                const header = ['Patient Name', 'MRN', 'Month/Year', 'Facility', 'Last Updated'];
+                var header = ['Patient Name', 'MRN', 'Month/Year', 'Facility', 'Last Updated'];
                 
                 reportData.push(['WOUND CARE SUPPLY REPORT - Generated ' + new Date().toLocaleDateString()]);
                 reportData.push(header);
                 
-                filteredPatients.forEach(function(patient) {
-                    const monthParts = patient.month.split('-');
-                    const displayMonth = monthParts[1] + '-' + monthParts[0];
+                for (var i = 0; i < filteredPatients.length; i++) {
+                    var patient = filteredPatients[i];
+                    var monthParts = patient.month.split('-');
+                    var displayMonth = monthParts[1] + '-' + monthParts[0];
                     
-                    const row = [
+                    var row = [
                         patient.name || 'Unknown',
                         patient.mrn || 'N/A',
                         displayMonth,
@@ -2029,10 +2039,10 @@ app.get('/', (req, res) => {
                     ];
                     
                     reportData.push(row);
-                });
+                }
 
-                const worksheet = XLSX.utils.aoa_to_sheet(reportData);
-                const workbook = XLSX.utils.book_new();
+                var worksheet = XLSX.utils.aoa_to_sheet(reportData);
+                var workbook = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(workbook, worksheet, 'Report');
                 
                 XLSX.writeFile(workbook, fileName + '.xlsx');
@@ -2050,12 +2060,10 @@ app.get('/', (req, res) => {
         /**
          * Load admin data
          */
-        async function loadAdminData() {
+        function loadAdminData() {
             if (!currentUser || currentUser.role !== 'admin') return;
 
-            try {
-                const stats = await apiCall('/statistics');
-                
+            apiCall('/statistics').then(function(stats) {
                 document.getElementById('totalUsersCount').textContent = stats.totalUsers;
                 document.getElementById('pendingUsersCount').textContent = stats.pendingUsers;
                 document.getElementById('totalPatientsCount').textContent = stats.totalPatients;
@@ -2063,17 +2071,17 @@ app.get('/', (req, res) => {
                 document.getElementById('totalSuppliesCount').textContent = stats.totalSupplies;
                 
                 loadFacilitiesList();
-            } catch (error) {
+            }).catch(function(error) {
                 console.error('Failed to load admin data:', error);
-            }
+            });
         }
 
         /**
          * Load facilities list for admin
          */
-        async function loadFacilitiesList() {
+        function loadFacilitiesList() {
             try {
-                const facilitiesList = document.getElementById('facilitiesList');
+                var facilitiesList = document.getElementById('facilitiesList');
                 if (!facilitiesList) return;
                 
                 if (appData.facilities.length === 0) {
@@ -2081,13 +2089,14 @@ app.get('/', (req, res) => {
                     return;
                 }
                 
-                let html = '';
-                appData.facilities.forEach(function(facility) {
+                var html = '';
+                for (var i = 0; i < appData.facilities.length; i++) {
+                    var facility = appData.facilities[i];
                     html += '<div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #e2e8f0;">';
                     html += '<span>' + facility.name + '</span>';
                     html += '<button class="btn btn-danger btn-sm" onclick="deleteFacility(' + facility.id + ')">Delete</button>';
                     html += '</div>';
-                });
+                }
                 
                 facilitiesList.innerHTML = html;
             } catch (error) {
@@ -2098,48 +2107,46 @@ app.get('/', (req, res) => {
         /**
          * Add facility
          */
-        async function addFacility() {
-            const name = document.getElementById('newFacilityName').value.trim();
+        function addFacility() {
+            var name = document.getElementById('newFacilityName').value.trim();
             
             if (!name) {
                 showNotification('Please enter a facility name', true);
                 return;
             }
             
-            try {
-                await apiCall('/facilities', {
-                    method: 'POST',
-                    body: { name: name }
-                });
-                
+            apiCall('/facilities', {
+                method: 'POST',
+                body: { name: name }
+            }).then(function() {
                 document.getElementById('newFacilityName').value = '';
-                await loadAllData();
+                return loadAllData();
+            }).then(function() {
                 loadAdminData();
                 showNotification('✅ Facility added successfully!');
-            } catch (error) {
+            }).catch(function(error) {
                 showNotification('Failed to add facility: ' + error.message, true);
-            }
+            });
         }
 
         /**
          * Delete facility
          */
-        async function deleteFacility(facilityId) {
+        function deleteFacility(facilityId) {
             if (!confirm('Are you sure you want to delete this facility? This action cannot be undone.')) {
                 return;
             }
             
-            try {
-                await apiCall('/facilities/' + facilityId, {
-                    method: 'DELETE'
-                });
-                
-                await loadAllData();
+            apiCall('/facilities/' + facilityId, {
+                method: 'DELETE'
+            }).then(function() {
+                return loadAllData();
+            }).then(function() {
                 loadAdminData();
                 showNotification('✅ Facility deleted successfully!');
-            } catch (error) {
+            }).catch(function(error) {
                 showNotification('Failed to delete facility: ' + error.message, true);
-            }
+            });
         }
 
         /**
@@ -2154,12 +2161,11 @@ app.get('/', (req, res) => {
         /**
          * Check for existing auth token on page load
          */
-        window.addEventListener('DOMContentLoaded', async function() {
+        window.addEventListener('DOMContentLoaded', function() {
             if (authToken) {
-                try {
-                    console.log('🔍 Checking stored auth token...');
-                    
-                    const response = await apiCall('/auth/verify');
+                console.log('🔍 Checking stored auth token...');
+                
+                apiCall('/auth/verify').then(function(response) {
                     currentUser = response.user;
                     
                     console.log('✅ Token valid, auto-logging in user:', currentUser.email);
@@ -2167,13 +2173,13 @@ app.get('/', (req, res) => {
                     document.getElementById('loginContainer').style.display = 'none';
                     document.getElementById('mainApp').style.display = 'block';
                     
-                    await initApp();
-                } catch (error) {
+                    return initApp();
+                }).catch(function(error) {
                     console.log('❌ Stored token invalid, showing login');
                     localStorage.removeItem('authToken');
                     authToken = null;
                     currentUser = null;
-                }
+                });
             } else {
                 console.log('🔓 No stored token, showing login screen');
             }
@@ -2183,17 +2189,18 @@ app.get('/', (req, res) => {
          * Handle Enter key for login
          */
         document.addEventListener('DOMContentLoaded', function() {
-            const loginEmail = document.getElementById('loginEmail');
-            const loginPassword = document.getElementById('loginPassword');
+            var loginEmail = document.getElementById('loginEmail');
+            var loginPassword = document.getElementById('loginPassword');
             
             if (loginEmail && loginPassword) {
-                [loginEmail, loginPassword].forEach(function(input) {
-                    input.addEventListener('keypress', function(e) {
+                var inputs = [loginEmail, loginPassword];
+                for (var i = 0; i < inputs.length; i++) {
+                    inputs[i].addEventListener('keypress', function(e) {
                         if (e.key === 'Enter') {
                             login();
                         }
                     });
-                });
+                }
             }
         });
     </script>
