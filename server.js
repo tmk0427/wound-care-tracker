@@ -32,10 +32,21 @@ const pool = new Pool({
     max: 10
 });
 
-// Rate limiting
+// Trust proxy for Heroku
+app.set('trust proxy', 1);
+
+// Rate limiting - configured for Heroku
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 100
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // limit each IP to 100 requests per windowMs
+    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+    legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+    // Skip successful requests (optional)
+    skipSuccessfulRequests: false,
+    // Key generator for Heroku
+    keyGenerator: (req) => {
+        return req.ip || req.connection.remoteAddress || 'unknown';
+    }
 });
 
 // Middleware
