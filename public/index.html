@@ -1,452 +1,383 @@
-require('dotenv').config();
-const express = require('express');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const { Pool } = require('pg');
-const multer = require('multer');
-const XLSX = require('xlsx');
-const rateLimit = require('express-rate-limit');
-const path = require('path');
-
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-// Database connection
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-});
-
-// Trust proxy for Heroku
-app.set('trust proxy', 1);
-
-// Rate limiting
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // limit each IP to 100 requests per windowMs
-    trustProxy: true, // Trust X-Forwarded-For headers
-    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-    legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-});
-
-// Middleware
-app.use(limiter);
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-
-// Serve static files from public directory
-app.use(express.static('public'));
-
-// JWT Secret
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
-
-// Middleware to verify JWT token
-const authenticateToken = (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-
-    if (!token) {
-        return res.status(401).json({ error: 'Access token required' });
-    }
-
-    jwt.verify(token, JWT_SECRET, (err, user) => {
-        if (err) {
-            return res.status(403).json({ error: 'Invalid or expired token' });
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wound Care RT Supply Tracker</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-        req.user = user;
-        next();
-    });
-};
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 800px;
+            margin: 20px;
+        }
+        
+        h1 {
+            color: #2d3748;
+            margin-bottom: 1.5rem;
+            text-align: center;
+        }
+        
+        .status {
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 8px;
+            display: none;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #4a5568;
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.2s;
+        }
+        
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+            width: 100%;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .dashboard {
+            display: none;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+        
+        .stat-label {
+            opacity: 0.9;
+        }
+        
+        .user-info {
+            background: #f7fafc;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .btn-logout {
+            background: #e53e3e;
+            width: auto;
+        }
+        
+        .test-section {
+            margin-top: 2rem;
+            padding: 1rem;
+            background: #f7fafc;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏥 Wound Care RT Supply Tracker</h1>
+        
+        <div id="status" class="status"></div>
+        
+        <!-- Login Form -->
+        <div id="loginForm">
+            <div class="form-group">
+                <label for="email">Email Address</label>
+                <input type="email" id="email" value="admin@system.com" placeholder="Enter your email">
+            </div>
+            
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" value="admin123" placeholder="Enter your password">
+            </div>
+            
+            <button class="btn" onclick="login()" id="loginBtn">Sign In</button>
+            
+            <div class="test-section">
+                <h3>🧪 API Test</h3>
+                <button class="btn" onclick="testAPI()" style="margin-top: 10px;">Test Database Connection</button>
+                <div id="testResults" style="margin-top: 10px; padding: 10px; background: white; border-radius: 4px; display: none;"></div>
+            </div>
+        </div>
+        
+        <!-- Dashboard (shown after login) -->
+        <div id="dashboard" class="dashboard">
+            <div class="user-info">
+                <div>
+                    <strong>Welcome, <span id="userName"></span>!</strong>
+                    <div style="color: #718096; font-size: 0.9rem;" id="userRole"></div>
+                </div>
+                <button class="btn btn-logout" onclick="logout()">Logout</button>
+            </div>
+            
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalPatients">0</div>
+                    <div class="stat-label">Total Patients</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-value" id="totalSupplies">0</div>
+                    <div class="stat-label">Total Supplies</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-value" id="totalFacilities">0</div>
+                    <div class="stat-label">Total Facilities</div>
+                </div>
+            </div>
+            
+            <div style="text-align: center; color: #718096;">
+                <p>✅ System is working! Your database connection is successful.</p>
+                <p>Ready for enhanced features to be added.</p>
+            </div>
+        </div>
+    </div>
 
-// ===== AUTHENTICATION ROUTES =====
+    <script>
+        let currentUser = null;
+        let authToken = localStorage.getItem('authToken');
 
-// Register new user
-app.post('/api/auth/register', async (req, res) => {
-    try {
-        const { name, email, password, facilityId } = req.body;
-
-        if (!name || !email || !password) {
-            return res.status(400).json({ error: 'Name, email, and password are required' });
+        function showStatus(message, isError = false) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = `status ${isError ? 'error' : 'success'}`;
+            status.style.display = 'block';
+            
+            setTimeout(() => {
+                status.style.display = 'none';
+            }, 4000);
         }
 
-        if (password.length < 6) {
-            return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+        async function apiCall(endpoint, options = {}) {
+            const url = `/api${endpoint}`;
+            const config = {
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(authToken && { 'Authorization': `Bearer ${authToken}` })
+                },
+                ...options
+            };
+
+            if (options.body) {
+                config.body = JSON.stringify(options.body);
+            }
+
+            const response = await fetch(url, config);
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.error || 'Request failed');
+            }
+            
+            return data;
         }
 
-        // Check if user already exists
-        const existingUser = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
-        if (existingUser.rows.length > 0) {
-            return res.status(400).json({ error: 'User with this email already exists' });
+        async function testAPI() {
+            const testResults = document.getElementById('testResults');
+            testResults.style.display = 'block';
+            testResults.innerHTML = 'Testing API connection...';
+            
+            try {
+                const facilities = await fetch('/api/facilities/public');
+                const data = await facilities.json();
+                
+                testResults.innerHTML = `
+                    <strong>✅ API Test Successful!</strong><br>
+                    Found ${data.length} facilities in database<br>
+                    <small>Database connection is working properly</small>
+                `;
+            } catch (error) {
+                testResults.innerHTML = `
+                    <strong>❌ API Test Failed</strong><br>
+                    Error: ${error.message}
+                `;
+            }
         }
 
-        // Hash password
-        const saltRounds = 12;
-        const hashedPassword = await bcrypt.hash(password, saltRounds);
+        async function login() {
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value.trim();
+            const loginBtn = document.getElementById('loginBtn');
 
-        // Insert user
-        const result = await pool.query(
-            'INSERT INTO users (name, email, password, facility_id, is_approved) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, email, role, facility_id, is_approved',
-            [name, email, hashedPassword, facilityId || null, false] // Users need approval by default
-        );
+            if (!email || !password) {
+                showStatus('Please enter both email and password', true);
+                return;
+            }
 
-        res.status(201).json({
-            message: 'User registered successfully. Please wait for admin approval.',
-            user: result.rows[0]
+            loginBtn.disabled = true;
+            loginBtn.textContent = 'Signing in...';
+
+            try {
+                const response = await apiCall('/auth/login', {
+                    method: 'POST',
+                    body: { email, password }
+                });
+
+                authToken = response.token;
+                currentUser = response.user;
+                localStorage.setItem('authToken', authToken);
+
+                document.getElementById('loginForm').style.display = 'none';
+                document.getElementById('dashboard').style.display = 'block';
+                
+                document.getElementById('userName').textContent = currentUser.name;
+                document.getElementById('userRole').textContent = 
+                    `${currentUser.role === 'admin' ? 'Administrator' : 'User'} • ${currentUser.facility_name || 'All Facilities'}`;
+
+                showStatus('🎉 Login successful! Welcome to your wound care tracker.');
+                loadDashboardData();
+
+            } catch (error) {
+                showStatus(error.message, true);
+            } finally {
+                loginBtn.disabled = false;
+                loginBtn.textContent = 'Sign In';
+            }
+        }
+
+        async function loadDashboardData() {
+            try {
+                const [patients, supplies, facilities] = await Promise.all([
+                    apiCall('/patients'),
+                    apiCall('/supplies'),
+                    apiCall('/facilities')
+                ]);
+
+                document.getElementById('totalPatients').textContent = patients.length;
+                document.getElementById('totalSupplies').textContent = supplies.length;
+                document.getElementById('totalFacilities').textContent = facilities.length;
+
+            } catch (error) {
+                showStatus('Could not load some dashboard data', true);
+                console.error('Dashboard load error:', error);
+            }
+        }
+
+        function logout() {
+            authToken = null;
+            currentUser = null;
+            localStorage.removeItem('authToken');
+            
+            document.getElementById('loginForm').style.display = 'block';
+            document.getElementById('dashboard').style.display = 'none';
+            document.getElementById('email').value = 'admin@system.com';
+            document.getElementById('password').value = 'admin123';
+            
+            showStatus('Successfully logged out');
+        }
+
+        // Auto-login check
+        if (authToken) {
+            apiCall('/auth/verify')
+                .then(response => {
+                    currentUser = response.user;
+                    document.getElementById('loginForm').style.display = 'none';
+                    document.getElementById('dashboard').style.display = 'block';
+                    
+                    document.getElementById('userName').textContent = currentUser.name;
+                    document.getElementById('userRole').textContent = 
+                        `${currentUser.role === 'admin' ? 'Administrator' : 'User'} • ${currentUser.facility_name || 'All Facilities'}`;
+                    
+                    loadDashboardData();
+                })
+                .catch(() => {
+                    localStorage.removeItem('authToken');
+                    authToken = null;
+                });
+        }
+
+        // Enter key support
+        document.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && document.getElementById('loginForm').style.display !== 'none') {
+                login();
+            }
         });
-    } catch (error) {
-        console.error('Registration error:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
 
-// Login user
-app.post('/api/auth/login', async (req, res) => {
-    try {
-        const { email, password } = req.body;
-
-        if (!email || !password) {
-            return res.status(400).json({ error: 'Email and password are required' });
-        }
-
-        // Get user with facility name
-        const result = await pool.query(`
-            SELECT u.*, f.name as facility_name 
-            FROM users u 
-            LEFT JOIN facilities f ON u.facility_id = f.id 
-            WHERE u.email = $1
-        `, [email]);
-
-        if (result.rows.length === 0) {
-            return res.status(401).json({ error: 'Invalid credentials' });
-        }
-
-        const user = result.rows[0];
-
-        if (!user.is_approved) {
-            return res.status(401).json({ error: 'Account pending approval' });
-        }
-
-        // Verify password
-        const isValidPassword = await bcrypt.compare(password, user.password);
-        if (!isValidPassword) {
-            return res.status(401).json({ error: 'Invalid credentials' });
-        }
-
-        // Generate JWT token
-        const token = jwt.sign(
-            { 
-                userId: user.id, 
-                email: user.email, 
-                role: user.role,
-                facilityId: user.facility_id 
-            },
-            JWT_SECRET,
-            { expiresIn: '24h' }
-        );
-
-        // Remove password from response
-        delete user.password;
-
-        res.json({
-            message: 'Login successful',
-            token,
-            user
-        });
-    } catch (error) {
-        console.error('Login error:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-// Verify token
-app.get('/api/auth/verify', authenticateToken, async (req, res) => {
-    try {
-        const result = await pool.query(`
-            SELECT u.*, f.name as facility_name 
-            FROM users u 
-            LEFT JOIN facilities f ON u.facility_id = f.id 
-            WHERE u.id = $1
-        `, [req.user.userId]);
-
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'User not found' });
-        }
-
-        const user = result.rows[0];
-        delete user.password;
-
-        res.json({ user });
-    } catch (error) {
-        console.error('Token verification error:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-// ===== FACILITY ROUTES =====
-
-// Get all facilities (public for registration)
-app.get('/api/facilities/public', async (req, res) => {
-    try {
-        const result = await pool.query('SELECT id, name FROM facilities ORDER BY name');
-        res.json(result.rows);
-    } catch (error) {
-        console.error('Error fetching facilities:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-// Get facilities (authenticated)
-app.get('/api/facilities', authenticateToken, async (req, res) => {
-    try {
-        let query = 'SELECT * FROM facilities ORDER BY name';
-        let params = [];
-
-        // Non-admin users can only see their facility
-        if (req.user.role !== 'admin' && req.user.facilityId) {
-            query = 'SELECT * FROM facilities WHERE id = $1 ORDER BY name';
-            params = [req.user.facilityId];
-        }
-
-        const result = await pool.query(query, params);
-        res.json(result.rows);
-    } catch (error) {
-        console.error('Error fetching facilities:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-// Add facility (admin only)
-app.post('/api/facilities', authenticateToken, async (req, res) => {
-    try {
-        if (req.user.role !== 'admin') {
-            return res.status(403).json({ error: 'Admin access required' });
-        }
-
-        const { name } = req.body;
-        if (!name) {
-            return res.status(400).json({ error: 'Facility name is required' });
-        }
-
-        const result = await pool.query(
-            'INSERT INTO facilities (name) VALUES ($1) RETURNING *',
-            [name]
-        );
-
-        res.status(201).json(result.rows[0]);
-    } catch (error) {
-        console.error('Error adding facility:', error);
-        if (error.code === '23505') { // Unique violation
-            res.status(400).json({ error: 'Facility name already exists' });
-        } else {
-            res.status(500).json({ error: 'Internal server error' });
-        }
-    }
-});
-
-// ===== SUPPLY ROUTES =====
-
-// Get supplies
-app.get('/api/supplies', authenticateToken, async (req, res) => {
-    try {
-        const result = await pool.query('SELECT * FROM supplies ORDER BY code');
-        res.json(result.rows);
-    } catch (error) {
-        console.error('Error fetching supplies:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-// Add supply (admin only)
-app.post('/api/supplies', authenticateToken, async (req, res) => {
-    try {
-        if (req.user.role !== 'admin') {
-            return res.status(403).json({ error: 'Admin access required' });
-        }
-
-        const { code, description, hcpcs, cost } = req.body;
-        if (!code || !description) {
-            return res.status(400).json({ error: 'Code and description are required' });
-        }
-
-        const result = await pool.query(
-            'INSERT INTO supplies (code, description, hcpcs, cost, is_custom) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-            [code, description, hcpcs || null, cost || 0, true]
-        );
-
-        res.status(201).json(result.rows[0]);
-    } catch (error) {
-        console.error('Error adding supply:', error);
-        if (error.code === '23505') { // Unique violation
-            res.status(400).json({ error: 'Supply code already exists' });
-        } else {
-            res.status(500).json({ error: 'Internal server error' });
-        }
-    }
-});
-
-// ===== PATIENT ROUTES =====
-
-// Get patients
-app.get('/api/patients', authenticateToken, async (req, res) => {
-    try {
-        let query = `
-            SELECT p.*, f.name as facility_name 
-            FROM patients p 
-            LEFT JOIN facilities f ON p.facility_id = f.id 
-        `;
-        let params = [];
-
-        // Non-admin users can only see patients from their facility
-        if (req.user.role !== 'admin' && req.user.facilityId) {
-            query += ' WHERE p.facility_id = $1';
-            params = [req.user.facilityId];
-        }
-
-        query += ' ORDER BY p.name, p.month';
-
-        const result = await pool.query(query, params);
-        res.json(result.rows);
-    } catch (error) {
-        console.error('Error fetching patients:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-// Add patient
-app.post('/api/patients', authenticateToken, async (req, res) => {
-    try {
-        const { name, month, mrn, facilityId } = req.body;
-
-        if (!name || !month || !facilityId) {
-            return res.status(400).json({ error: 'Name, month, and facility are required' });
-        }
-
-        // Non-admin users can only add patients to their facility
-        if (req.user.role !== 'admin' && req.user.facilityId !== parseInt(facilityId)) {
-            return res.status(403).json({ error: 'Can only add patients to your facility' });
-        }
-
-        const result = await pool.query(
-            'INSERT INTO patients (name, month, mrn, facility_id) VALUES ($1, $2, $3, $4) RETURNING *',
-            [name, month, mrn || null, facilityId]
-        );
-
-        res.status(201).json(result.rows[0]);
-    } catch (error) {
-        console.error('Error adding patient:', error);
-        if (error.code === '23505') { // Unique violation
-            res.status(400).json({ error: 'Patient already exists for this month and facility' });
-        } else {
-            res.status(500).json({ error: 'Internal server error' });
-        }
-    }
-});
-
-// ===== TRACKING ROUTES =====
-
-// Get tracking data
-app.get('/api/tracking/:patientId', authenticateToken, async (req, res) => {
-    try {
-        const { patientId } = req.params;
-
-        // Verify patient access
-        let patientQuery = 'SELECT * FROM patients WHERE id = $1';
-        let patientParams = [patientId];
-
-        if (req.user.role !== 'admin' && req.user.facilityId) {
-            patientQuery += ' AND facility_id = $2';
-            patientParams.push(req.user.facilityId);
-        }
-
-        const patientResult = await pool.query(patientQuery, patientParams);
-        if (patientResult.rows.length === 0) {
-            return res.status(404).json({ error: 'Patient not found or access denied' });
-        }
-
-        const result = await pool.query(
-            'SELECT * FROM tracking WHERE patient_id = $1 ORDER BY supply_id, day_of_month',
-            [patientId]
-        );
-
-        res.json(result.rows);
-    } catch (error) {
-        console.error('Error fetching tracking data:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-// Update tracking data
-app.post('/api/tracking', authenticateToken, async (req, res) => {
-    try {
-        const { patientId, supplyId, dayOfMonth, quantity, woundDx } = req.body;
-
-        // Verify patient access
-        let patientQuery = 'SELECT * FROM patients WHERE id = $1';
-        let patientParams = [patientId];
-
-        if (req.user.role !== 'admin' && req.user.facilityId) {
-            patientQuery += ' AND facility_id = $2';
-            patientParams.push(req.user.facilityId);
-        }
-
-        const patientResult = await pool.query(patientQuery, patientParams);
-        if (patientResult.rows.length === 0) {
-            return res.status(404).json({ error: 'Patient not found or access denied' });
-        }
-
-        // Upsert tracking data
-        const result = await pool.query(`
-            INSERT INTO tracking (patient_id, supply_id, day_of_month, quantity, wound_dx)
-            VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (patient_id, supply_id, day_of_month)
-            DO UPDATE SET quantity = $4, wound_dx = $5, updated_at = CURRENT_TIMESTAMP
-            RETURNING *
-        `, [patientId, supplyId, dayOfMonth, quantity || 0, woundDx || null]);
-
-        res.json(result.rows[0]);
-    } catch (error) {
-        console.error('Error updating tracking data:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-// ===== DEFAULT ROUTE =====
-
-// Serve main application
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// ===== ERROR HANDLING =====
-
-// 404 handler
-app.use((req, res) => {
-    res.status(404).json({ error: 'Endpoint not found' });
-});
-
-// Global error handler
-app.use((err, req, res, next) => {
-    console.error('Unhandled error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-});
-
-// ===== START SERVER =====
-
-app.listen(PORT, () => {
-    console.log(`🚀 Wound Care RT Supply Tracker Server running on port ${PORT}`);
-    console.log(`📊 Database: ${process.env.DATABASE_URL ? 'Connected' : 'Using DATABASE_URL from environment'}`);
-    console.log(`🌐 Access your application at: http://localhost:${PORT}`);
-});
-
-// Graceful shutdown
-process.on('SIGTERM', async () => {
-    console.log('SIGTERM signal received: closing HTTP server');
-    await pool.end();
-    process.exit(0);
-});
-
-process.on('SIGINT', async () => {
-    console.log('SIGINT signal received: closing HTTP server');
-    await pool.end();
-    process.exit(0);
-});
+        console.log('🎉 Wound Care Tracker loaded successfully!');
+    </script>
+</body>
+</html>
