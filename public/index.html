@@ -2003,10 +2003,6 @@
 
                 supplies.sort((a, b) => a.code - b.code).forEach(supply => {
                     const row = document.createElement('tr');
-                    const editButton = supply.is_custom ? 
-                        `<button class="btn btn-secondary btn-sm" onclick="editSupply(${supply.id}, ${supply.code}, '${supply.description.replace(/'/g, "\\'")}', '${supply.hcpcs || ''}', ${supply.cost})">Edit</button>` : '';
-                    const deleteButton = supply.is_custom ? 
-                        `<button class="btn btn-danger btn-sm" onclick="deleteSupply(${supply.id})">Delete</button>` : '';
                     
                     row.innerHTML = `
                         <td><strong>${supply.code}</strong></td>
@@ -2020,13 +2016,32 @@
                         </td>
                         <td>
                             <div style="display: flex; gap: 5px; flex-wrap: wrap;">
-                                ${editButton}
-                                ${deleteButton || '<span style="color: #718096;">System Supply</span>'}
+                                ${supply.is_custom ? `<button class="btn btn-secondary btn-sm edit-supply-btn" data-supply-id="${supply.id}">Edit</button>` : ''}
+                                ${supply.is_custom ? `<button class="btn btn-danger btn-sm delete-supply-btn" data-supply-id="${supply.id}">Delete</button>` : '<span style="color: #718096;">System Supply</span>'}
                             </div>
                         </td>
                     `;
                     tbody.appendChild(row);
                 });
+
+                // Add event listeners for edit and delete buttons
+                document.querySelectorAll('.edit-supply-btn').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const supplyId = this.getAttribute('data-supply-id');
+                        const supply = supplies.find(s => s.id === parseInt(supplyId));
+                        if (supply) {
+                            editSupply(supply.id, supply.code, supply.description, supply.hcpcs, supply.cost);
+                        }
+                    });
+                });
+
+                document.querySelectorAll('.delete-supply-btn').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const supplyId = this.getAttribute('data-supply-id');
+                        deleteSupply(parseInt(supplyId));
+                    });
+                });
+
             } catch (error) {
                 showNotification('Failed to load supplies', true);
             }
