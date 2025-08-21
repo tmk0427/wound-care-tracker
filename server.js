@@ -467,6 +467,83 @@ app.get('/', (req, res) => {
             background-color: #f7fafc;
         }
 
+        /* Checkbox styles */
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .checkbox-container input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .bulk-actions {
+            display: none;
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .bulk-actions.show {
+            display: flex;
+        }
+
+        /* Supply tracking styles */
+        .tracking-grid {
+            display: grid;
+            grid-template-columns: 200px repeat(auto-fit, minmax(40px, 1fr));
+            gap: 1px;
+            background: #e2e8f0;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-top: 20px;
+        }
+
+        .tracking-header {
+            background: #667eea;
+            color: white;
+            padding: 10px;
+            font-weight: 600;
+            text-align: center;
+            font-size: 12px;
+        }
+
+        .tracking-supply {
+            background: #f7fafc;
+            padding: 10px;
+            font-weight: 600;
+            font-size: 12px;
+            border-right: 2px solid #e2e8f0;
+        }
+
+        .tracking-cell {
+            background: white;
+            padding: 5px;
+        }
+
+        .tracking-input {
+            width: 100%;
+            padding: 4px;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 12px;
+        }
+
+        .tracking-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+        }
+
         /* Summary Cards */
         .summary-cards {
             display: grid;
@@ -573,6 +650,10 @@ app.get('/', (req, res) => {
             .tabs {
                 overflow-x: auto;
             }
+
+            .tracking-grid {
+                grid-template-columns: 150px repeat(auto-fit, minmax(35px, 1fr));
+            }
         }
     </style>
 </head>
@@ -597,11 +678,11 @@ app.get('/', (req, res) => {
             <div id="loginForm">
                 <div class="form-group">
                     <label for="loginEmail">Email Address</label>
-                    <input type="email" id="loginEmail" placeholder="admin@system.com">
+                    <input type="email" id="loginEmail" placeholder="Enter your email">
                 </div>
                 <div class="form-group">
                     <label for="loginPassword">Password</label>
-                    <input type="password" id="loginPassword" placeholder="admin123">
+                    <input type="password" id="loginPassword" placeholder="Enter your password">
                 </div>
                 <button class="auth-btn" onclick="login()" id="loginBtn">Sign In</button>
                 <div id="loginError" class="error-message hidden">Invalid credentials</div>
@@ -710,10 +791,24 @@ app.get('/', (req, res) => {
                 </div>
             </div>
 
+            <!-- Bulk Actions -->
+            <div class="bulk-actions" id="bulkActions">
+                <span id="selectedCount">0 patients selected</span>
+                <button class="btn btn-danger btn-sm" onclick="bulkDeletePatients()">Delete Selected</button>
+                <button class="btn btn-secondary btn-sm" onclick="clearSelection()">Clear Selection</button>
+            </div>
+
+            <!-- Select All Checkbox -->
+            <div class="checkbox-container">
+                <input type="checkbox" id="selectAllPatients" onchange="toggleSelectAll()">
+                <label for="selectAllPatients">Select All Patients</label>
+            </div>
+
             <div class="table-container">
                 <table class="admin-table" id="patientTable">
                     <thead>
                         <tr>
+                            <th width="50">Select</th>
                             <th>Patient Name</th>
                             <th>MRN</th>
                             <th>Month/Year</th>
@@ -886,6 +981,38 @@ app.get('/', (req, res) => {
         </div>
     </div>
 
+    <!-- Edit Patient Modal -->
+    <div id="editPatientModal" class="modal">
+        <div class="modal-content">
+            <h2>Edit Patient</h2>
+            <div class="form-group">
+                <label>Patient Name</label>
+                <input type="text" id="editPatientName" placeholder="Last, First">
+            </div>
+            <div class="form-group">
+                <label>MRN (Medical Record Number)</label>
+                <input type="text" id="editMrnNumber" placeholder="MRN">
+            </div>
+            <div class="form-group">
+                <label>Select Month/Year</label>
+                <select id="editPatientMonth" style="padding: 10px; border-radius: 8px; border: 2px solid #e2e8f0; width: 100%;">
+                    <option value="">Select Month/Year</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Select Facility</label>
+                <select id="editPatientFacility" style="padding: 10px; border-radius: 8px; border: 2px solid #e2e8f0; width: 100%;">
+                    <option value="">Select Facility</option>
+                </select>
+            </div>
+            <div id="editPatientMessage" style="margin: 10px 0;"></div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button class="btn btn-secondary" onclick="closeEditPatientModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="savePatientEdit()" id="savePatientBtn">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Change Password Modal -->
     <div id="changePasswordModal" class="modal">
         <div class="modal-content">
@@ -943,6 +1070,8 @@ app.get('/', (req, res) => {
         // Global variables
         var currentUser = null;
         var authToken = localStorage.getItem('authToken');
+        var selectedPatients = new Set();
+        var editingPatientId = null;
         var appData = {
             facilities: [],
             patients: [],
@@ -957,7 +1086,7 @@ app.get('/', (req, res) => {
         var excelData = null;
         var API_BASE = window.location.origin + '/api';
 
-        // Utility function to pad strings (replaces String.padStart)
+        // Utility function to pad strings
         function padStart(str, targetLength, padString) {
             str = String(str);
             targetLength = targetLength >> 0;
@@ -1037,14 +1166,24 @@ app.get('/', (req, res) => {
             }, 3000);
         }
 
-        // Populate month/year dropdowns
+        // Populate month/year dropdowns - UPDATED to show current month going back 1 year
         function populateMonthYearDropdowns() {
             var currentDate = new Date();
             var currentMonth = currentDate.getMonth();
             var currentYear = currentDate.getFullYear();
             
             var months = [];
-            for (var year = currentYear - 2; year <= currentYear + 2; year++) {
+            
+            // Add current month and future months for current year
+            for (var month = currentMonth; month < 12; month++) {
+                var monthStr = padStart(String(month + 1), 2, '0');
+                var value = monthStr + '-' + currentYear;
+                var label = new Date(currentYear, month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                months.push({ value: value, label: label });
+            }
+            
+            // Add all months for previous year(s) going back 1 year
+            for (var year = currentYear - 1; year >= currentYear - 1; year++) {
                 for (var month = 0; month < 12; month++) {
                     var monthStr = padStart(String(month + 1), 2, '0');
                     var value = monthStr + '-' + year;
@@ -1053,6 +1192,7 @@ app.get('/', (req, res) => {
                 }
             }
             
+            // Sort by date (newest first)
             months.sort(function(a, b) {
                 var aMonthParts = a.value.split('-');
                 var bMonthParts = b.value.split('-');
@@ -1061,7 +1201,7 @@ app.get('/', (req, res) => {
                 return bDate - aDate;
             });
             
-            var selectIds = ['patientMonth', 'trackingMonthSelect', 'summaryMonth'];
+            var selectIds = ['patientMonth', 'trackingMonthSelect', 'summaryMonth', 'editPatientMonth'];
             for (var i = 0; i < selectIds.length; i++) {
                 var selectId = selectIds[i];
                 var select = document.getElementById(selectId);
@@ -1168,6 +1308,7 @@ app.get('/', (req, res) => {
             }
 
             populatePatientFacilityDropdown();
+            populateEditFacilityDropdown();
             populateTrackingFacilitySelector();
             populateSummaryFacilities();
             refreshPatientList();
@@ -1319,6 +1460,201 @@ app.get('/', (req, res) => {
             setTimeout(function() {
                 loginError.classList.add('hidden');
             }, 5000);
+        }
+
+        // Patient selection functions
+        function togglePatientSelection(patientId, checkbox) {
+            if (checkbox.checked) {
+                selectedPatients.add(patientId);
+            } else {
+                selectedPatients.delete(patientId);
+            }
+            updateBulkActions();
+            updateSelectAllCheckbox();
+        }
+
+        function toggleSelectAll() {
+            var selectAllCheckbox = document.getElementById('selectAllPatients');
+            var patientCheckboxes = document.querySelectorAll('.patient-checkbox');
+            
+            if (selectAllCheckbox.checked) {
+                selectedPatients.clear();
+                for (var i = 0; i < appData.patients.length; i++) {
+                    selectedPatients.add(appData.patients[i].id);
+                }
+                for (var i = 0; i < patientCheckboxes.length; i++) {
+                    patientCheckboxes[i].checked = true;
+                }
+            } else {
+                selectedPatients.clear();
+                for (var i = 0; i < patientCheckboxes.length; i++) {
+                    patientCheckboxes[i].checked = false;
+                }
+            }
+            updateBulkActions();
+        }
+
+        function updateSelectAllCheckbox() {
+            var selectAllCheckbox = document.getElementById('selectAllPatients');
+            var totalPatients = appData.patients.length;
+            var selectedCount = selectedPatients.size;
+            
+            if (selectedCount === 0) {
+                selectAllCheckbox.indeterminate = false;
+                selectAllCheckbox.checked = false;
+            } else if (selectedCount === totalPatients) {
+                selectAllCheckbox.indeterminate = false;
+                selectAllCheckbox.checked = true;
+            } else {
+                selectAllCheckbox.indeterminate = true;
+                selectAllCheckbox.checked = false;
+            }
+        }
+
+        function updateBulkActions() {
+            var bulkActions = document.getElementById('bulkActions');
+            var selectedCount = document.getElementById('selectedCount');
+            
+            if (selectedPatients.size > 0) {
+                bulkActions.classList.add('show');
+                selectedCount.textContent = selectedPatients.size + ' patient' + (selectedPatients.size === 1 ? '' : 's') + ' selected';
+            } else {
+                bulkActions.classList.remove('show');
+            }
+        }
+
+        function clearSelection() {
+            selectedPatients.clear();
+            var patientCheckboxes = document.querySelectorAll('.patient-checkbox');
+            for (var i = 0; i < patientCheckboxes.length; i++) {
+                patientCheckboxes[i].checked = false;
+            }
+            updateBulkActions();
+            updateSelectAllCheckbox();
+        }
+
+        function bulkDeletePatients() {
+            if (selectedPatients.size === 0) return;
+            
+            var message = 'Are you sure you want to delete ' + selectedPatients.size + ' patient' + (selectedPatients.size === 1 ? '' : 's') + ' and all their tracking data?';
+            if (!confirm(message)) return;
+            
+            var patientIds = Array.from(selectedPatients);
+            var promises = [];
+            
+            for (var i = 0; i < patientIds.length; i++) {
+                promises.push(apiCall('/patients/' + patientIds[i], { method: 'DELETE' }));
+            }
+            
+            Promise.all(promises).then(function() {
+                clearSelection();
+                initApp();
+                showNotification('Patients deleted successfully!');
+            }).catch(function(error) {
+                showNotification('Failed to delete some patients: ' + error.message, true);
+                initApp(); // Refresh to show current state
+            });
+        }
+
+        // Edit Patient functions
+        function showEditPatientModal(patientId) {
+            editingPatientId = patientId;
+            var patient = null;
+            for (var i = 0; i < appData.patients.length; i++) {
+                if (appData.patients[i].id === patientId) {
+                    patient = appData.patients[i];
+                    break;
+                }
+            }
+            
+            if (!patient) {
+                showNotification('Patient not found', true);
+                return;
+            }
+            
+            document.getElementById('editPatientName').value = patient.name;
+            document.getElementById('editMrnNumber').value = patient.mrn || '';
+            
+            // Convert storage format (YYYY-MM) to display format (MM-YYYY)
+            var monthParts = patient.month.split('-');
+            var displayMonth = monthParts[1] + '-' + monthParts[0];
+            document.getElementById('editPatientMonth').value = displayMonth;
+            
+            document.getElementById('editPatientFacility').value = patient.facility_id;
+            document.getElementById('editPatientMessage').innerHTML = '';
+            
+            document.getElementById('editPatientModal').style.display = 'flex';
+        }
+
+        function closeEditPatientModal() {
+            document.getElementById('editPatientModal').style.display = 'none';
+            editingPatientId = null;
+            document.getElementById('editPatientName').value = '';
+            document.getElementById('editMrnNumber').value = '';
+            document.getElementById('editPatientMonth').value = '';
+            document.getElementById('editPatientFacility').value = '';
+            document.getElementById('editPatientMessage').innerHTML = '';
+        }
+
+        function savePatientEdit() {
+            if (!editingPatientId) return;
+            
+            var name = document.getElementById('editPatientName').value.trim();
+            var mrn = document.getElementById('editMrnNumber').value.trim();
+            var monthInput = document.getElementById('editPatientMonth').value.trim();
+            var facilityId = parseInt(document.getElementById('editPatientFacility').value);
+            var saveBtn = document.getElementById('savePatientBtn');
+            var messageEl = document.getElementById('editPatientMessage');
+
+            if (!name || !monthInput || !facilityId) {
+                messageEl.innerHTML = '<div class="error-message">Please fill in all required fields</div>';
+                return;
+            }
+
+            var monthParts = monthInput.split('-');
+            if (monthParts.length !== 2) {
+                messageEl.innerHTML = '<div class="error-message">Invalid month format selected</div>';
+                return;
+            }
+            
+            // Convert display format (MM-YYYY) to storage format (YYYY-MM)
+            var month = monthParts[1] + '-' + monthParts[0];
+
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<span class="loading"></span>Saving...';
+
+            apiCall('/patients/' + editingPatientId, {
+                method: 'PUT',
+                body: { name: name, month: month, mrn: mrn, facilityId: facilityId }
+            }).then(function() {
+                messageEl.innerHTML = '<div class="success-message">Patient updated successfully!</div>';
+                
+                setTimeout(function() {
+                    closeEditPatientModal();
+                    initApp();
+                    showNotification('Patient updated successfully!');
+                }, 1500);
+            }).catch(function(error) {
+                messageEl.innerHTML = '<div class="error-message">' + error.message + '</div>';
+            }).finally(function() {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = 'Save Changes';
+            });
+        }
+
+        function populateEditFacilityDropdown() {
+            var select = document.getElementById('editPatientFacility');
+            if (!select) return;
+            
+            select.innerHTML = '<option value="">Select Facility</option>';
+
+            for (var i = 0; i < appData.facilities.length; i++) {
+                var facility = appData.facilities[i];
+                var option = document.createElement('option');
+                option.value = facility.id;
+                option.textContent = facility.name;
+                select.appendChild(option);
+            }
         }
 
         // Password change functions
@@ -1478,7 +1814,7 @@ app.get('/', (req, res) => {
             if (!tableBody) return;
 
             if (appData.patients.length === 0) {
-                tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #718096; padding: 40px;">No patients found. Add your first patient above or import from Excel.</td></tr>';
+                tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #718096; padding: 40px;">No patients found. Add your first patient above or import from Excel.</td></tr>';
                 return;
             }
 
@@ -1491,7 +1827,10 @@ app.get('/', (req, res) => {
                 var monthParts = patient.month.split('-');
                 var displayMonth = monthParts[1] + '-' + monthParts[0];
                 
+                var isSelected = selectedPatients.has(patient.id);
+                
                 row.innerHTML = 
+                    '<td><input type="checkbox" class="patient-checkbox" ' + (isSelected ? 'checked' : '') + ' onchange="togglePatientSelection(' + patient.id + ', this)"></td>' +
                     '<td>' + patient.name + '</td>' +
                     '<td>' + (patient.mrn || 'N/A') + '</td>' +
                     '<td>' + displayMonth + '</td>' +
@@ -1499,11 +1838,14 @@ app.get('/', (req, res) => {
                     '<td>' + new Date(patient.updated_at).toLocaleDateString() + '</td>' +
                     '<td>' +
                         '<button class="btn btn-secondary btn-sm" onclick="viewPatientTracking(' + patient.id + ')" style="margin-right: 5px;">View</button>' +
+                        '<button class="btn btn-primary btn-sm" onclick="showEditPatientModal(' + patient.id + ')" style="margin-right: 5px;">Edit</button>' +
                         '<button class="btn btn-danger btn-sm" onclick="removePatient(' + patient.id + ')">Delete</button>' +
                     '</td>';
 
                 tableBody.appendChild(row);
             }
+            
+            updateSelectAllCheckbox();
         }
 
         function viewPatientTracking(patientId) {
@@ -1517,6 +1859,7 @@ app.get('/', (req, res) => {
                 apiCall('/patients/' + patientId, {
                     method: 'DELETE'
                 }).then(function() {
+                    selectedPatients.delete(patientId);
                     initApp();
                     showNotification('Patient removed successfully!');
                 }).catch(function(error) {
@@ -1767,6 +2110,7 @@ app.get('/', (req, res) => {
             }
         }
 
+        // ENHANCED Supply Tracking with Grid Interface
         function loadPatientTracking() {
             var patientId = document.getElementById('patientSelect').value;
             var container = document.getElementById('trackingContent');
@@ -1789,18 +2133,17 @@ app.get('/', (req, res) => {
                 return;
             }
 
-            container.innerHTML = '<p style="text-align: center; color: #667eea; font-size: 18px; margin-top: 100px;">Loading tracking data...</p>';
+            container.innerHTML = '<p style="text-align: center; color: #667eea; font-size: 18px; margin-top: 100px;">Loading tracking interface...</p>';
 
-            apiCall('/patients/' + patientId + '/tracking').then(function(trackingData) {
-                container.innerHTML = 
-                    '<div style="text-align: center; margin-top: 50px; padding: 40px; background: #f0f4ff; border-radius: 15px; border-left: 4px solid #667eea;">' +
-                    '<h3 style="color: #667eea; margin-bottom: 20px;">Supply Tracking Interface</h3>' +
-                    '<p style="color: #4a5568; margin-bottom: 15px;"><strong>Patient:</strong> ' + patient.name + '</p>' +
-                    '<p style="color: #4a5568; margin-bottom: 15px;"><strong>Facility:</strong> ' + (patient.facility_name || 'Unknown') + '</p>' +
-                    '<p style="color: #4a5568; margin-bottom: 30px;"><strong>Tracking Records:</strong> ' + trackingData.length + ' entries</p>' +
-                    '<p style="color: #718096;">Advanced supply tracking interface will be implemented here.</p>' +
-                    '<p style="color: #718096; margin-top: 10px;">This will include day-by-day supply usage tracking, wound diagnoses, and cost calculations.</p>' +
-                    '</div>';
+            // Load both tracking data and supplies
+            Promise.all([
+                apiCall('/patients/' + patientId + '/tracking'),
+                appData.supplies
+            ]).then(function(results) {
+                var trackingData = results[0];
+                var supplies = results[1];
+                
+                createTrackingInterface(patient, supplies, trackingData, container);
             }).catch(function(error) {
                 console.error('Failed to load tracking data:', error);
                 
@@ -1811,6 +2154,193 @@ app.get('/', (req, res) => {
                 }
                 
                 container.innerHTML = '<div style="text-align: center; margin-top: 50px; padding: 20px; background: #fed7d7; border-radius: 10px; border-left: 4px solid #e53e3e;"><p style="color: #c53030; font-size: 16px; margin: 0;">' + errorMessage + '</p></div>';
+            });
+        }
+
+        function createTrackingInterface(patient, supplies, trackingData, container) {
+            // Get number of days in the patient's month
+            var monthParts = patient.month.split('-');
+            var year = parseInt(monthParts[0]);
+            var month = parseInt(monthParts[1]) - 1; // JavaScript months are 0-indexed
+            var daysInMonth = new Date(year, month + 1, 0).getDate();
+            
+            // Create tracking data map for quick lookups
+            var trackingMap = {};
+            for (var i = 0; i < trackingData.length; i++) {
+                var tracking = trackingData[i];
+                var key = tracking.supply_id + '_' + tracking.day_of_month;
+                trackingMap[key] = tracking.quantity;
+            }
+            
+            var displayMonth = new Date(year, month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+            
+            var html = '<div style="margin-bottom: 30px;">';
+            html += '<h3 style="color: #667eea; margin-bottom: 15px;">Supply Tracking - ' + patient.name + '</h3>';
+            html += '<p style="color: #4a5568; margin-bottom: 10px;"><strong>Month:</strong> ' + displayMonth + '</p>';
+            html += '<p style="color: #4a5568; margin-bottom: 10px;"><strong>Facility:</strong> ' + (patient.facility_name || 'Unknown') + '</p>';
+            html += '<p style="color: #4a5568; margin-bottom: 20px;"><strong>MRN:</strong> ' + (patient.mrn || 'N/A') + '</p>';
+            html += '</div>';
+            
+            // Create the tracking grid
+            html += '<div class="tracking-grid">';
+            
+            // Header row
+            html += '<div class="tracking-header">Supply</div>';
+            for (var day = 1; day <= daysInMonth; day++) {
+                html += '<div class="tracking-header">' + day + '</div>';
+            }
+            html += '<div class="tracking-header">Total</div>';
+            
+            // Supply rows
+            for (var i = 0; i < supplies.length; i++) {
+                var supply = supplies[i];
+                html += '<div class="tracking-supply" title="' + supply.description + ' (Code: ' + supply.code + ')">';
+                html += supply.code + '<br><small>' + supply.description.substring(0, 20) + (supply.description.length > 20 ? '...' : '') + '</small>';
+                html += '</div>';
+                
+                var rowTotal = 0;
+                
+                // Day cells
+                for (var day = 1; day <= daysInMonth; day++) {
+                    var key = supply.id + '_' + day;
+                    var quantity = trackingMap[key] || 0;
+                    rowTotal += parseInt(quantity) || 0;
+                    
+                    html += '<div class="tracking-cell">';
+                    html += '<input type="number" class="tracking-input" ';
+                    html += 'data-patient-id="' + patient.id + '" ';
+                    html += 'data-supply-id="' + supply.id + '" ';
+                    html += 'data-day="' + day + '" ';
+                    html += 'value="' + (quantity || '') + '" ';
+                    html += 'min="0" max="99" ';
+                    html += 'onchange="updateTracking(this)">';
+                    html += '</div>';
+                }
+                
+                // Total cell
+                html += '<div class="tracking-cell" style="background: #f7fafc; font-weight: bold; text-align: center; padding: 10px;">';
+                html += '<span id="total_' + supply.id + '">' + rowTotal + '</span>';
+                html += '</div>';
+            }
+            
+            html += '</div>';
+            
+            // Add save button and summary
+            html += '<div style="margin-top: 30px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">';
+            html += '<div style="color: #4a5568;">';
+            html += '<strong>Auto-saved:</strong> Changes are saved automatically as you type';
+            html += '</div>';
+            html += '<button class="btn btn-success" onclick="exportTrackingData(' + patient.id + ')">Export Tracking Data</button>';
+            html += '</div>';
+            
+            container.innerHTML = html;
+        }
+
+        function updateTracking(input) {
+            var patientId = input.dataset.patientId;
+            var supplyId = input.dataset.supplyId;
+            var day = input.dataset.day;
+            var quantity = parseInt(input.value) || 0;
+            
+            // Validate input
+            if (quantity < 0) {
+                input.value = 0;
+                quantity = 0;
+            }
+            if (quantity > 99) {
+                input.value = 99;
+                quantity = 99;
+            }
+            
+            // Update total for this supply
+            updateSupplyTotal(supplyId);
+            
+            // Save to server (with debouncing)
+            clearTimeout(input.saveTimeout);
+            input.saveTimeout = setTimeout(function() {
+                apiCall('/patients/' + patientId + '/tracking', {
+                    method: 'POST',
+                    body: {
+                        supplyId: parseInt(supplyId),
+                        dayOfMonth: parseInt(day),
+                        quantity: quantity
+                    }
+                }).then(function() {
+                    input.style.borderColor = '#38a169';
+                    setTimeout(function() {
+                        input.style.borderColor = '#e2e8f0';
+                    }, 1000);
+                }).catch(function(error) {
+                    console.error('Failed to save tracking data:', error);
+                    input.style.borderColor = '#e53e3e';
+                    showNotification('Failed to save: ' + error.message, true);
+                });
+            }, 500);
+        }
+
+        function updateSupplyTotal(supplyId) {
+            var inputs = document.querySelectorAll('[data-supply-id="' + supplyId + '"]');
+            var total = 0;
+            
+            for (var i = 0; i < inputs.length; i++) {
+                total += parseInt(inputs[i].value) || 0;
+            }
+            
+            var totalElement = document.getElementById('total_' + supplyId);
+            if (totalElement) {
+                totalElement.textContent = total;
+            }
+        }
+
+        function exportTrackingData(patientId) {
+            showNotification('Exporting tracking data...');
+            
+            var patient = null;
+            for (var i = 0; i < appData.patients.length; i++) {
+                if (appData.patients[i].id == patientId) {
+                    patient = appData.patients[i];
+                    break;
+                }
+            }
+            
+            if (!patient) {
+                showNotification('Patient not found', true);
+                return;
+            }
+            
+            apiCall('/patients/' + patientId + '/tracking').then(function(trackingData) {
+                var monthParts = patient.month.split('-');
+                var displayMonth = monthParts[1] + '-' + monthParts[0];
+                
+                var reportData = [];
+                reportData.push(['SUPPLY TRACKING REPORT']);
+                reportData.push(['Patient: ' + patient.name]);
+                reportData.push(['Month: ' + displayMonth]);
+                reportData.push(['Facility: ' + (patient.facility_name || 'Unknown')]);
+                reportData.push(['Generated: ' + new Date().toLocaleDateString()]);
+                reportData.push([]);
+                reportData.push(['Supply Code', 'Description', 'Day', 'Quantity']);
+                
+                for (var i = 0; i < trackingData.length; i++) {
+                    var tracking = trackingData[i];
+                    reportData.push([
+                        tracking.code,
+                        tracking.description,
+                        tracking.day_of_month,
+                        tracking.quantity
+                    ]);
+                }
+                
+                var worksheet = XLSX.utils.aoa_to_sheet(reportData);
+                var workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, worksheet, 'Tracking');
+                
+                var fileName = 'Tracking_' + patient.name.replace(/[^a-zA-Z0-9]/g, '_') + '_' + displayMonth.replace('-', '_') + '.xlsx';
+                XLSX.writeFile(workbook, fileName);
+                
+                showNotification('Tracking data exported successfully!');
+            }).catch(function(error) {
+                showNotification('Failed to export: ' + error.message, true);
             });
         }
 
@@ -2104,6 +2634,85 @@ app.get('/', (req, res) => {
 </body>
 </html>`);
 });
+
+// ADD NEW PUT ROUTE FOR UPDATING PATIENTS
+app.put('/api/patients/:id', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, month, mrn, facilityId } = req.body;
+
+        if (!name || !month || !facilityId) {
+            return res.status(400).json({ error: 'Name, month, and facility are required' });
+        }
+
+        // Check if user has access to this patient
+        if (req.user.role !== 'admin') {
+            const patientCheck = await pool.query('SELECT facility_id FROM patients WHERE id = $1', [id]);
+            if (patientCheck.rows.length === 0 || patientCheck.rows[0].facility_id !== req.user.facility_id) {
+                return res.status(403).json({ error: 'Access denied' });
+            }
+        }
+
+        // Verify user has access to the new facility
+        if (req.user.role !== 'admin' && req.user.facility_id !== parseInt(facilityId)) {
+            return res.status(403).json({ error: 'Access denied to this facility' });
+        }
+
+        const result = await pool.query(
+            'UPDATE patients SET name = $1, month = $2, mrn = $3, facility_id = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5 RETURNING *',
+            [name, month, mrn || null, facilityId, id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Patient not found' });
+        }
+
+        res.json(result.rows[0]);
+    } catch (error) {
+        console.error('Update patient error:', error);
+        res.status(500).json({ error: 'Failed to update patient' });
+    }
+});
+
+// UPDATE TRACKING ROUTES for better functionality
+app.post('/api/patients/:id/tracking', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { supplyId, dayOfMonth, quantity } = req.body;
+
+        // Check if user has access to this patient
+        if (req.user.role !== 'admin') {
+            const patientCheck = await pool.query('SELECT facility_id FROM patients WHERE id = $1', [id]);
+            if (patientCheck.rows.length === 0 || patientCheck.rows[0].facility_id !== req.user.facility_id) {
+                return res.status(403).json({ error: 'Access denied' });
+            }
+        }
+
+        if (quantity > 0) {
+            // Insert or update tracking record
+            await pool.query(`
+                INSERT INTO tracking (patient_id, supply_id, day_of_month, quantity)
+                VALUES ($1, $2, $3, $4)
+                ON CONFLICT (patient_id, supply_id, day_of_month)
+                DO UPDATE SET quantity = $4, updated_at = CURRENT_TIMESTAMP
+            `, [id, supplyId, dayOfMonth, quantity]);
+        } else {
+            // Remove tracking record if quantity is 0
+            await pool.query(
+                'DELETE FROM tracking WHERE patient_id = $1 AND supply_id = $2 AND day_of_month = $3',
+                [id, supplyId, dayOfMonth]
+            );
+        }
+
+        res.json({ message: 'Tracking updated successfully' });
+    } catch (error) {
+        console.error('Update tracking error:', error);
+        res.status(500).json({ error: 'Failed to update tracking data' });
+    }
+});
+
+// Continue with rest of the server code...
+// [All the other auth, facilities, patients, etc. routes remain the same as before]
 
 // Auth routes
 app.post('/api/auth/register', async (req, res) => {
@@ -2601,7 +3210,16 @@ async function initializeDatabase() {
                     (702, 'Alginate Dressing 2x2', 'A6196', 12.25, false),
                     (703, 'Transparent Film 4x4.75', 'A6257', 3.20, false),
                     (704, 'Antimicrobial Dressing 4x5', 'A6251', 15.80, false),
-                    (705, 'Collagen Dressing 4x4', 'A6021', 22.50, false)
+                    (705, 'Collagen Dressing 4x4', 'A6021', 22.50, false),
+                    (706, 'Silicone Foam Border 6x6', 'A6212', 18.90, false),
+                    (707, 'Gauze Pad Sterile 4x4', 'A6402', 0.85, false),
+                    (708, 'Calcium Alginate 4x4', 'A6196', 14.20, false),
+                    (709, 'Hydrogel Sheet 4x4', 'A6242', 9.80, false),
+                    (710, 'Composite Dressing 4x4', 'A6203', 7.45, false),
+                    (711, 'Zinc Paste Bandage 3x10', 'A6456', 6.30, false),
+                    (712, 'Foam Dressing with Border 6x6', 'A6212', 11.95, false),
+                    (713, 'Transparent Film 6x7', 'A6258', 4.75, false),
+                    (714, 'Alginate Rope 12 inch', 'A6199', 18.50, false)
                 ON CONFLICT (code) DO NOTHING;
             `);
 
