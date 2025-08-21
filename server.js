@@ -13,15 +13,15 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-producti
 
 // Validate critical environment variables
 if (!process.env.DATABASE_URL) {
-    console.error('❌ ERROR: DATABASE_URL environment variable is required');
+    console.error('ERROR: DATABASE_URL environment variable is required');
     process.exit(1);
 }
 
-console.log('🔧 Environment check:');
+console.log('Environment check:');
 console.log('  - NODE_ENV:', process.env.NODE_ENV || 'development');
 console.log('  - PORT:', PORT);
-console.log('  - DATABASE_URL:', process.env.DATABASE_URL ? '✅ Set' : '❌ Missing');
-console.log('  - JWT_SECRET:', process.env.JWT_SECRET ? '✅ Set' : '⚠️ Using default');
+console.log('  - DATABASE_URL:', process.env.DATABASE_URL ? 'Set' : 'Missing');
+console.log('  - JWT_SECRET:', process.env.JWT_SECRET ? 'Set' : 'Using default');
 
 // Database connection
 const pool = new Pool({
@@ -579,13 +579,13 @@ app.get('/', (req, res) => {
 <body>
     <!-- Status Banner -->
     <div class="status-banner">
-        🏥 Wound Care RT Supply Tracker - Professional Edition
+        Wound Care RT Supply Tracker - Professional Edition
     </div>
 
     <!-- Login/Register Screen -->
     <div id="loginContainer" class="login-container">
         <div class="auth-form">
-            <h1>🏥 Wound Care RT Supply Tracker</h1>
+            <h1>Wound Care RT Supply Tracker</h1>
             
             <!-- Auth Tabs -->
             <div class="auth-tabs">
@@ -638,7 +638,7 @@ app.get('/', (req, res) => {
     <div id="mainApp" class="main-app">
         <div class="header">
             <div>
-                <h1>🏥 Wound Care RT Supply Tracker</h1>
+                <h1>Wound Care RT Supply Tracker</h1>
                 <div class="header-info">
                     <div id="currentUserInfo"></div>
                 </div>
@@ -662,12 +662,12 @@ app.get('/', (req, res) => {
 
             <!-- Excel Import Section -->
             <div class="excel-import-section">
-                <h3 style="margin-bottom: 15px; color: #2b6cb0;">📊 Bulk Import Patients from Excel</h3>
+                <h3 style="margin-bottom: 15px; color: #2b6cb0;">Bulk Import Patients from Excel</h3>
                 <p style="color: #4299e1; margin-bottom: 20px;">Import multiple patients at once using an Excel file (.xlsx or .xls)</p>
                 
                 <div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
-                    <button class="btn btn-secondary" onclick="downloadExcelTemplate()">📥 Download Template</button>
-                    <button class="btn btn-primary" onclick="showExcelImportModal()">📤 Import Excel File</button>
+                    <button class="btn btn-secondary" onclick="downloadExcelTemplate()">Download Template</button>
+                    <button class="btn btn-primary" onclick="showExcelImportModal()">Import Excel File</button>
                 </div>
 
                 <div style="background: #ebf8ff; padding: 15px; border-radius: 8px; border-left: 4px solid #4299e1;">
@@ -734,7 +734,7 @@ app.get('/', (req, res) => {
             <h2 style="margin-bottom: 30px; color: #4a5568;">Supply Tracking</h2>
 
             <div class="filter-section">
-                <h3 style="margin-bottom: 15px; color: #4a5568;">📋 Select Patient</h3>
+                <h3 style="margin-bottom: 15px; color: #4a5568;">Select Patient</h3>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
                     <div class="form-group">
                         <label for="trackingFacilitySelect">Filter by Facility</label>
@@ -769,7 +769,7 @@ app.get('/', (req, res) => {
             <h2 style="margin-bottom: 30px; color: #4a5568;">Summary Report</h2>
 
             <div class="filter-section">
-                <h3 style="margin-bottom: 15px; color: #4a5568;">📊 Report Filters & Export Options</h3>
+                <h3 style="margin-bottom: 15px; color: #4a5568;">Report Filters & Export Options</h3>
                 
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 15px;">
                     <div class="form-group">
@@ -788,9 +788,9 @@ app.get('/', (req, res) => {
                 </div>
 
                 <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: center;">
-                    <button class="btn btn-primary" onclick="applySummaryFilters()">📈 Apply Filters</button>
-                    <button class="btn btn-success" onclick="downloadUserReport()">📊 Download Report</button>
-                    <button class="btn btn-secondary" onclick="clearSummaryFilters()">🔄 Clear Filters</button>
+                    <button class="btn btn-primary" onclick="applySummaryFilters()">Apply Filters</button>
+                    <button class="btn btn-success" onclick="downloadUserReport()">Download Report</button>
+                    <button class="btn btn-secondary" onclick="clearSummaryFilters()">Clear Filters</button>
                 </div>
             </div>
 
@@ -833,11 +833,11 @@ app.get('/', (req, res) => {
 
         <!-- Admin Panel Tab -->
         <div id="adminTab" class="tab-content hidden">
-            <h2 style="margin-bottom: 30px; color: #4a5568;">🔧 Admin Panel</h2>
+            <h2 style="margin-bottom: 30px; color: #4a5568;">Admin Panel</h2>
 
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
                 <div style="background: #f7fafc; padding: 20px; border-radius: 12px; border-left: 4px solid #38a169;">
-                    <h3 style="color: #38a169; margin-bottom: 15px;">👥 User Management</h3>
+                    <h3 style="color: #38a169; margin-bottom: 15px;">User Management</h3>
                     <p style="color: #718096; margin-bottom: 15px;">Manage user accounts and permissions</p>
                     <div id="userStats" style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
                         <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
@@ -853,7 +853,7 @@ app.get('/', (req, res) => {
                 </div>
 
                 <div style="background: #f7fafc; padding: 20px; border-radius: 12px; border-left: 4px solid #667eea;">
-                    <h3 style="color: #667eea; margin-bottom: 15px;">🏢 Facility Management</h3>
+                    <h3 style="color: #667eea; margin-bottom: 15px;">Facility Management</h3>
                     <p style="color: #718096; margin-bottom: 15px;">Add and configure facilities</p>
                     <div style="display: flex; gap: 10px; margin-bottom: 15px;">
                         <input type="text" id="newFacilityName" placeholder="Facility name" style="flex: 1; padding: 8px; border: 1px solid #e2e8f0; border-radius: 4px;">
@@ -865,7 +865,7 @@ app.get('/', (req, res) => {
                 </div>
 
                 <div style="background: #f7fafc; padding: 20px; border-radius: 12px; border-left: 4px solid #e53e3e;">
-                    <h3 style="color: #e53e3e; margin-bottom: 15px;">📊 System Statistics</h3>
+                    <h3 style="color: #e53e3e; margin-bottom: 15px;">System Statistics</h3>
                     <p style="color: #718096; margin-bottom: 15px;">Overview of system usage</p>
                     <div id="systemStats" style="background: white; padding: 15px; border-radius: 8px;">
                         <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
@@ -913,7 +913,7 @@ app.get('/', (req, res) => {
     <!-- Excel Import Modal -->
     <div id="excelImportModal" class="modal">
         <div class="modal-content">
-            <h2>📊 Import Patients from Excel</h2>
+            <h2>Import Patients from Excel</h2>
             
             <div style="border: 2px dashed #4299e1; border-radius: 10px; padding: 30px; text-align: center; background: #f7faff; margin: 20px 0;">
                 <div style="font-size: 48px; margin-bottom: 20px;">📁</div>
@@ -940,7 +940,7 @@ app.get('/', (req, res) => {
     </div>
 
     <script>
-        // Global variables and application state
+        // Global variables
         var currentUser = null;
         var authToken = localStorage.getItem('authToken');
         var appData = {
@@ -955,13 +955,24 @@ app.get('/', (req, res) => {
             }
         };
         var excelData = null;
-
-        // API Configuration
         var API_BASE = window.location.origin + '/api';
 
-        /**
-         * Utility function for making API calls with authentication
-         */
+        // Utility function to pad strings (replaces String.padStart)
+        function padStart(str, targetLength, padString) {
+            str = String(str);
+            targetLength = targetLength >> 0;
+            padString = String(padString || ' ');
+            if (str.length > targetLength) {
+                return str;
+            }
+            targetLength = targetLength - str.length;
+            if (targetLength > padString.length) {
+                padString += padString.repeat(targetLength / padString.length);
+            }
+            return padString.slice(0, targetLength) + str;
+        }
+
+        // Utility function for making API calls
         function apiCall(endpoint, options) {
             var url = API_BASE + endpoint;
             var defaultOptions = {
@@ -974,7 +985,22 @@ app.get('/', (req, res) => {
                 defaultOptions.headers['Authorization'] = 'Bearer ' + authToken;
             }
 
-            var finalOptions = Object.assign({}, defaultOptions, options || {});
+            var finalOptions = {};
+            for (var key in defaultOptions) {
+                finalOptions[key] = defaultOptions[key];
+            }
+            if (options) {
+                for (var key in options) {
+                    if (key === 'headers') {
+                        for (var headerKey in options.headers) {
+                            finalOptions.headers[headerKey] = options.headers[headerKey];
+                        }
+                    } else {
+                        finalOptions[key] = options[key];
+                    }
+                }
+            }
+
             if (options && options.body && typeof options.body === 'object') {
                 finalOptions.body = JSON.stringify(options.body);
             }
@@ -997,9 +1023,7 @@ app.get('/', (req, res) => {
             });
         }
 
-        /**
-         * Show notification
-         */
+        // Show notification
         function showNotification(message, isError) {
             var notification = document.getElementById('notification');
             var text = document.getElementById('notificationText');
@@ -1013,35 +1037,30 @@ app.get('/', (req, res) => {
             }, 3000);
         }
 
-        /**
-         * Populate month/year dropdowns with MM-YYYY format
-         */
+        // Populate month/year dropdowns
         function populateMonthYearDropdowns() {
             var currentDate = new Date();
             var currentMonth = currentDate.getMonth();
             var currentYear = currentDate.getFullYear();
             
-            // Generate months from 2 years ago to 2 years in the future
             var months = [];
             for (var year = currentYear - 2; year <= currentYear + 2; year++) {
                 for (var month = 0; month < 12; month++) {
-                    var monthStr = String(month + 1).padStart(2, '0');
+                    var monthStr = padStart(String(month + 1), 2, '0');
                     var value = monthStr + '-' + year;
                     var label = new Date(year, month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
                     months.push({ value: value, label: label });
                 }
             }
             
-            // Sort by date (newest first for recent months)
             months.sort(function(a, b) {
-                var aMonthParts = a.value.split('-').map(Number);
-                var bMonthParts = b.value.split('-').map(Number);
-                var aDate = new Date(aMonthParts[1], aMonthParts[0] - 1);
-                var bDate = new Date(bMonthParts[1], bMonthParts[0] - 1);
+                var aMonthParts = a.value.split('-');
+                var bMonthParts = b.value.split('-');
+                var aDate = new Date(parseInt(aMonthParts[1]), parseInt(aMonthParts[0]) - 1);
+                var bDate = new Date(parseInt(bMonthParts[1]), parseInt(bMonthParts[0]) - 1);
                 return bDate - aDate;
             });
             
-            // Populate all month dropdowns
             var selectIds = ['patientMonth', 'trackingMonthSelect', 'summaryMonth'];
             for (var i = 0; i < selectIds.length; i++) {
                 var selectId = selectIds[i];
@@ -1057,18 +1076,15 @@ app.get('/', (req, res) => {
                         select.appendChild(option);
                     }
                     
-                    // Set default to current month for patient month
                     if (selectId === 'patientMonth') {
-                        var currentMonthValue = String(currentMonth + 1).padStart(2, '0') + '-' + currentYear;
+                        var currentMonthValue = padStart(String(currentMonth + 1), 2, '0') + '-' + currentYear;
                         select.value = currentMonthValue;
                     }
                 }
             }
         }
 
-        /**
-         * Setup user interface based on user role and permissions
-         */
+        // Setup user interface
         function setupUserInterface() {
             var user = currentUser;
             if (!user) return;
@@ -1090,81 +1106,78 @@ app.get('/', (req, res) => {
             }
         }
 
-        /**
-         * Initialize the application
-         */
+        // Initialize app
         function initApp() {
-            return new Promise(function(resolve, reject) {
-                try {
-                    setupUserInterface();
-                    populateMonthYearDropdowns();
-                    loadAllData().then(function() {
-                        populateSummaryFacilities();
-                        resolve();
-                    }).catch(reject);
-                } catch (error) {
-                    console.error('App initialization error:', error);
-                    showNotification('Failed to initialize application. Please refresh the page.', true);
-                    reject(error);
+            setupUserInterface();
+            populateMonthYearDropdowns();
+            
+            var requests = [
+                apiCall('/facilities'),
+                apiCall('/supplies'),
+                apiCall('/patients')
+            ];
+            
+            // Simple Promise.all replacement
+            var completed = 0;
+            var results = [];
+            var hasError = false;
+            
+            for (var i = 0; i < requests.length; i++) {
+                (function(index) {
+                    requests[index].then(function(result) {
+                        if (hasError) return;
+                        results[index] = result;
+                        completed++;
+                        if (completed === requests.length) {
+                            processLoadedData(results);
+                        }
+                    }).catch(function(error) {
+                        if (hasError) return;
+                        hasError = true;
+                        console.error('Failed to load data:', error);
+                        showNotification('Failed to load data: ' + error.message, true);
+                    });
+                })(i);
+            }
+        }
+
+        function processLoadedData(results) {
+            appData.facilities = results[0];
+            appData.supplies = results[1];
+            
+            var allPatients = results[2];
+            if (currentUser.role === 'admin') {
+                appData.patients = allPatients;
+            } else if (currentUser.facility_id) {
+                appData.patients = [];
+                for (var i = 0; i < allPatients.length; i++) {
+                    if (allPatients[i].facility_id === currentUser.facility_id) {
+                        appData.patients.push(allPatients[i]);
+                    }
                 }
-            });
-        }
-
-        /**
-         * Load all application data
-         */
-        function loadAllData() {
-            return new Promise(function(resolve, reject) {
-                console.log('🔄 Loading all data...');
-                
-                Promise.all([
-                    apiCall('/facilities'),
-                    apiCall('/supplies'),
-                    apiCall('/patients')
-                ]).then(function(results) {
-                    appData.facilities = results[0];
-                    appData.supplies = results[1];
-                    
-                    var allPatients = results[2];
-                    if (currentUser.role === 'admin') {
-                        appData.patients = allPatients;
-                    } else if (currentUser.facility_id) {
-                        appData.patients = allPatients.filter(function(patient) {
-                            return patient.facility_id === currentUser.facility_id;
-                        });
-                    } else {
-                        appData.patients = [];
-                    }
-                    
-                    if (appData.patients && Array.isArray(appData.patients)) {
-                        appData.patients.sort(function(a, b) {
-                            var nameA = (a.name || '').toLowerCase();
-                            var nameB = (b.name || '').toLowerCase();
-                            return nameA.localeCompare(nameB);
-                        });
-                    }
-
-                    populatePatientFacilityDropdown();
-                    populateTrackingFacilitySelector();
-                    refreshPatientList();
-                    refreshPatientSelect();
-                    updateSummary();
-                    
-                    console.log('✅ Data loading complete');
-                    resolve();
-                }).catch(function(error) {
-                    console.error('Failed to load data:', error);
-                    showNotification('❌ Failed to load data: ' + error.message, true);
-                    reject(error);
+            } else {
+                appData.patients = [];
+            }
+            
+            if (appData.patients && appData.patients.length > 0) {
+                appData.patients.sort(function(a, b) {
+                    var nameA = (a.name || '').toLowerCase();
+                    var nameB = (b.name || '').toLowerCase();
+                    return nameA.localeCompare(nameB);
                 });
-            });
+            }
+
+            populatePatientFacilityDropdown();
+            populateTrackingFacilitySelector();
+            populateSummaryFacilities();
+            refreshPatientList();
+            refreshPatientSelect();
+            updateSummary();
+            
+            console.log('Data loading complete');
         }
 
-        // ========== AUTHENTICATION FUNCTIONS ==========
-
-        /**
-         * Show authentication tab (login/register)
-         */
+        // Authentication functions
         function showAuthTab(tab, element) {
             var tabs = document.querySelectorAll('.auth-tab');
             for (var i = 0; i < tabs.length; i++) {
@@ -1182,9 +1195,6 @@ app.get('/', (req, res) => {
             }
         }
 
-        /**
-         * Load facilities for registration dropdown
-         */
         function loadFacilitiesForRegistration() {
             fetch(API_BASE + '/facilities/public').then(function(response) {
                 return response.json();
@@ -1204,9 +1214,6 @@ app.get('/', (req, res) => {
             });
         }
 
-        /**
-         * User registration
-         */
         function register() {
             var name = document.getElementById('registerName').value.trim();
             var email = document.getElementById('registerEmail').value.trim();
@@ -1259,9 +1266,6 @@ app.get('/', (req, res) => {
             });
         }
 
-        /**
-         * User login
-         */
         function login() {
             var email = document.getElementById('loginEmail').value.trim();
             var password = document.getElementById('loginPassword').value.trim();
@@ -1288,7 +1292,7 @@ app.get('/', (req, res) => {
                 document.getElementById('loginContainer').style.display = 'none';
                 document.getElementById('mainApp').style.display = 'block';
 
-                return initApp();
+                initApp();
             }).catch(function(error) {
                 showError(error.message);
             }).finally(function() {
@@ -1297,9 +1301,6 @@ app.get('/', (req, res) => {
             });
         }
 
-        /**
-         * User logout
-         */
         function logout() {
             authToken = null;
             currentUser = null;
@@ -1311,9 +1312,6 @@ app.get('/', (req, res) => {
             document.getElementById('loginPassword').value = '';
         }
 
-        /**
-         * Show error message
-         */
         function showError(message) {
             var loginError = document.getElementById('loginError');
             loginError.textContent = message;
@@ -1323,8 +1321,7 @@ app.get('/', (req, res) => {
             }, 5000);
         }
 
-        // ========== PASSWORD CHANGE FUNCTIONS ==========
-
+        // Password change functions
         function showChangePasswordModal() {
             document.getElementById('changePasswordModal').style.display = 'flex';
         }
@@ -1379,11 +1376,7 @@ app.get('/', (req, res) => {
             });
         }
 
-        // ========== NAVIGATION FUNCTIONS ==========
-
-        /**
-         * Show tab content
-         */
+        // Navigation functions
         function showTab(tabName, clickedElement) {
             var tabContents = document.querySelectorAll('.tab-content');
             for (var i = 0; i < tabContents.length; i++) {
@@ -1423,11 +1416,7 @@ app.get('/', (req, res) => {
             }
         }
 
-        // ========== PATIENT MANAGEMENT FUNCTIONS ==========
-
-        /**
-         * Populate patient facility dropdown
-         */
+        // Patient management functions
         function populatePatientFacilityDropdown() {
             var select = document.getElementById('patientFacility');
             select.innerHTML = '<option value="">Select Facility</option>';
@@ -1441,9 +1430,6 @@ app.get('/', (req, res) => {
             }
         }
 
-        /**
-         * Add a new patient
-         */
         function addPatient() {
             var name = document.getElementById('patientName').value.trim();
             var monthInput = document.getElementById('patientMonth').value.trim();
@@ -1456,14 +1442,13 @@ app.get('/', (req, res) => {
                 return;
             }
 
-            // Convert MM-YYYY to YYYY-MM format for storage
             var monthParts = monthInput.split('-');
             if (monthParts.length !== 2) {
                 showNotification('Invalid month format selected', true);
                 return;
             }
             
-            var month = monthParts[1] + '-' + monthParts[0]; // Convert to YYYY-MM
+            var month = monthParts[1] + '-' + monthParts[0];
 
             addBtn.disabled = true;
             addBtn.innerHTML = '<span class="loading"></span>Adding...';
@@ -1475,11 +1460,10 @@ app.get('/', (req, res) => {
                 document.getElementById('patientName').value = '';
                 document.getElementById('mrnNumber').value = '';
                 document.getElementById('patientFacility').value = '';
-                populateMonthYearDropdowns(); // Reset month to current
+                populateMonthYearDropdowns();
 
-                return loadAllData();
-            }).then(function() {
-                showNotification('✅ Patient added successfully!');
+                initApp();
+                showNotification('Patient added successfully!');
             }).catch(function(error) {
                 showNotification(error.message, true);
             }).finally(function() {
@@ -1488,9 +1472,6 @@ app.get('/', (req, res) => {
             });
         }
 
-        /**
-         * Refresh patient list
-         */
         function refreshPatientList() {
             var tableBody = document.getElementById('patientTableBody');
             
@@ -1507,7 +1488,6 @@ app.get('/', (req, res) => {
                 var patient = appData.patients[i];
                 var row = document.createElement('tr');
                 
-                // Convert YYYY-MM to MM-YYYY for display
                 var monthParts = patient.month.split('-');
                 var displayMonth = monthParts[1] + '-' + monthParts[0];
                 
@@ -1518,51 +1498,38 @@ app.get('/', (req, res) => {
                     '<td>' + (patient.facility_name || 'Unknown') + '</td>' +
                     '<td>' + new Date(patient.updated_at).toLocaleDateString() + '</td>' +
                     '<td>' +
-                        '<button class="btn btn-secondary btn-sm" onclick="viewPatientTracking(' + patient.id + ')" style="margin-right: 5px;">👁️ View</button>' +
-                        '<button class="btn btn-danger btn-sm" onclick="removePatient(' + patient.id + ')">🗑️ Delete</button>' +
+                        '<button class="btn btn-secondary btn-sm" onclick="viewPatientTracking(' + patient.id + ')" style="margin-right: 5px;">View</button>' +
+                        '<button class="btn btn-danger btn-sm" onclick="removePatient(' + patient.id + ')">Delete</button>' +
                     '</td>';
 
                 tableBody.appendChild(row);
             }
         }
 
-        /**
-         * View patient tracking (switch to tracking tab)
-         */
         function viewPatientTracking(patientId) {
             showTab('tracking', document.querySelector('.tab:nth-child(2)'));
             document.getElementById('patientSelect').value = patientId;
             loadPatientTracking();
         }
 
-        /**
-         * Remove a patient
-         */
         function removePatient(patientId) {
             if (confirm('Are you sure you want to remove this patient and all tracking data?')) {
                 apiCall('/patients/' + patientId, {
                     method: 'DELETE'
                 }).then(function() {
-                    return loadAllData();
-                }).then(function() {
-                    showNotification('✅ Patient removed successfully!');
+                    initApp();
+                    showNotification('Patient removed successfully!');
                 }).catch(function(error) {
                     showNotification('Failed to remove patient: ' + error.message, true);
                 });
             }
         }
 
-        // ========== EXCEL IMPORT/EXPORT FUNCTIONS ==========
-
-        /**
-         * Download Excel template for patient import
-         */
+        // Excel functions
         function downloadExcelTemplate() {
             var worksheet = XLSX.utils.aoa_to_sheet([
                 ['Name', 'Month', 'MRN', 'Facility'],
-                ['Smith, John', '12-2024', 'MRN12345', 'Main Hospital'],
-                ['Doe, Jane', '12-2024', 'MRN67890', 'Main Hospital'],
-                ['Johnson, Bob', '12-2024', '', 'Main Hospital']
+                ['Smith, John', '12-2024', 'MRN12345', 'Main Hospital']
             ]);
 
             var workbook = XLSX.utils.book_new();
@@ -1570,16 +1537,10 @@ app.get('/', (req, res) => {
             XLSX.writeFile(workbook, 'patient_import_template.xlsx');
         }
 
-        /**
-         * Show Excel import modal
-         */
         function showExcelImportModal() {
             document.getElementById('excelImportModal').style.display = 'flex';
         }
 
-        /**
-         * Close Excel import modal
-         */
         function closeExcelImportModal() {
             document.getElementById('excelImportModal').style.display = 'none';
             document.getElementById('excelFileInput').value = '';
@@ -1588,9 +1549,6 @@ app.get('/', (req, res) => {
             excelData = null;
         }
 
-        /**
-         * Handle Excel file selection
-         */
         function handleExcelFile(file) {
             if (!file) return;
 
@@ -1618,9 +1576,6 @@ app.get('/', (req, res) => {
             reader.readAsArrayBuffer(file);
         }
 
-        /**
-         * Show Excel file preview
-         */
         function showExcelPreview(data, fileName) {
             var resultsDiv = document.getElementById('importResults');
             
@@ -1633,7 +1588,7 @@ app.get('/', (req, res) => {
             var headers = data[0];
             var dataRows = data.slice(1);
 
-            var html = '<h4>📄 File Preview: ' + fileName + '</h4>';
+            var html = '<h4>File Preview: ' + fileName + '</h4>';
             html += '<p><strong>Rows to import:</strong> ' + dataRows.length + '</p>';
             html += '<p><strong>Columns found:</strong> ' + headers.join(', ') + '</p>';
 
@@ -1641,9 +1596,6 @@ app.get('/', (req, res) => {
             resultsDiv.style.display = 'block';
         }
 
-        /**
-         * Process Excel import
-         */
         function processExcelImport() {
             var processBtn = document.getElementById('processImportBtn');
             var resultsDiv = document.getElementById('importResults');
@@ -1679,35 +1631,16 @@ app.get('/', (req, res) => {
                     return result;
                 });
             }).then(function(result) {
-                var resultsHtml = '<h4 style="color: #38a169;">✅ Import Complete</h4><p>' + result.message + '</p>';
-                
-                if (result.results && result.results.success && result.results.success.length > 0) {
-                    resultsHtml += '<h5 style="color: #38a169; margin-top: 15px;">Successfully Added:</h5><ul>';
-                    for (var i = 0; i < result.results.success.length; i++) {
-                        resultsHtml += '<li style="color: #38a169;">' + result.results.success[i] + '</li>';
-                    }
-                    resultsHtml += '</ul>';
-                }
-
-                if (result.results && result.results.errors && result.results.errors.length > 0) {
-                    resultsHtml += '<h5 style="color: #e53e3e; margin-top: 15px;">Errors:</h5><ul>';
-                    for (var i = 0; i < result.results.errors.length; i++) {
-                        resultsHtml += '<li style="color: #e53e3e;">' + result.results.errors[i] + '</li>';
-                    }
-                    resultsHtml += '</ul>';
-                }
-
+                var resultsHtml = '<h4 style="color: #38a169;">Import Complete</h4><p>' + result.message + '</p>';
                 resultsDiv.innerHTML = resultsHtml;
                 resultsDiv.style.display = 'block';
 
-                return loadAllData();
-            }).then(function() {
-                // Auto-close modal after successful import
+                initApp();
                 setTimeout(function() {
                     closeExcelImportModal();
                 }, 3000);
             }).catch(function(error) {
-                resultsDiv.innerHTML = '<h4 style="color: #e53e3e;">❌ Import Failed</h4><p style="color: #e53e3e;">' + error.message + '</p>';
+                resultsDiv.innerHTML = '<h4 style="color: #e53e3e;">Import Failed</h4><p style="color: #e53e3e;">' + error.message + '</p>';
                 resultsDiv.style.display = 'block';
             }).finally(function() {
                 processBtn.disabled = false;
@@ -1715,11 +1648,7 @@ app.get('/', (req, res) => {
             });
         }
 
-        // ========== SUPPLY TRACKING FUNCTIONS ==========
-
-        /**
-         * Populate tracking facility selector
-         */
+        // Supply tracking functions
         function populateTrackingFacilitySelector() {
             var select = document.getElementById('trackingFacilitySelect');
             if (!select) return;
@@ -1739,9 +1668,6 @@ app.get('/', (req, res) => {
             });
         }
 
-        /**
-         * Update tracking filters
-         */
         function updateTrackingFilters() {
             var facilitySelect = document.getElementById('trackingFacilitySelect');
             var monthSelect = document.getElementById('trackingMonthSelect');
@@ -1754,24 +1680,32 @@ app.get('/', (req, res) => {
             updateFilteredPatientSelect(selectedFacilityId, selectedMonth);
         }
 
-        /**
-         * Get filtered tracking patients
-         */
         function getFilteredTrackingPatients(facilityId, monthFilter) {
-            var filteredPatients = appData.patients.slice();
+            var filteredPatients = [];
+            for (var i = 0; i < appData.patients.length; i++) {
+                filteredPatients.push(appData.patients[i]);
+            }
             
             if (facilityId) {
-                filteredPatients = filteredPatients.filter(function(patient) {
-                    return patient.facility_id == facilityId;
-                });
+                var newFiltered = [];
+                for (var i = 0; i < filteredPatients.length; i++) {
+                    if (filteredPatients[i].facility_id == facilityId) {
+                        newFiltered.push(filteredPatients[i]);
+                    }
+                }
+                filteredPatients = newFiltered;
             }
             
             if (monthFilter) {
                 var monthParts = monthFilter.split('-');
                 var storageFormat = monthParts[1] + '-' + monthParts[0];
-                filteredPatients = filteredPatients.filter(function(patient) {
-                    return patient.month === storageFormat;
-                });
+                var newFiltered = [];
+                for (var i = 0; i < filteredPatients.length; i++) {
+                    if (filteredPatients[i].month === storageFormat) {
+                        newFiltered.push(filteredPatients[i]);
+                    }
+                }
+                filteredPatients = newFiltered;
             }
             
             filteredPatients.sort(function(a, b) {
@@ -1783,9 +1717,6 @@ app.get('/', (req, res) => {
             return filteredPatients;
         }
 
-        /**
-         * Update filtered patient select dropdown
-         */
         function updateFilteredPatientSelect(facilityId, monthFilter) {
             var select = document.getElementById('patientSelect');
             if (!select) return;
@@ -1817,9 +1748,6 @@ app.get('/', (req, res) => {
             }
         }
 
-        /**
-         * Refresh patient select dropdown
-         */
         function refreshPatientSelect() {
             populateTrackingFacilitySelector();
             
@@ -1839,9 +1767,6 @@ app.get('/', (req, res) => {
             }
         }
 
-        /**
-         * Load patient tracking data
-         */
         function loadPatientTracking() {
             var patientId = document.getElementById('patientSelect').value;
             var container = document.getElementById('trackingContent');
@@ -1851,7 +1776,14 @@ app.get('/', (req, res) => {
                 return;
             }
 
-            var patient = appData.patients.find(function(p) { return p.id == patientId; });
+            var patient = null;
+            for (var i = 0; i < appData.patients.length; i++) {
+                if (appData.patients[i].id == patientId) {
+                    patient = appData.patients[i];
+                    break;
+                }
+            }
+            
             if (!patient) {
                 container.innerHTML = '<div style="text-align: center; margin-top: 50px; padding: 20px; background: #fed7d7; border-radius: 10px; border-left: 4px solid #e53e3e;"><p style="color: #c53030; font-size: 16px; margin: 0;">Patient not found</p></div>';
                 return;
@@ -1862,7 +1794,7 @@ app.get('/', (req, res) => {
             apiCall('/patients/' + patientId + '/tracking').then(function(trackingData) {
                 container.innerHTML = 
                     '<div style="text-align: center; margin-top: 50px; padding: 40px; background: #f0f4ff; border-radius: 15px; border-left: 4px solid #667eea;">' +
-                    '<h3 style="color: #667eea; margin-bottom: 20px;">🏗️ Supply Tracking Interface</h3>' +
+                    '<h3 style="color: #667eea; margin-bottom: 20px;">Supply Tracking Interface</h3>' +
                     '<p style="color: #4a5568; margin-bottom: 15px;"><strong>Patient:</strong> ' + patient.name + '</p>' +
                     '<p style="color: #4a5568; margin-bottom: 15px;"><strong>Facility:</strong> ' + (patient.facility_name || 'Unknown') + '</p>' +
                     '<p style="color: #4a5568; margin-bottom: 30px;"><strong>Tracking Records:</strong> ' + trackingData.length + ' entries</p>' +
@@ -1874,19 +1806,15 @@ app.get('/', (req, res) => {
                 
                 var errorMessage = 'Failed to load tracking data: ' + error.message;
                 
-                if (error.message.indexOf('Access denied') !== -1 || error.message.indexOf('Unauthorized') !== -1) {
-                    errorMessage = '❌ Access Denied: You may not have permission to view this patient\'s data.';
+                if (error.message.indexOf('Access denied') !== -1) {
+                    errorMessage = 'Access Denied: You may not have permission to view this patient data.';
                 }
                 
                 container.innerHTML = '<div style="text-align: center; margin-top: 50px; padding: 20px; background: #fed7d7; border-radius: 10px; border-left: 4px solid #e53e3e;"><p style="color: #c53030; font-size: 16px; margin: 0;">' + errorMessage + '</p></div>';
             });
         }
 
-        // ========== SUMMARY REPORT FUNCTIONS ==========
-
-        /**
-         * Populate summary facilities dropdown
-         */
+        // Summary functions
         function populateSummaryFacilities() {
             var select = document.getElementById('summaryFacility');
             if (!select) return;
@@ -1902,9 +1830,6 @@ app.get('/', (req, res) => {
             }
         }
 
-        /**
-         * Apply summary filters
-         */
         function applySummaryFilters() {
             var month = document.getElementById('summaryMonth').value;
             var facility = document.getElementById('summaryFacility') ? document.getElementById('summaryFacility').value : '';
@@ -1915,9 +1840,6 @@ app.get('/', (req, res) => {
             updateSummary();
         }
 
-        /**
-         * Clear summary filters
-         */
         function clearSummaryFilters() {
             document.getElementById('summaryMonth').value = '';
             if (document.getElementById('summaryFacility')) {
@@ -1930,32 +1852,37 @@ app.get('/', (req, res) => {
             updateSummary();
         }
 
-        /**
-         * Get filtered patients for summary
-         */
         function getFilteredPatients() {
-            var filteredPatients = appData.patients.slice();
+            var filteredPatients = [];
+            for (var i = 0; i < appData.patients.length; i++) {
+                filteredPatients.push(appData.patients[i]);
+            }
 
             if (appData.currentFilters.month) {
                 var monthParts = appData.currentFilters.month.split('-');
                 var storageFormat = monthParts[1] + '-' + monthParts[0];
-                filteredPatients = filteredPatients.filter(function(patient) { 
-                    return patient.month === storageFormat; 
-                });
+                var newFiltered = [];
+                for (var i = 0; i < filteredPatients.length; i++) {
+                    if (filteredPatients[i].month === storageFormat) {
+                        newFiltered.push(filteredPatients[i]);
+                    }
+                }
+                filteredPatients = newFiltered;
             }
 
             if (appData.currentFilters.facility) {
-                filteredPatients = filteredPatients.filter(function(patient) { 
-                    return patient.facility_id == appData.currentFilters.facility; 
-                });
+                var newFiltered = [];
+                for (var i = 0; i < filteredPatients.length; i++) {
+                    if (filteredPatients[i].facility_id == appData.currentFilters.facility) {
+                        newFiltered.push(filteredPatients[i]);
+                    }
+                }
+                filteredPatients = newFiltered;
             }
 
             return filteredPatients;
         }
 
-        /**
-         * Update summary data
-         */
         function updateSummary() {
             try {
                 var filteredPatients = getFilteredPatients();
@@ -1968,13 +1895,10 @@ app.get('/', (req, res) => {
                 updateSummaryTable(filteredPatients);
             } catch (error) {
                 console.error('Failed to update summary:', error);
-                showNotification('❌ Failed to update summary: ' + error.message, true);
+                showNotification('Failed to update summary: ' + error.message, true);
             }
         }
 
-        /**
-         * Update summary table
-         */
         function updateSummaryTable(patients) {
             var tbody = document.getElementById('summaryTableBody');
             tbody.innerHTML = '';
@@ -2003,12 +1927,9 @@ app.get('/', (req, res) => {
             }
         }
 
-        /**
-         * Download user report
-         */
         function downloadUserReport() {
             try {
-                showNotification('📄 Generating report...');
+                showNotification('Generating report...');
                 
                 var filteredPatients = getFilteredPatients();
                 var reportData = [];
@@ -2047,19 +1968,15 @@ app.get('/', (req, res) => {
                 
                 XLSX.writeFile(workbook, fileName + '.xlsx');
                 
-                showNotification('✅ Report downloaded successfully!');
+                showNotification('Report downloaded successfully!');
                 
             } catch (error) {
                 console.error('Failed to generate report:', error);
-                showNotification('❌ Failed to generate report: ' + error.message, true);
+                showNotification('Failed to generate report: ' + error.message, true);
             }
         }
 
-        // ========== ADMIN PANEL FUNCTIONS ==========
-
-        /**
-         * Load admin data
-         */
+        // Admin functions
         function loadAdminData() {
             if (!currentUser || currentUser.role !== 'admin') return;
 
@@ -2076,9 +1993,6 @@ app.get('/', (req, res) => {
             });
         }
 
-        /**
-         * Load facilities list for admin
-         */
         function loadFacilitiesList() {
             try {
                 var facilitiesList = document.getElementById('facilitiesList');
@@ -2104,9 +2018,6 @@ app.get('/', (req, res) => {
             }
         }
 
-        /**
-         * Add facility
-         */
         function addFacility() {
             var name = document.getElementById('newFacilityName').value.trim();
             
@@ -2120,18 +2031,14 @@ app.get('/', (req, res) => {
                 body: { name: name }
             }).then(function() {
                 document.getElementById('newFacilityName').value = '';
-                return loadAllData();
-            }).then(function() {
+                initApp();
                 loadAdminData();
-                showNotification('✅ Facility added successfully!');
+                showNotification('Facility added successfully!');
             }).catch(function(error) {
                 showNotification('Failed to add facility: ' + error.message, true);
             });
         }
 
-        /**
-         * Delete facility
-         */
         function deleteFacility(facilityId) {
             if (!confirm('Are you sure you want to delete this facility? This action cannot be undone.')) {
                 return;
@@ -2140,54 +2047,44 @@ app.get('/', (req, res) => {
             apiCall('/facilities/' + facilityId, {
                 method: 'DELETE'
             }).then(function() {
-                return loadAllData();
-            }).then(function() {
+                initApp();
                 loadAdminData();
-                showNotification('✅ Facility deleted successfully!');
+                showNotification('Facility deleted successfully!');
             }).catch(function(error) {
                 showNotification('Failed to delete facility: ' + error.message, true);
             });
         }
 
-        /**
-         * Load user management (placeholder)
-         */
         function loadUserManagement() {
-            showNotification('👥 User management interface coming soon!');
+            showNotification('User management interface coming soon!');
         }
 
-        // ========== INITIALIZATION ==========
-
-        /**
-         * Check for existing auth token on page load
-         */
+        // Initialization
         window.addEventListener('DOMContentLoaded', function() {
             if (authToken) {
-                console.log('🔍 Checking stored auth token...');
+                console.log('Checking stored auth token...');
                 
                 apiCall('/auth/verify').then(function(response) {
                     currentUser = response.user;
                     
-                    console.log('✅ Token valid, auto-logging in user:', currentUser.email);
+                    console.log('Token valid, auto-logging in user:', currentUser.email);
                     
                     document.getElementById('loginContainer').style.display = 'none';
                     document.getElementById('mainApp').style.display = 'block';
                     
-                    return initApp();
+                    initApp();
                 }).catch(function(error) {
-                    console.log('❌ Stored token invalid, showing login');
+                    console.log('Stored token invalid, showing login');
                     localStorage.removeItem('authToken');
                     authToken = null;
                     currentUser = null;
                 });
             } else {
-                console.log('🔓 No stored token, showing login screen');
+                console.log('No stored token, showing login screen');
             }
         });
 
-        /**
-         * Handle Enter key for login
-         */
+        // Handle Enter key for login
         document.addEventListener('DOMContentLoaded', function() {
             var loginEmail = document.getElementById('loginEmail');
             var loginPassword = document.getElementById('loginPassword');
@@ -2208,9 +2105,7 @@ app.get('/', (req, res) => {
 </html>`);
 });
 
-// ==================== AUTH ROUTES ====================
-
-// Register
+// Auth routes
 app.post('/api/auth/register', async (req, res) => {
     try {
         const { name, email, password, facilityId } = req.body;
@@ -2245,7 +2140,6 @@ app.post('/api/auth/register', async (req, res) => {
     }
 });
 
-// Login
 app.post('/api/auth/login', async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -2294,7 +2188,6 @@ app.post('/api/auth/login', async (req, res) => {
     }
 });
 
-// Verify token
 app.get('/api/auth/verify', authenticateToken, async (req, res) => {
     try {
         const result = await pool.query(`
@@ -2318,7 +2211,6 @@ app.get('/api/auth/verify', authenticateToken, async (req, res) => {
     }
 });
 
-// Change password
 app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
     try {
         const { currentPassword, newPassword } = req.body;
@@ -2348,8 +2240,7 @@ app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
     }
 });
 
-// ==================== FACILITIES ROUTES ====================
-
+// Facilities routes
 app.get('/api/facilities/public', async (req, res) => {
     try {
         const result = await pool.query('SELECT id, name FROM facilities ORDER BY name');
@@ -2424,8 +2315,7 @@ app.delete('/api/facilities/:id', authenticateToken, requireAdmin, async (req, r
     }
 });
 
-// ==================== SUPPLIES ROUTES ====================
-
+// Supplies routes
 app.get('/api/supplies', authenticateToken, async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM supplies ORDER BY code');
@@ -2436,8 +2326,7 @@ app.get('/api/supplies', authenticateToken, async (req, res) => {
     }
 });
 
-// ==================== PATIENTS ROUTES ====================
-
+// Patients routes
 app.get('/api/patients', authenticateToken, async (req, res) => {
     try {
         let query = `
@@ -2510,7 +2399,6 @@ app.delete('/api/patients/:id', authenticateToken, async (req, res) => {
     }
 });
 
-// Excel import
 app.post('/api/patients/import-excel', authenticateToken, upload.single('excelFile'), async (req, res) => {
     try {
         if (!req.file) {
@@ -2554,7 +2442,6 @@ app.post('/api/patients/import-excel', authenticateToken, upload.single('excelFi
                     continue;
                 }
 
-                // Convert MM-YYYY to YYYY-MM
                 const monthParts = month.split('-');
                 const storageMonth = monthParts[1] + '-' + monthParts[0];
 
@@ -2578,8 +2465,6 @@ app.post('/api/patients/import-excel', authenticateToken, upload.single('excelFi
         res.status(500).json({ error: 'Failed to import Excel file' });
     }
 });
-
-// ==================== TRACKING ROUTES ====================
 
 app.get('/api/patients/:id/tracking', authenticateToken, async (req, res) => {
     try {
@@ -2607,8 +2492,6 @@ app.get('/api/patients/:id/tracking', authenticateToken, async (req, res) => {
     }
 });
 
-// ==================== STATISTICS ROUTE ====================
-
 app.get('/api/statistics', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const stats = await Promise.all([
@@ -2632,14 +2515,12 @@ app.get('/api/statistics', authenticateToken, requireAdmin, async (req, res) => 
     }
 });
 
-// ==================== DATABASE INITIALIZATION ====================
-
 async function initializeDatabase() {
     try {
-        console.log('🔄 Starting database initialization...');
+        console.log('Starting database initialization...');
         
         await pool.query('SELECT NOW()');
-        console.log('✅ Database connection successful');
+        console.log('Database connection successful');
         
         const tablesExist = await pool.query(`
             SELECT COUNT(*) FROM information_schema.tables 
@@ -2647,7 +2528,7 @@ async function initializeDatabase() {
         `);
         
         if (parseInt(tablesExist.rows[0].count) < 5) {
-            console.log('🔧 Creating database tables...');
+            console.log('Creating database tables...');
             
             await pool.query(`
                 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -2706,7 +2587,6 @@ async function initializeDatabase() {
                 );
             `);
 
-            // Insert default data
             await pool.query(`
                 INSERT INTO facilities (name) VALUES 
                     ('Main Hospital'),
@@ -2721,11 +2601,7 @@ async function initializeDatabase() {
                     (702, 'Alginate Dressing 2x2', 'A6196', 12.25, false),
                     (703, 'Transparent Film 4x4.75', 'A6257', 3.20, false),
                     (704, 'Antimicrobial Dressing 4x5', 'A6251', 15.80, false),
-                    (705, 'Collagen Dressing 4x4', 'A6021', 22.50, false),
-                    (272, 'Med-Surgical Supplies', 'B4149', 0.00, false),
-                    (400, 'HME filter holder for trach or vent', 'A7507', 3.49, false),
-                    (401, 'HME housing & adhesive', 'A7509', 1.97, false),
-                    (414, 'Trach tube', 'A7520', 12.50, false)
+                    (705, 'Collagen Dressing 4x4', 'A6021', 22.50, false)
                 ON CONFLICT (code) DO NOTHING;
             `);
 
@@ -2752,20 +2628,17 @@ async function initializeDatabase() {
                 ON CONFLICT (name, month, facility_id) DO NOTHING;
             `);
 
-            console.log('✅ Database initialized successfully');
+            console.log('Database initialized successfully');
         } else {
-            console.log('✅ Database tables already exist');
+            console.log('Database tables already exist');
         }
 
-        console.log('🔑 Default Login: admin@system.com / admin123');
+        console.log('Default Login: admin@system.com / admin123');
 
     } catch (error) {
-        console.error('❌ Database initialization failed:', error);
-        // Don't throw - let the app start anyway
+        console.error('Database initialization failed:', error);
     }
 }
-
-// ==================== ERROR HANDLING ====================
 
 app.use((req, res) => {
     res.status(404).json({ error: 'Route not found' });
@@ -2779,23 +2652,21 @@ app.use((error, req, res, next) => {
     });
 });
 
-// ==================== SERVER START ====================
-
 async function startServer() {
     try {
-        console.log('🚀 Starting Wound Care RT Supply Tracker...');
+        console.log('Starting Wound Care RT Supply Tracker...');
         
         await initializeDatabase();
         
         app.listen(PORT, '0.0.0.0', () => {
-            console.log(`🚀 Server running on port ${PORT}`);
-            console.log(`🔗 App URL: https://terence-wound-care-tracker-0ee111d0e54a.herokuapp.com`);
-            console.log('🎉 Wound Care RT Supply Tracker is ready!');
-            console.log('👑 Admin Login: admin@system.com / admin123');
-            console.log('👤 User Login: user@demo.com / user123');
+            console.log(`Server running on port ${PORT}`);
+            console.log(`App URL: https://terence-wound-care-tracker-0ee111d0e54a.herokuapp.com`);
+            console.log('Wound Care RT Supply Tracker is ready!');
+            console.log('Admin Login: admin@system.com / admin123');
+            console.log('User Login: user@demo.com / user123');
         });
     } catch (error) {
-        console.error('❌ Failed to start server:', error);
+        console.error('Failed to start server:', error);
         process.exit(1);
     }
 }
