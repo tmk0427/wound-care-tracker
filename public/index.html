@@ -384,15 +384,15 @@
             width: 100%;
             border-collapse: separate;
             border-spacing: 0;
-            font-size: 12px;
+            font-size: 13px;
         }
 
         .tracking-table th,
         .tracking-table td {
             border: 1px solid #e2e8f0;
-            padding: 8px;
+            padding: 10px;
             text-align: center;
-            min-width: 50px;
+            min-width: 80px;
             position: relative;
         }
 
@@ -413,13 +413,21 @@
             position: sticky;
             top: 0;
             z-index: 10;
+            font-size: 12px;
         }
 
         .tracking-table th:nth-child(-n+7) {
             z-index: 15;
         }
 
-        .tracking-table .supply-info {
+        .tracking-table .ar-code-cell {
+            text-align: left;
+            min-width: 80px;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .tracking-table .description-cell {
             text-align: left;
             min-width: 200px;
             max-width: 250px;
@@ -428,24 +436,19 @@
             text-overflow: ellipsis;
         }
 
-        .tracking-table .ar-code {
-            font-weight: bold;
-            color: #667eea;
-        }
-
-        .tracking-table .item-desc {
-            font-size: 11px;
-            color: #718096;
-            margin-top: 2px;
+        .tracking-table .wound-dx-cell {
+            text-align: left;
+            min-width: 150px;
+            max-width: 200px;
         }
 
         .tracking-input {
-            width: 100%;
-            padding: 4px;
+            width: 80px;
+            padding: 6px;
             border: 1px solid #e2e8f0;
             border-radius: 4px;
             text-align: center;
-            font-size: 12px;
+            font-size: 13px;
             background: white;
         }
 
@@ -457,12 +460,12 @@
 
         .wound-dx-input {
             width: 100%;
-            padding: 4px;
+            padding: 6px;
             border: 1px solid #e2e8f0;
             border-radius: 4px;
-            font-size: 11px;
+            font-size: 12px;
             resize: vertical;
-            min-height: 30px;
+            min-height: 35px;
         }
 
         .wound-dx-input:focus {
@@ -523,6 +526,20 @@
             gap: 15px;
             flex-wrap: wrap;
             align-items: center;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
 
         /* Import Section */
@@ -676,18 +693,17 @@
             }
 
             .tracking-table {
-                font-size: 10px;
+                font-size: 11px;
             }
 
             .tracking-table th,
             .tracking-table td {
-                padding: 6px;
-                min-width: 40px;
+                padding: 8px;
+                min-width: 60px;
             }
 
-            .tracking-table .supply-info {
-                min-width: 150px;
-                max-width: 180px;
+            .tracking-input {
+                width: 60px;
             }
         }
 
@@ -728,11 +744,11 @@
             <div id="loginForm">
                 <div class="form-group">
                     <label for="loginEmail">Email Address</label>
-                    <input type="email" id="loginEmail" placeholder="Enter your email" value="admin@system.com">
+                    <input type="email" id="loginEmail" placeholder="Enter your email">
                 </div>
                 <div class="form-group">
                     <label for="loginPassword">Password</label>
-                    <input type="password" id="loginPassword" placeholder="Enter your password" value="admin123">
+                    <input type="password" id="loginPassword" placeholder="Enter your password">
                 </div>
                 <button class="auth-btn" onclick="login()" id="loginBtn">Sign In</button>
                 <div id="loginError" class="error-message hidden">Invalid credentials</div>
@@ -765,6 +781,23 @@
         <!-- Dashboard Tab -->
         <div id="dashboardTab" class="tab-content">
             <h2 style="margin-bottom: 30px; color: #4a5568;">🏠 Dashboard</h2>
+
+            <!-- Dashboard Filters -->
+            <div class="filter-section">
+                <h3 style="margin-bottom: 15px; color: #4a5568;">Dashboard Filters</h3>
+                <div class="filter-grid">
+                    <div class="form-group">
+                        <label for="dashboardFacilityFilter">Filter by Facility</label>
+                        <select id="dashboardFacilityFilter" onchange="loadDashboard()">
+                            <option value="">All Facilities</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="dashboardMonthFilter">Filter by Month/Year</label>
+                        <input type="month" id="dashboardMonthFilter" onchange="loadDashboard()">
+                    </div>
+                </div>
+            </div>
 
             <!-- Dashboard Cards -->
             <div class="dashboard-cards">
@@ -805,9 +838,13 @@
                         <tr id="dashboardTableHeader">
                             <th>Patient Name</th>
                             <th>MRN</th>
+                            <th>Wound Dx</th>
+                            <th>AR Code</th>
+                            <th>HCPCS</th>
                             <th>Month/Year</th>
                             <th>Facility</th>
                             <th>Total Units</th>
+                            <th>Total Costs</th>
                             <th>Last Updated</th>
                         </tr>
                     </thead>
@@ -836,7 +873,7 @@
                     <h4>Required Excel Columns:</h4>
                     <ul>
                         <li><strong>Name</strong> - Patient full name (e.g., "Smith, John")</li>
-                        <li><strong>Month</strong> - Format: YYYY-MM (e.g., "2025-01")</li>
+                        <li><strong>Month</strong> - Format: MM-YYYY (e.g., "01-2025")</li>
                         <li><strong>Facility</strong> - Exact facility name from your system</li>
                         <li><strong>MRN</strong> - Medical Record Number (optional)</li>
                     </ul>
@@ -894,7 +931,7 @@
             <h2 style="margin-bottom: 30px; color: #4a5568;">📊 Enhanced Supply Tracking</h2>
 
             <div class="filter-section">
-                <h3 style="margin-bottom: 15px; color: #4a5568;">Select Patient for Tracking</h3>
+                <h3 style="margin-bottom: 15px; color: #4a5568;">Patient & Supply Filters</h3>
                 <div class="filter-grid">
                     <div class="form-group">
                         <label for="trackingFacilitySelect">Filter by Facility</label>
@@ -903,10 +940,18 @@
                         </select>
                     </div>
                     <div class="form-group">
+                        <label for="trackingMonthFilter">Filter by Month/Year</label>
+                        <input type="month" id="trackingMonthFilter" onchange="refreshPatientSelect()">
+                    </div>
+                    <div class="form-group">
                         <label for="patientSelect">Select Patient</label>
                         <select id="patientSelect" onchange="loadPatientTracking()">
                             <option value="">Select Patient</option>
                         </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="supplySearchInput">Search Supplies</label>
+                        <input type="text" id="supplySearchInput" placeholder="Search by AR Code or Description" class="search-input" onkeyup="filterSupplies()">
                     </div>
                 </div>
             </div>
@@ -921,7 +966,7 @@
                         <li>✅ Real-time auto-save functionality</li>
                         <li>✅ Wound diagnosis tracking</li>
                         <li>✅ Cost calculations</li>
-                        <li>✅ Role-based editing permissions</li>
+                        <li>✅ Search and filter capabilities</li>
                     </ul>
                 </div>
 
@@ -947,6 +992,19 @@
             <div class="filter-section">
                 <h3 style="margin-bottom: 15px; color: #4a5568;">Report Filters & Export Options</h3>
                 
+                <div class="filter-grid">
+                    <div class="form-group">
+                        <label for="summaryFacilityFilter">Filter by Facility</label>
+                        <select id="summaryFacilityFilter" onchange="updateSummaryReport()">
+                            <option value="">All Facilities</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="summaryMonthFilter">Filter by Month/Year</label>
+                        <input type="month" id="summaryMonthFilter" onchange="updateSummaryReport()">
+                    </div>
+                </div>
+                
                 <div class="filter-actions">
                     <button class="btn btn-success" onclick="downloadSummaryReport()">📥 Download Report</button>
                     <button class="btn btn-primary" onclick="updateSummaryReport()">🔄 Refresh Report</button>
@@ -959,6 +1017,7 @@
                         <tr id="summaryTableHeader">
                             <th>Patient Name</th>
                             <th>MRN</th>
+                            <th>Wound Dx</th>
                             <th>Month/Year</th>
                             <th>Facility</th>
                             <th>Total Units</th>
@@ -1101,6 +1160,8 @@
         let authToken = localStorage.getItem('authToken');
         let excelData = null;
         let supplyExcelData = null;
+        let allSupplies = [];
+        let filteredSupplies = [];
 
         // Utility functions
         function formatCurrency(amount) {
@@ -1118,6 +1179,27 @@
                 month: 'short', 
                 day: 'numeric' 
             });
+        }
+
+        function formatMonthForDisplay(monthStr) {
+            if (!monthStr) return 'N/A';
+            if (monthStr.includes('-')) {
+                const [year, month] = monthStr.split('-');
+                return `${month}-${year}`;
+            }
+            return monthStr;
+        }
+
+        function formatMonthForAPI(monthStr) {
+            if (!monthStr) return '';
+            if (monthStr.includes('-') && monthStr.length === 7) {
+                return monthStr; // Already in YYYY-MM format
+            }
+            if (monthStr.includes('-') && monthStr.length === 7) {
+                const [month, year] = monthStr.split('-');
+                return `${year}-${month.padStart(2, '0')}`;
+            }
+            return monthStr;
         }
 
         function showNotification(message, isError = false) {
@@ -1209,8 +1291,8 @@
 
             document.getElementById('loginContainer').style.display = 'flex';
             document.getElementById('mainApp').style.display = 'none';
-            document.getElementById('loginEmail').value = 'admin@system.com';
-            document.getElementById('loginPassword').value = 'admin123';
+            document.getElementById('loginEmail').value = '';
+            document.getElementById('loginPassword').value = '';
         }
 
         function showError(message) {
@@ -1232,6 +1314,9 @@
                     apiCall('/supplies'),
                     apiCall('/patients')
                 ]);
+
+                allSupplies = supplies;
+                filteredSupplies = supplies;
 
                 // Populate dropdowns
                 populateFacilityDropdowns(facilities);
@@ -1270,6 +1355,9 @@
                 document.getElementById('summaryTableHeader').innerHTML = 
                     '<th>Patient Name</th>' +
                     '<th>MRN</th>' +
+                    '<th>Wound Dx</th>' +
+                    '<th>AR Code</th>' +
+                    '<th>HCPCS</th>' +
                     '<th>Month/Year</th>' +
                     '<th>Facility</th>' +
                     '<th>Total Units</th>' +
@@ -1279,6 +1367,9 @@
                 document.getElementById('dashboardTableHeader').innerHTML = 
                     '<th>Patient Name</th>' +
                     '<th>MRN</th>' +
+                    '<th>Wound Dx</th>' +
+                    '<th>AR Code</th>' +
+                    '<th>HCPCS</th>' +
                     '<th>Month/Year</th>' +
                     '<th>Facility</th>' +
                     '<th>Total Units</th>' +
@@ -1287,19 +1378,38 @@
             } else {
                 suppliesTabButton.style.display = 'none';
                 dashboardCostCard.style.display = 'none';
+                
+                // Update table headers for regular users
+                document.getElementById('summaryTableHeader').innerHTML = 
+                    '<th>Patient Name</th>' +
+                    '<th>MRN</th>' +
+                    '<th>Wound Dx</th>' +
+                    '<th>Month/Year</th>' +
+                    '<th>Facility</th>' +
+                    '<th>Total Units</th>' +
+                    '<th>Last Updated</th>';
+                
+                document.getElementById('dashboardTableHeader').innerHTML = 
+                    '<th>Patient Name</th>' +
+                    '<th>MRN</th>' +
+                    '<th>Wound Dx</th>' +
+                    '<th>Month/Year</th>' +
+                    '<th>Facility</th>' +
+                    '<th>Total Units</th>' +
+                    '<th>Last Updated</th>';
             }
         }
 
         function populateFacilityDropdowns(facilities) {
             const facilitySelects = [
-                'patientFacility', 'trackingFacilitySelect'
+                'patientFacility', 'trackingFacilitySelect', 'dashboardFacilityFilter', 'summaryFacilityFilter'
             ];
             
             facilitySelects.forEach(selectId => {
                 const select = document.getElementById(selectId);
                 if (select) {
                     const currentValue = select.value;
-                    const isFiltering = selectId.includes('tracking');
+                    const isFiltering = selectId.includes('Filter') || selectId.includes('tracking');
                     
                     select.innerHTML = isFiltering ? '<option value="">All Facilities</option>' : '<option value="">Select Facility</option>';
                     
@@ -1401,7 +1511,7 @@
                     row.innerHTML = `
                         <td>${patient.name}</td>
                         <td>${patient.mrn || 'N/A'}</td>
-                        <td>${patient.month}</td>
+                        <td>${formatMonthForDisplay(patient.month)}</td>
                         <td>${patient.facility_name || 'Unknown'}</td>
                         <td>${formatDate(patient.updated_at)}</td>
                         <td>
@@ -1434,6 +1544,7 @@
             try {
                 const patients = await apiCall('/patients');
                 const facilityFilter = document.getElementById('trackingFacilitySelect').value;
+                const monthFilter = document.getElementById('trackingMonthFilter').value;
                 const patientSelect = document.getElementById('patientSelect');
                 
                 patientSelect.innerHTML = '<option value="">Select Patient</option>';
@@ -1442,17 +1553,41 @@
 
                 // Apply facility filter
                 if (facilityFilter) {
-                    filteredPatients = patients.filter(p => p.facility_id === parseInt(facilityFilter));
+                    filteredPatients = filteredPatients.filter(p => p.facility_id === parseInt(facilityFilter));
+                }
+
+                // Apply month filter
+                if (monthFilter) {
+                    filteredPatients = filteredPatients.filter(p => p.month === monthFilter);
                 }
 
                 filteredPatients.forEach(patient => {
                     const option = document.createElement('option');
                     option.value = patient.id;
-                    option.textContent = `${patient.name} (${patient.month}) - ${patient.facility_name || 'Unknown'}`;
+                    option.textContent = `${patient.name} (${formatMonthForDisplay(patient.month)}) - ${patient.facility_name || 'Unknown'}`;
                     patientSelect.appendChild(option);
                 });
             } catch (error) {
                 showNotification('Failed to load patients for tracking', true);
+            }
+        }
+
+        function filterSupplies() {
+            const searchTerm = document.getElementById('supplySearchInput').value.toLowerCase();
+            
+            if (!searchTerm) {
+                filteredSupplies = allSupplies;
+            } else {
+                filteredSupplies = allSupplies.filter(supply => 
+                    supply.code.toString().includes(searchTerm) ||
+                    supply.description.toLowerCase().includes(searchTerm)
+                );
+            }
+
+            // Reload the tracking grid if a patient is selected
+            const patientId = document.getElementById('patientSelect').value;
+            if (patientId) {
+                loadPatientTracking();
             }
         }
 
@@ -1465,15 +1600,12 @@
             }
 
             try {
-                const [trackingData, supplies] = await Promise.all([
-                    apiCall(`/tracking/${patientId}`),
-                    apiCall('/supplies')
-                ]);
+                const trackingData = await apiCall(`/tracking/${patientId}`);
 
                 document.getElementById('trackingPlaceholder').classList.add('hidden');
                 document.getElementById('trackingGrid').classList.remove('hidden');
                 
-                generateTrackingGrid(patientId, trackingData, supplies);
+                generateTrackingGrid(patientId, trackingData, filteredSupplies);
                 showNotification(`✅ Loaded tracking for patient`);
             } catch (error) {
                 showNotification('Failed to load tracking data: ' + error.message, true);
@@ -1485,16 +1617,16 @@
             const thead = document.getElementById('trackingTableHead');
             const tbody = document.getElementById('trackingTableBody');
 
-            // Generate header
+            // Generate header with new structure
             let headerHTML = `
                 <tr>
-                    <th class="supply-info">Supply Information</th>
-                    <th>Code</th>
+                    <th class="ar-code-cell">AR Code</th>
+                    <th class="description-cell">Item Description</th>
+                    <th class="wound-dx-cell">All Wound Dx</th>
                     <th>HCPCS</th>
                     <th>Unit Cost</th>
-                    <th>Wound Dx</th>
-                    <th>Total</th>
-                    <th>Cost</th>
+                    <th>Total Units</th>
+                    <th>Total Costs</th>
             `;
 
             // Add day columns (1-31)
@@ -1516,33 +1648,31 @@
                 const trackingForSupply = trackingData.filter(t => t.supply_id === supply.id);
                 
                 let totalUnits = 0;
-                let woundDx = '';
+                const woundDxList = [];
                 
-                // Calculate total and get wound diagnosis
+                // Calculate total and collect wound diagnoses
                 trackingForSupply.forEach(track => {
                     totalUnits += track.quantity || 0;
-                    if (track.wound_dx && !woundDx) {
-                        woundDx = track.wound_dx;
+                    if (track.wound_dx && !woundDxList.includes(track.wound_dx)) {
+                        woundDxList.push(track.wound_dx);
                     }
                 });
 
+                const allWoundDx = woundDxList.join('; ');
                 const totalCost = totalUnits * (supply.cost || 0);
                 grandTotalUnits += totalUnits;
                 grandTotalCost += totalCost;
 
                 let rowHTML = `
-                    <td class="supply-info">
-                        <div class="ar-code">${supply.code}</div>
-                        <div class="item-desc">${supply.description}</div>
-                    </td>
-                    <td>${supply.code}</td>
-                    <td>${supply.hcpcs || 'N/A'}</td>
-                    <td>${formatCurrency(supply.cost)}</td>
-                    <td>
+                    <td class="ar-code-cell">${supply.code}</td>
+                    <td class="description-cell" title="${supply.description}">${supply.description}</td>
+                    <td class="wound-dx-cell">
                         <textarea class="wound-dx-input" 
                                   onchange="updateWoundDx(${patientId}, ${supply.id}, this.value)"
-                                  placeholder="Enter wound diagnosis">${woundDx}</textarea>
+                                  placeholder="Enter wound diagnosis">${allWoundDx}</textarea>
                     </td>
+                    <td>${supply.hcpcs || 'N/A'}</td>
+                    <td>${formatCurrency(supply.cost)}</td>
                     <td class="total-cell">${totalUnits}</td>
                     <td class="cost-cell">${formatCurrency(totalCost)}</td>
                 `;
@@ -1573,9 +1703,9 @@
             totalsRow.style.fontWeight = 'bold';
             
             let totalsHTML = `
-                <td class="supply-info"><strong>TOTALS</strong></td>
-                <td></td>
-                <td></td>
+                <td class="ar-code-cell"><strong>TOTALS</strong></td>
+                <td class="description-cell"></td>
+                <td class="wound-dx-cell"></td>
                 <td></td>
                 <td></td>
                 <td class="total-cell">${grandTotalUnits}</td>
@@ -1585,7 +1715,7 @@
             // Calculate daily totals
             for (let day = 1; day <= 31; day++) {
                 const dayTotal = trackingData
-                    .filter(t => t.day_of_month === day)
+                    .filter(t => t.day_of_month === day && filteredSupplies.some(s => s.id === t.supply_id))
                     .reduce((sum, t) => sum + (t.quantity || 0), 0);
                 
                 totalsHTML += `<td class="total-cell">${dayTotal}</td>`;
@@ -1662,6 +1792,12 @@
 
                 clearSupplyForm();
                 await refreshSuppliesList();
+                
+                // Refresh supplies data
+                const supplies = await apiCall('/supplies');
+                allSupplies = supplies;
+                filteredSupplies = supplies;
+                
                 showNotification('✅ Supply added successfully!');
             } catch (error) {
                 showNotification(error.message, true);
@@ -1709,6 +1845,12 @@
                 try {
                     await apiCall(`/supplies/${supplyId}`, { method: 'DELETE' });
                     await refreshSuppliesList();
+                    
+                    // Refresh supplies data
+                    const supplies = await apiCall('/supplies');
+                    allSupplies = supplies;
+                    filteredSupplies = supplies;
+                    
                     await loadDashboard();
                     showNotification('Supply deleted successfully');
                 } catch (error) {
@@ -1720,19 +1862,27 @@
         // ===== DASHBOARD FUNCTIONS =====
         async function loadDashboard() {
             try {
-                const [patients, supplies, facilities] = await Promise.all([
-                    apiCall('/patients'),
-                    apiCall('/supplies'),
+                const [facilities] = await Promise.all([
                     apiCall('/facilities')
                 ]);
 
-                // Calculate statistics
-                const totalPatients = patients.length;
-                const totalFacilities = currentUser.role === 'admin' ? facilities.length : 1;
+                // Get filters
+                const facilityFilter = document.getElementById('dashboardFacilityFilter')?.value;
+                const monthFilter = document.getElementById('dashboardMonthFilter')?.value;
 
-                // For now, set units and costs to 0 since we need tracking data
-                const totalUnits = 0;
-                const totalCosts = 0;
+                // Build query parameters
+                const params = new URLSearchParams();
+                if (facilityFilter) params.append('facilityId', facilityFilter);
+                if (monthFilter) params.append('month', monthFilter);
+
+                // Get dashboard summary data
+                const dashboardData = await apiCall(`/dashboard/summary?${params.toString()}`);
+
+                // Calculate statistics
+                const totalPatients = dashboardData.length;
+                const totalFacilities = currentUser.role === 'admin' ? facilities.length : 1;
+                const totalUnits = dashboardData.reduce((sum, patient) => sum + (patient.total_units || 0), 0);
+                const totalCosts = dashboardData.reduce((sum, patient) => sum + (parseFloat(patient.total_cost) || 0), 0);
 
                 // Update dashboard cards
                 document.getElementById('dashboardTotalPatients').textContent = totalPatients;
@@ -1742,37 +1892,41 @@
                     document.getElementById('dashboardTotalCosts').textContent = formatCurrency(totalCosts);
                 }
 
-                // Update patient table
-                updateDashboardTable(patients);
+                // Update patient table with detailed data
+                updateDashboardTable(dashboardData);
             } catch (error) {
                 showNotification('Failed to load dashboard data', true);
             }
         }
 
-        function updateDashboardTable(patients) {
+        function updateDashboardTable(dashboardData) {
             const tbody = document.getElementById('dashboardPatientsTableBody');
             tbody.innerHTML = '';
 
-            patients.forEach(patient => {
+            dashboardData.forEach(patient => {
                 const row = document.createElement('tr');
                 
                 if (currentUser.role === 'admin') {
                     row.innerHTML = `
                         <td>${patient.name}</td>
                         <td>${patient.mrn || 'N/A'}</td>
-                        <td>${patient.month}</td>
+                        <td>${patient.wound_diagnoses || 'N/A'}</td>
+                        <td>${patient.supply_codes || 'N/A'}</td>
+                        <td>${patient.hcpcs_codes || 'N/A'}</td>
+                        <td>${formatMonthForDisplay(patient.month)}</td>
                         <td>${patient.facility_name || 'Unknown'}</td>
-                        <td>0</td>
-                        <td>$0.00</td>
+                        <td>${patient.total_units || 0}</td>
+                        <td>${formatCurrency(patient.total_cost || 0)}</td>
                         <td>${formatDate(patient.updated_at)}</td>
                     `;
                 } else {
                     row.innerHTML = `
                         <td>${patient.name}</td>
                         <td>${patient.mrn || 'N/A'}</td>
-                        <td>${patient.month}</td>
+                        <td>${patient.wound_diagnoses || 'N/A'}</td>
+                        <td>${formatMonthForDisplay(patient.month)}</td>
                         <td>${patient.facility_name || 'Unknown'}</td>
-                        <td>0</td>
+                        <td>${patient.total_units || 0}</td>
                         <td>${formatDate(patient.updated_at)}</td>
                     `;
                 }
@@ -1784,30 +1938,45 @@
         // ===== SUMMARY REPORT =====
         async function updateSummaryReport() {
             try {
-                const patients = await apiCall('/patients');
+                // Get filters
+                const facilityFilter = document.getElementById('summaryFacilityFilter')?.value;
+                const monthFilter = document.getElementById('summaryMonthFilter')?.value;
+
+                // Build query parameters
+                const params = new URLSearchParams();
+                if (facilityFilter) params.append('facilityId', facilityFilter);
+                if (monthFilter) params.append('month', monthFilter);
+
+                // Get summary data
+                const summaryData = await apiCall(`/dashboard/summary?${params.toString()}`);
+
                 const tbody = document.getElementById('summaryTableBody');
                 tbody.innerHTML = '';
 
-                patients.forEach(patient => {
+                summaryData.forEach(patient => {
                     const row = document.createElement('tr');
                     
                     if (currentUser.role === 'admin') {
                         row.innerHTML = `
                             <td>${patient.name}</td>
                             <td>${patient.mrn || 'N/A'}</td>
-                            <td>${patient.month}</td>
+                            <td>${patient.wound_diagnoses || 'N/A'}</td>
+                            <td>${patient.supply_codes || 'N/A'}</td>
+                            <td>${patient.hcpcs_codes || 'N/A'}</td>
+                            <td>${formatMonthForDisplay(patient.month)}</td>
                             <td>${patient.facility_name || 'Unknown'}</td>
-                            <td>0</td>
-                            <td>$0.00</td>
+                            <td>${patient.total_units || 0}</td>
+                            <td>${formatCurrency(patient.total_cost || 0)}</td>
                             <td>${formatDate(patient.updated_at)}</td>
                         `;
                     } else {
                         row.innerHTML = `
                             <td>${patient.name}</td>
                             <td>${patient.mrn || 'N/A'}</td>
-                            <td>${patient.month}</td>
+                            <td>${patient.wound_diagnoses || 'N/A'}</td>
+                            <td>${formatMonthForDisplay(patient.month)}</td>
                             <td>${patient.facility_name || 'Unknown'}</td>
-                            <td>0</td>
+                            <td>${patient.total_units || 0}</td>
                             <td>${formatDate(patient.updated_at)}</td>
                         `;
                     }
@@ -1821,8 +1990,54 @@
             }
         }
 
-        function downloadSummaryReport() {
-            showNotification('📥 Excel export feature ready for implementation');
+        async function downloadSummaryReport() {
+            try {
+                // Get filters
+                const facilityFilter = document.getElementById('summaryFacilityFilter')?.value;
+                const monthFilter = document.getElementById('summaryMonthFilter')?.value;
+
+                // Build query parameters
+                const params = new URLSearchParams();
+                if (facilityFilter) params.append('facilityId', facilityFilter);
+                if (monthFilter) params.append('month', monthFilter);
+
+                // Get summary data
+                const summaryData = await apiCall(`/dashboard/summary?${params.toString()}`);
+
+                // Prepare data for export
+                const exportData = summaryData.map(patient => {
+                    if (currentUser.role === 'admin') {
+                        return {
+                            'Patient Name': patient.name,
+                            'MRN': patient.mrn || 'N/A',
+                            'Wound Dx': patient.wound_diagnoses || 'N/A',
+                            'AR Code': patient.supply_codes || 'N/A',
+                            'HCPCS': patient.hcpcs_codes || 'N/A',
+                            'Month/Year': formatMonthForDisplay(patient.month),
+                            'Facility': patient.facility_name || 'Unknown',
+                            'Total Units': patient.total_units || 0,
+                            'Total Costs': formatCurrency(patient.total_cost || 0),
+                            'Last Updated': formatDate(patient.updated_at)
+                        };
+                    } else {
+                        return {
+                            'Patient Name': patient.name,
+                            'MRN': patient.mrn || 'N/A',
+                            'Wound Dx': patient.wound_diagnoses || 'N/A',
+                            'Month/Year': formatMonthForDisplay(patient.month),
+                            'Facility': patient.facility_name || 'Unknown',
+                            'Total Units': patient.total_units || 0,
+                            'Last Updated': formatDate(patient.updated_at)
+                        };
+                    }
+                });
+
+                const filename = `Summary_Report_${new Date().toISOString().split('T')[0]}`;
+                downloadExcel(exportData, filename);
+                showNotification('📥 Summary report downloaded successfully!');
+            } catch (error) {
+                showNotification('Failed to download summary report: ' + error.message, true);
+            }
         }
 
         // ===== EXCEL IMPORT/EXPORT FUNCTIONS =====
@@ -1830,13 +2045,13 @@
             const templateData = [
                 {
                     'Name': 'Smith, John',
-                    'Month': '2025-01',
+                    'Month': '01-2025',
                     'Facility': 'Main Hospital',
                     'MRN': 'MRN12345'
                 },
                 {
                     'Name': 'Johnson, Mary',
-                    'Month': '2025-01',
+                    'Month': '01-2025',
                     'Facility': 'Clinic North',
                     'MRN': 'MRN67890'
                 }
@@ -1987,13 +2202,6 @@
                 }
             });
         });
-
-        // ===== WELCOME MESSAGES =====
-        setTimeout(function() {
-            if (!authToken) {
-                showNotification('🚀 Enhanced Wound Care RT Supply Tracker is ready! Login to explore all features.');
-            }
-        }, 1000);
 
         console.log('🎉 Enhanced Wound Care RT Supply Tracker initialized!');
     </script>
