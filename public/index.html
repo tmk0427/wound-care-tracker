@@ -396,11 +396,65 @@
             position: relative;
         }
 
-        /* Freeze first 7 columns */
-        .tracking-table th:nth-child(-n+7),
-        .tracking-table td:nth-child(-n+7) {
+        /* Freeze first 7 columns with specific positioning */
+        .tracking-table th:nth-child(1),
+        .tracking-table td:nth-child(1) {
             position: sticky;
             left: 0;
+            background: white;
+            z-index: 5;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+        }
+
+        .tracking-table th:nth-child(2),
+        .tracking-table td:nth-child(2) {
+            position: sticky;
+            left: 80px;
+            background: white;
+            z-index: 5;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+        }
+
+        .tracking-table th:nth-child(3),
+        .tracking-table td:nth-child(3) {
+            position: sticky;
+            left: 280px;
+            background: white;
+            z-index: 5;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+        }
+
+        .tracking-table th:nth-child(4),
+        .tracking-table td:nth-child(4) {
+            position: sticky;
+            left: 480px;
+            background: white;
+            z-index: 5;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+        }
+
+        .tracking-table th:nth-child(5),
+        .tracking-table td:nth-child(5) {
+            position: sticky;
+            left: 560px;
+            background: white;
+            z-index: 5;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+        }
+
+        .tracking-table th:nth-child(6),
+        .tracking-table td:nth-child(6) {
+            position: sticky;
+            left: 640px;
+            background: white;
+            z-index: 5;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+        }
+
+        .tracking-table th:nth-child(7),
+        .tracking-table td:nth-child(7) {
+            position: sticky;
+            left: 720px;
             background: white;
             z-index: 5;
             box-shadow: 2px 0 5px rgba(0,0,0,0.1);
@@ -900,10 +954,8 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label></label>
-                    <div style="display: flex; gap: 10px; margin-top: 25px;">
-                        <button class="btn btn-primary" onclick="addPatient()" id="addPatientBtn">➕ Add Patient</button>
-                    </div>
+                    <label>&nbsp;</label>
+                    <button class="btn btn-primary" onclick="addPatient()" id="addPatientBtn" style="margin-top: 0;">➕ Add Patient</button>
                 </div>
             </div>
 
@@ -1202,6 +1254,49 @@
             return monthStr;
         }
 
+        function generateMonthOptions() {
+            const months = [];
+            const startDate = new Date(2024, 7); // August 2024 (month is 0-indexed)
+            const currentDate = new Date();
+            const endDate = new Date(currentDate.getFullYear() + 2, currentDate.getMonth()); // 2 years into future
+            
+            let date = new Date(startDate);
+            while (date <= endDate) {
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const monthStr = `${year}-${month}`;
+                const displayStr = `${month}-${year}`;
+                months.push({ value: monthStr, display: displayStr });
+                date.setMonth(date.getMonth() + 1);
+            }
+            
+            return months;
+        }
+
+        function populateMonthDropdowns() {
+            const monthOptions = generateMonthOptions();
+            const monthSelects = [
+                'dashboardMonthFilter', 'trackingMonthFilter', 'summaryMonthFilter'
+            ];
+            
+            monthSelects.forEach(selectId => {
+                const select = document.getElementById(selectId);
+                if (select) {
+                    const currentValue = select.value;
+                    select.innerHTML = '<option value="">All Months</option>';
+                    
+                    monthOptions.forEach(month => {
+                        const option = document.createElement('option');
+                        option.value = month.value;
+                        option.textContent = month.display;
+                        select.appendChild(option);
+                    });
+                    
+                    if (currentValue) select.value = currentValue;
+                }
+            });
+        }
+
         function showNotification(message, isError = false) {
             const notification = document.getElementById('notification');
             const text = document.getElementById('notificationText');
@@ -1320,6 +1415,7 @@
 
                 // Populate dropdowns
                 populateFacilityDropdowns(facilities);
+                populateMonthDropdowns();
                 
                 // Load data
                 await loadDashboard();
@@ -1617,7 +1713,7 @@
             const thead = document.getElementById('trackingTableHead');
             const tbody = document.getElementById('trackingTableBody');
 
-            // Generate header with new structure
+            // Generate header with new structure - 7 frozen columns
             let headerHTML = `
                 <tr>
                     <th class="ar-code-cell">AR Code</th>
@@ -1653,8 +1749,8 @@
                 // Calculate total and collect wound diagnoses
                 trackingForSupply.forEach(track => {
                     totalUnits += track.quantity || 0;
-                    if (track.wound_dx && !woundDxList.includes(track.wound_dx)) {
-                        woundDxList.push(track.wound_dx);
+                    if (track.wound_dx && track.wound_dx.trim() && !woundDxList.includes(track.wound_dx.trim())) {
+                        woundDxList.push(track.wound_dx.trim());
                     }
                 });
 
@@ -1673,8 +1769,8 @@
                     </td>
                     <td>${supply.hcpcs || 'N/A'}</td>
                     <td>${formatCurrency(supply.cost)}</td>
-                    <td class="total-cell">${totalUnits}</td>
-                    <td class="cost-cell">${formatCurrency(totalCost)}</td>
+                    <td class="total-cell" id="total-${supply.id}">${totalUnits}</td>
+                    <td class="cost-cell" id="cost-${supply.id}">${formatCurrency(totalCost)}</td>
                 `;
 
                 // Add day columns
@@ -1688,7 +1784,9 @@
                                    class="tracking-input" 
                                    value="${quantity}" 
                                    min="0" 
-                                   onchange="updateTracking(${patientId}, ${supply.id}, ${day}, this.value)">
+                                   onchange="updateTracking(${patientId}, ${supply.id}, ${day}, this.value)"
+                                   data-supply-id="${supply.id}"
+                                   data-day="${day}">
                         </td>
                     `;
                 }
@@ -1708,8 +1806,8 @@
                 <td class="wound-dx-cell"></td>
                 <td></td>
                 <td></td>
-                <td class="total-cell">${grandTotalUnits}</td>
-                <td class="cost-cell">${formatCurrency(grandTotalCost)}</td>
+                <td class="total-cell" id="grand-total-units">${grandTotalUnits}</td>
+                <td class="cost-cell" id="grand-total-cost">${formatCurrency(grandTotalCost)}</td>
             `;
 
             // Calculate daily totals
@@ -1718,7 +1816,7 @@
                     .filter(t => t.day_of_month === day && filteredSupplies.some(s => s.id === t.supply_id))
                     .reduce((sum, t) => sum + (t.quantity || 0), 0);
                 
-                totalsHTML += `<td class="total-cell">${dayTotal}</td>`;
+                totalsHTML += `<td class="total-cell" id="day-total-${day}">${dayTotal}</td>`;
             }
 
             totalsRow.innerHTML = totalsHTML;
@@ -1740,14 +1838,80 @@
                     }
                 });
 
-                // Refresh the current view to update totals
+                // Update totals in real-time without full reload
+                updateTrackingTotals();
+                
+                // Update dashboard after a short delay
                 setTimeout(() => {
-                    loadPatientTracking();
                     loadDashboard();
-                }, 100);
+                }, 500);
             } catch (error) {
                 showNotification('Failed to update tracking: ' + error.message, true);
             }
+        }
+
+        function updateTrackingTotals() {
+            // Get all supplies and calculate totals
+            const allInputs = document.querySelectorAll('.tracking-input');
+            const supplyTotals = {};
+            const dayTotals = {};
+            let grandTotal = 0;
+            let grandCost = 0;
+
+            // Initialize totals
+            for (let day = 1; day <= 31; day++) {
+                dayTotals[day] = 0;
+            }
+
+            // Calculate totals
+            allInputs.forEach(input => {
+                const supplyId = input.getAttribute('data-supply-id');
+                const day = parseInt(input.getAttribute('data-day'));
+                const quantity = parseInt(input.value) || 0;
+
+                if (!supplyTotals[supplyId]) {
+                    supplyTotals[supplyId] = 0;
+                }
+                
+                supplyTotals[supplyId] += quantity;
+                dayTotals[day] += quantity;
+                grandTotal += quantity;
+            });
+
+            // Update supply totals and costs
+            Object.keys(supplyTotals).forEach(supplyId => {
+                const totalCell = document.getElementById(`total-${supplyId}`);
+                const costCell = document.getElementById(`cost-${supplyId}`);
+                
+                if (totalCell) {
+                    totalCell.textContent = supplyTotals[supplyId];
+                }
+                
+                if (costCell) {
+                    // Get the supply cost from the page
+                    const supplyRow = totalCell?.closest('tr');
+                    const costText = supplyRow?.cells[4]?.textContent || '$0.00';
+                    const cost = parseFloat(costText.replace(/[$,]/g, '')) || 0;
+                    const totalCost = supplyTotals[supplyId] * cost;
+                    costCell.textContent = formatCurrency(totalCost);
+                    grandCost += totalCost;
+                }
+            });
+
+            // Update day totals
+            for (let day = 1; day <= 31; day++) {
+                const dayTotalCell = document.getElementById(`day-total-${day}`);
+                if (dayTotalCell) {
+                    dayTotalCell.textContent = dayTotals[day];
+                }
+            }
+
+            // Update grand totals
+            const grandTotalCell = document.getElementById('grand-total-units');
+            const grandCostCell = document.getElementById('grand-total-cost');
+            
+            if (grandTotalCell) grandTotalCell.textContent = grandTotal;
+            if (grandCostCell) grandCostCell.textContent = formatCurrency(grandCost);
         }
 
         async function updateWoundDx(patientId, supplyId, value) {
@@ -1768,6 +1932,8 @@
         }
 
         // ===== SUPPLY MANAGEMENT =====
+        let editingSupplyId = null;
+
         async function addSupply() {
             const code = document.getElementById('supplyArCode').value.trim();
             const description = document.getElementById('supplyDescription').value.trim();
@@ -1780,15 +1946,33 @@
             }
 
             try {
-                await apiCall('/supplies', {
-                    method: 'POST',
-                    body: { 
-                        code: parseInt(code), 
-                        description: description, 
-                        hcpcs: hcpcs || null, 
-                        cost: cost 
-                    }
-                });
+                if (editingSupplyId) {
+                    // Update existing supply
+                    await apiCall(`/supplies/${editingSupplyId}`, {
+                        method: 'PUT',
+                        body: { 
+                            code: parseInt(code), 
+                            description: description, 
+                            hcpcs: hcpcs || null, 
+                            cost: cost 
+                        }
+                    });
+                    showNotification('✅ Supply updated successfully!');
+                    editingSupplyId = null;
+                    document.getElementById('addSupplyBtn').textContent = '➕ Add Supply';
+                } else {
+                    // Add new supply
+                    await apiCall('/supplies', {
+                        method: 'POST',
+                        body: { 
+                            code: parseInt(code), 
+                            description: description, 
+                            hcpcs: hcpcs || null, 
+                            cost: cost 
+                        }
+                    });
+                    showNotification('✅ Supply added successfully!');
+                }
 
                 clearSupplyForm();
                 await refreshSuppliesList();
@@ -1797,18 +1981,30 @@
                 const supplies = await apiCall('/supplies');
                 allSupplies = supplies;
                 filteredSupplies = supplies;
-                
-                showNotification('✅ Supply added successfully!');
             } catch (error) {
                 showNotification(error.message, true);
             }
         }
 
+        function editSupply(supplyId, code, description, hcpcs, cost) {
+            editingSupplyId = supplyId;
+            document.getElementById('supplyArCode').value = code;
+            document.getElementById('supplyDescription').value = description;
+            document.getElementById('supplyHcpcs').value = hcpcs || '';
+            document.getElementById('supplyUnitCost').value = cost || 0;
+            document.getElementById('addSupplyBtn').textContent = '💾 Update Supply';
+            
+            // Scroll to form
+            document.getElementById('supplyArCode').scrollIntoView({ behavior: 'smooth' });
+        }
+
         function clearSupplyForm() {
+            editingSupplyId = null;
             document.getElementById('supplyArCode').value = '';
             document.getElementById('supplyDescription').value = '';
             document.getElementById('supplyHcpcs').value = '';
             document.getElementById('supplyUnitCost').value = '';
+            document.getElementById('addSupplyBtn').textContent = '➕ Add Supply';
         }
 
         async function refreshSuppliesList() {
@@ -1819,6 +2015,11 @@
 
                 supplies.sort((a, b) => a.code - b.code).forEach(supply => {
                     const row = document.createElement('tr');
+                    const editButton = supply.is_custom ? 
+                        `<button class="btn btn-secondary btn-sm" onclick="editSupply(${supply.id}, ${supply.code}, '${supply.description.replace(/'/g, "\\'")}', '${supply.hcpcs || ''}', ${supply.cost})">Edit</button>` : '';
+                    const deleteButton = supply.is_custom ? 
+                        `<button class="btn btn-danger btn-sm" onclick="deleteSupply(${supply.id})">Delete</button>` : 'System Supply';
+                    
                     row.innerHTML = `
                         <td><strong>${supply.code}</strong></td>
                         <td>${supply.description}</td>
@@ -1830,7 +2031,10 @@
                             </span>
                         </td>
                         <td>
-                            ${supply.is_custom ? `<button class="btn btn-danger btn-sm" onclick="deleteSupply(${supply.id})">Delete</button>` : 'System Supply'}
+                            <div style="display: flex; gap: 5px;">
+                                ${editButton}
+                                ${deleteButton}
+                            </div>
                         </td>
                     `;
                     tbody.appendChild(row);
@@ -1876,7 +2080,22 @@
                 if (monthFilter) params.append('month', monthFilter);
 
                 // Get dashboard summary data
-                const dashboardData = await apiCall(`/dashboard/summary?${params.toString()}`);
+                let dashboardData = [];
+                try {
+                    dashboardData = await apiCall(`/dashboard/summary?${params.toString()}`);
+                } catch (error) {
+                    console.warn('Dashboard summary endpoint not available, using basic patient data');
+                    // Fallback to basic patient data if dashboard/summary endpoint fails
+                    const patients = await apiCall('/patients');
+                    dashboardData = patients.map(patient => ({
+                        ...patient,
+                        total_units: 0,
+                        total_cost: 0,
+                        wound_diagnoses: 'N/A',
+                        supply_codes: 'N/A',
+                        hcpcs_codes: 'N/A'
+                    }));
+                }
 
                 // Calculate statistics
                 const totalPatients = dashboardData.length;
@@ -1895,7 +2114,8 @@
                 // Update patient table with detailed data
                 updateDashboardTable(dashboardData);
             } catch (error) {
-                showNotification('Failed to load dashboard data', true);
+                console.error('Dashboard error:', error);
+                showNotification('Failed to load dashboard data: ' + error.message, true);
             }
         }
 
@@ -1948,7 +2168,29 @@
                 if (monthFilter) params.append('month', monthFilter);
 
                 // Get summary data
-                const summaryData = await apiCall(`/dashboard/summary?${params.toString()}`);
+                let summaryData = [];
+                try {
+                    summaryData = await apiCall(`/dashboard/summary?${params.toString()}`);
+                } catch (error) {
+                    console.warn('Dashboard summary endpoint not available, using basic patient data');
+                    // Fallback to basic patient data if dashboard/summary endpoint fails
+                    const patients = await apiCall('/patients');
+                    let filteredPatients = patients;
+                    if (facilityFilter) {
+                        filteredPatients = filteredPatients.filter(p => p.facility_id === parseInt(facilityFilter));
+                    }
+                    if (monthFilter) {
+                        filteredPatients = filteredPatients.filter(p => p.month === monthFilter);
+                    }
+                    summaryData = filteredPatients.map(patient => ({
+                        ...patient,
+                        total_units: 0,
+                        total_cost: 0,
+                        wound_diagnoses: 'N/A',
+                        supply_codes: 'N/A',
+                        hcpcs_codes: 'N/A'
+                    }));
+                }
 
                 const tbody = document.getElementById('summaryTableBody');
                 tbody.innerHTML = '';
@@ -1986,7 +2228,8 @@
                 
                 showNotification('Summary report updated');
             } catch (error) {
-                showNotification('Failed to update summary report', true);
+                console.error('Summary report error:', error);
+                showNotification('Failed to update summary report: ' + error.message, true);
             }
         }
 
@@ -2002,7 +2245,29 @@
                 if (monthFilter) params.append('month', monthFilter);
 
                 // Get summary data
-                const summaryData = await apiCall(`/dashboard/summary?${params.toString()}`);
+                let summaryData = [];
+                try {
+                    summaryData = await apiCall(`/dashboard/summary?${params.toString()}`);
+                } catch (error) {
+                    console.warn('Dashboard summary endpoint not available, using basic patient data');
+                    // Fallback to basic patient data if dashboard/summary endpoint fails
+                    const patients = await apiCall('/patients');
+                    let filteredPatients = patients;
+                    if (facilityFilter) {
+                        filteredPatients = filteredPatients.filter(p => p.facility_id === parseInt(facilityFilter));
+                    }
+                    if (monthFilter) {
+                        filteredPatients = filteredPatients.filter(p => p.month === monthFilter);
+                    }
+                    summaryData = filteredPatients.map(patient => ({
+                        ...patient,
+                        total_units: 0,
+                        total_cost: 0,
+                        wound_diagnoses: 'N/A',
+                        supply_codes: 'N/A',
+                        hcpcs_codes: 'N/A'
+                    }));
+                }
 
                 // Prepare data for export
                 const exportData = summaryData.map(patient => {
