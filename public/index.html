@@ -972,9 +972,9 @@
                     <h4>Required Excel Columns:</h4>
                     <ul>
                         <li><strong>Name</strong> - Patient full name (e.g., "Smith, John")</li>
-                        <li><strong>Month</strong> - Format: MM-YYYY (e.g., "01-2025")</li>
-                        <li><strong>Facility</strong> - Exact facility name from your system</li>
                         <li><strong>MRN</strong> - Medical Record Number (optional)</li>
+                        <li><strong>Month</strong> - Format: MM-YYYY (e.g., "01-2025")</li>
+                        <li><strong>Facility</strong> - Facility name (Spalding Post Acute)</li>
                     </ul>
                 </div>
             </div>
@@ -2478,7 +2478,7 @@
                 // Calculate statistics
                 const totalPatients = dashboardData.length;
                 const totalFacilities = currentUser.role === 'admin' ? facilities.length : 1;
-                const totalUnits = dashboardData.reduce((sum, patient) => sum + (patient.total_units || 0), 0);
+                const totalUnits = dashboardData.reduce((sum, patient) => sum + (parseInt(patient.total_units) || 0), 0);
                 const totalCosts = dashboardData.reduce((sum, patient) => sum + (parseFloat(patient.total_cost) || 0), 0);
 
                 // Update dashboard cards
@@ -2687,15 +2687,15 @@
             const templateData = [
                 {
                     'Name': 'Smith, John',
+                    'MRN': 'MRN12345',
                     'Month': '01-2025',
-                    'Facility': 'Main Hospital',
-                    'MRN': 'MRN12345'
+                    'Facility': 'Spalding Post Acute'
                 },
                 {
                     'Name': 'Johnson, Mary',
+                    'MRN': 'MRN67890',
                     'Month': '01-2025',
-                    'Facility': 'Clinic North',
-                    'MRN': 'MRN67890'
+                    'Facility': 'Main Hospital'
                 }
             ];
 
@@ -2769,7 +2769,7 @@
                 <div style="max-height: 150px; overflow-y: auto; background: #f7fafc; padding: 10px; border-radius: 4px;">
                     ${data.slice(0, 5).map(row => `
                         <div style="margin-bottom: 5px; padding: 5px; background: white; border-radius: 3px;">
-                            <strong>${row.Name || 'N/A'}</strong> - ${row.Month || 'N/A'} - ${row.Facility || 'N/A'}
+                            <strong>${row.Name || 'N/A'}</strong> - ${row.MRN || 'No MRN'} - ${row.Month || 'N/A'} - ${row.Facility || 'N/A'}
                         </div>
                     `).join('')}
                     ${data.length > 5 ? `<div style="text-align: center; color: #718096; font-style: italic;">... and ${data.length - 5} more records</div>` : ''}
