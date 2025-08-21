@@ -182,6 +182,155 @@ app.get('/api/auth/verify', authenticateToken, async (req, res) => {
     }
 });
 
+// ===== USER MANAGEMENT ROUTES =====
+
+// Get all users (admin only)
+app.get('/api/users', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Admin access required' });
+        }
+
+        const result = await pool.query(`
+            SELECT u.id, u.name, u.email, u.role, u.is_approved, u.created_at, u.updated_at,
+                   f.name as facility_name
+            FROM users u
+            LEFT JOIN facilities f ON u.facility_id = f.id
+            ORDER BY u.created_at DESC
+        `);
+
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Error fetching users:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Update user approval status (admin only)
+app.put('/api/users/:id/approval', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Admin access required' });
+        }
+
+        const { id } = req.params;
+        const { isApproved } = req.body;
+
+        if (typeof isApproved !== 'boolean') {
+            return res.status(400).json({ error: 'isApproved must be a boolean' });
+        }
+
+        const result = await pool.query(
+            'UPDATE users SET is_approved = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
+            [isApproved, id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        res.json({ 
+            message: `User ${isApproved ? 'approved' : 'suspended'} successfully`,
+            user: result.rows[0] 
+        });
+    } catch (error) {
+        console.error('Error updating user approval:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Delete user (admin only)
+app.delete('/api/users/:id', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Admin access required' });
+        }
+
+        const { id } = req.params;
+
+        // Prevent deleting admin users
+        const userCheck = await pool.query('SELECT role FROM users WHERE id = $1', [id]);
+        if (userCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        if (userCheck.rows[0].role === 'admin') {
+            return res.status(400).json({ error: 'Cannot delete admin users' });
+        }
+
+        // Prevent self-deletion
+        if (parseInt(id) === req.user.userId) {
+            return res.status(400).json({ error: 'Cannot delete your own account' });
+        }
+
+        await pool.query('DELETE FROM users WHERE id = $1', [id]);
+
+        res.json({ message: 'User deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// ===== DASHBOARD ROUTES =====
+
+// Get dashboard summary data
+app.get('/api/dashboard/summary', authenticateToken, async (req, res) => {
+    try {
+        const { facilityId, month } = req.query;
+        
+        let whereConditions = [];
+        let params = [];
+        let paramCount = 0;
+
+        // Non-admin users can only see their facility data
+        if (req.user.role !== 'admin' && req.user.facilityId) {
+            whereConditions.push(`p.facility_id = $${++paramCount}`);
+            params.push(req.user.facilityId);
+        } else if (facilityId && req.user.role === 'admin') {
+            whereConditions.push(`p.facility_id = $${++paramCount}`);
+            params.push(facilityId);
+        }
+
+        if (month) {
+            whereConditions.push(`p.month = $${++paramCount}`);
+            params.push(month);
+        }
+
+        const whereClause = whereConditions.length > 0 ? 'WHERE ' + whereConditions.join(' AND ') : '';
+
+        const query = `
+            SELECT 
+                p.id,
+                p.name,
+                p.mrn,
+                p.month,
+                p.facility_id,
+                f.name as facility_name,
+                p.created_at,
+                p.updated_at,
+                COALESCE(SUM(t.quantity), 0) as total_units,
+                COALESCE(SUM(t.quantity * s.cost), 0) as total_cost,
+                STRING_AGG(DISTINCT t.wound_dx, '; ') FILTER (WHERE t.wound_dx IS NOT NULL AND t.wound_dx != '') as wound_diagnoses,
+                STRING_AGG(DISTINCT s.code::text, ', ') FILTER (WHERE t.quantity > 0) as supply_codes,
+                STRING_AGG(DISTINCT s.hcpcs, ', ') FILTER (WHERE s.hcpcs IS NOT NULL AND t.quantity > 0) as hcpcs_codes
+            FROM patients p
+            LEFT JOIN facilities f ON p.facility_id = f.id
+            LEFT JOIN tracking t ON p.id = t.patient_id
+            LEFT JOIN supplies s ON t.supply_id = s.id
+            ${whereClause}
+            GROUP BY p.id, p.name, p.mrn, p.month, p.facility_id, f.name, p.created_at, p.updated_at
+            ORDER BY p.name, p.month
+        `;
+
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Error fetching dashboard summary:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 // ===== FACILITY ROUTES =====
 
 // Get all facilities (public for registration)
@@ -284,6 +433,68 @@ app.post('/api/supplies', authenticateToken, async (req, res) => {
     }
 });
 
+// Update supply (admin only)
+app.put('/api/supplies/:id', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Admin access required' });
+        }
+
+        const { id } = req.params;
+        const { code, description, hcpcs, cost } = req.body;
+
+        if (!code || !description) {
+            return res.status(400).json({ error: 'Code and description are required' });
+        }
+
+        const result = await pool.query(
+            'UPDATE supplies SET code = $1, description = $2, hcpcs = $3, cost = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5 AND is_custom = true RETURNING *',
+            [code, description, hcpcs || null, cost || 0, id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Supply not found or not editable' });
+        }
+
+        res.json(result.rows[0]);
+    } catch (error) {
+        console.error('Error updating supply:', error);
+        if (error.code === '23505') { // Unique violation
+            res.status(400).json({ error: 'Supply code already exists' });
+        } else {
+            res.status(500).json({ error: 'Internal server error' });
+        }
+    }
+});
+
+// Delete supply (admin only)
+app.delete('/api/supplies/:id', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Admin access required' });
+        }
+
+        const { id } = req.params;
+
+        // Check if supply is custom before deleting
+        const supplyCheck = await pool.query('SELECT is_custom FROM supplies WHERE id = $1', [id]);
+        if (supplyCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Supply not found' });
+        }
+
+        if (!supplyCheck.rows[0].is_custom) {
+            return res.status(400).json({ error: 'Cannot delete system supplies' });
+        }
+
+        await pool.query('DELETE FROM supplies WHERE id = $1', [id]);
+
+        res.json({ message: 'Supply deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting supply:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 // ===== PATIENT ROUTES =====
 
 // Get patients
@@ -342,6 +553,34 @@ app.post('/api/patients', authenticateToken, async (req, res) => {
     }
 });
 
+// Delete patient
+app.delete('/api/patients/:id', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Verify patient access
+        let patientQuery = 'SELECT * FROM patients WHERE id = $1';
+        let patientParams = [id];
+
+        if (req.user.role !== 'admin' && req.user.facilityId) {
+            patientQuery += ' AND facility_id = $2';
+            patientParams.push(req.user.facilityId);
+        }
+
+        const patientResult = await pool.query(patientQuery, patientParams);
+        if (patientResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Patient not found or access denied' });
+        }
+
+        await pool.query('DELETE FROM patients WHERE id = $1', [id]);
+
+        res.json({ message: 'Patient deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting patient:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 // ===== TRACKING ROUTES =====
 
 // Get tracking data
@@ -394,14 +633,39 @@ app.post('/api/tracking', authenticateToken, async (req, res) => {
             return res.status(404).json({ error: 'Patient not found or access denied' });
         }
 
-        // Upsert tracking data
+        // For wound diagnosis updates, we need to handle them specially
+        if (woundDx !== undefined && woundDx !== null) {
+            // Check if there's existing tracking data for this patient and supply
+            const existingTracking = await pool.query(
+                'SELECT * FROM tracking WHERE patient_id = $1 AND supply_id = $2 LIMIT 1',
+                [patientId, supplyId]
+            );
+
+            if (existingTracking.rows.length > 0) {
+                // Update wound_dx on all tracking records for this patient and supply
+                await pool.query(
+                    'UPDATE tracking SET wound_dx = $1, updated_at = CURRENT_TIMESTAMP WHERE patient_id = $2 AND supply_id = $3',
+                    [woundDx.trim() || null, patientId, supplyId]
+                );
+            } else if (woundDx.trim()) {
+                // Create a new tracking record with wound_dx if it doesn't exist
+                await pool.query(
+                    'INSERT INTO tracking (patient_id, supply_id, day_of_month, quantity, wound_dx) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (patient_id, supply_id, day_of_month) DO UPDATE SET wound_dx = $5, updated_at = CURRENT_TIMESTAMP',
+                    [patientId, supplyId, dayOfMonth || 1, 0, woundDx.trim()]
+                );
+            }
+            
+            return res.json({ message: 'Wound diagnosis updated successfully' });
+        }
+
+        // Regular quantity update
         const result = await pool.query(`
-            INSERT INTO tracking (patient_id, supply_id, day_of_month, quantity, wound_dx)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO tracking (patient_id, supply_id, day_of_month, quantity)
+            VALUES ($1, $2, $3, $4)
             ON CONFLICT (patient_id, supply_id, day_of_month)
-            DO UPDATE SET quantity = $4, wound_dx = $5, updated_at = CURRENT_TIMESTAMP
+            DO UPDATE SET quantity = $4, updated_at = CURRENT_TIMESTAMP
             RETURNING *
-        `, [patientId, supplyId, dayOfMonth, quantity || 0, woundDx || null]);
+        `, [patientId, supplyId, dayOfMonth, quantity || 0]);
 
         res.json(result.rows[0]);
     } catch (error) {
