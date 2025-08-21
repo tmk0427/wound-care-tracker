@@ -1177,7 +1177,7 @@ app.get('/', (req, res) => {
             }, 3000);
         }
 
-        // Populate month/year dropdowns - UPDATED to show current month going back 1 year
+        // Populate month/year dropdowns - FIXED: Current month going back 1 year
         function populateMonthYearDropdowns() {
             var currentDate = new Date();
             var currentMonth = currentDate.getMonth();
@@ -1185,22 +1185,23 @@ app.get('/', (req, res) => {
             
             var months = [];
             
-            // Add current month and future months for current year
-            for (var month = currentMonth; month < 12; month++) {
-                var monthStr = padStart(String(month + 1), 2, '0');
-                var value = monthStr + '-' + currentYear;
-                var label = new Date(currentYear, month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-                months.push({ value: value, label: label });
-            }
+            // Generate 15 months: current month + 2 future months + 12 past months
+            var startDate = new Date(currentYear, currentMonth - 12); // 12 months ago
+            var endDate = new Date(currentYear, currentMonth + 3); // 3 months in future
             
-            // Add all months for previous year(s) going back 1 year
-            for (var year = currentYear - 1; year >= currentYear - 1; year++) {
-                for (var month = 0; month < 12; month++) {
-                    var monthStr = padStart(String(month + 1), 2, '0');
-                    var value = monthStr + '-' + year;
-                    var label = new Date(year, month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-                    months.push({ value: value, label: label });
-                }
+            var iterDate = new Date(startDate);
+            while (iterDate < endDate) {
+                var year = iterDate.getFullYear();
+                var month = iterDate.getMonth();
+                
+                var monthStr = padStart(String(month + 1), 2, '0');
+                var value = monthStr + '-' + year;
+                var label = new Date(year, month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                
+                months.push({ value: value, label: label });
+                
+                // Move to next month
+                iterDate.setMonth(iterDate.getMonth() + 1);
             }
             
             // Sort by date (newest first)
@@ -1217,19 +1218,23 @@ app.get('/', (req, res) => {
                 var selectId = selectIds[i];
                 var select = document.getElementById(selectId);
                 if (select) {
-                    var currentOption = select.querySelector('option[value=""]').textContent;
-                    select.innerHTML = '<option value="">' + currentOption + '</option>';
-                    for (var j = 0; j < months.length; j++) {
-                        var month = months[j];
-                        var option = document.createElement('option');
-                        option.value = month.value;
-                        option.textContent = month.label;
-                        select.appendChild(option);
-                    }
-                    
-                    if (selectId === 'patientMonth') {
-                        var currentMonthValue = padStart(String(currentMonth + 1), 2, '0') + '-' + currentYear;
-                        select.value = currentMonthValue;
+                    var currentOption = select.querySelector('option[value=""]');
+                    if (currentOption) {
+                        var placeholder = currentOption.textContent;
+                        select.innerHTML = '<option value="">' + placeholder + '</option>';
+                        
+                        for (var j = 0; j < months.length; j++) {
+                            var month = months[j];
+                            var option = document.createElement('option');
+                            option.value = month.value;
+                            option.textContent = month.label;
+                            select.appendChild(option);
+                        }
+                        
+                        if (selectId === 'patientMonth') {
+                            var currentMonthValue = padStart(String(currentMonth + 1), 2, '0') + '-' + currentYear;
+                            select.value = currentMonthValue;
+                        }
                     }
                 }
             }
