@@ -778,41 +778,10 @@
 </head>
 <body>
     <!-- Status Banner -->
-<div class="status-banner">
-    🚀 Enhanced Wound Care RT Supply Tracker - Professional Edition
-</div>
-  <!-- User Management Tab (Admin Only) -->
-        <div id="usersTab" class="tab-content hidden">
-            <h2 style="margin-bottom: 30px; color: #4a5568;">👤 User Management</h2>
+    <div class="status-banner">
+        🚀 Enhanced Wound Care RT Supply Tracker - Professional Edition
+    </div>
 
-            <div class="filter-section">
-                <h3 style="margin-bottom: 15px; color: #4a5568;">User Account Management</h3>
-                <div class="filter-actions">
-                    <button class="btn btn-primary" onclick="refreshUsersList()">🔄 Refresh Users</button>
-                </div>
-            </div>
-
-            <div class="table-container">
-                <table class="data-table" id="usersTable">
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>Email</th>
-                            <th>Facility</th>
-                            <th>Role</th>
-                            <th>Status</th>
-                            <th>Registered</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="usersTableBody">
-                        <!-- Users will be populated here -->
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>     
-    
     <!-- Login/Register Screen -->
     <div id="loginContainer" class="login-container">
         <div class="auth-form">
@@ -1229,6 +1198,37 @@
                     </thead>
                     <tbody id="suppliesTableBody">
                         <!-- Supplies will be populated here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- User Management Tab (Admin Only) -->
+        <div id="usersTab" class="tab-content hidden">
+            <h2 style="margin-bottom: 30px; color: #4a5568;">👤 User Management</h2>
+
+            <div class="filter-section">
+                <h3 style="margin-bottom: 15px; color: #4a5568;">User Account Management</h3>
+                <div class="filter-actions">
+                    <button class="btn btn-primary" onclick="refreshUsersList()">🔄 Refresh Users</button>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table class="data-table" id="usersTable">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Facility</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th>Registered</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usersTableBody">
+                        <!-- Users will be populated here -->
                     </tbody>
                 </table>
             </div>
