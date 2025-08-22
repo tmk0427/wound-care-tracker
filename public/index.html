@@ -133,4 +133,500 @@
         }
 
         .hidden {
-            display:
+            display: none !important;
+        }
+
+        /* Main Application Styles */
+        .main-app {
+            display: none;
+            padding: 20px;
+            max-width: 1600px;
+            margin: 0 auto;
+            margin-top: 40px;
+        }
+
+        .header {
+            background: white;
+            padding: 20px 30px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .header h1 {
+            color: #4a5568;
+            font-size: 28px;
+            margin: 0;
+        }
+
+        .header-info {
+            text-align: right;
+            color: #718096;
+            font-size: 14px;
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        /* Button Styles */
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 14px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #e2e8f0;
+            color: #4a5568;
+        }
+
+        .btn-danger {
+            background: #e53e3e;
+            color: white;
+        }
+
+        .btn-success {
+            background: #38a169;
+            color: white;
+        }
+
+        .btn-warning {
+            background: #ed8936;
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        /* Tab Styles */
+        .tabs {
+            display: flex;
+            background: white;
+            border-radius: 15px;
+            padding: 5px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            overflow-x: auto;
+        }
+
+        .tab {
+            flex: 1;
+            min-width: 120px;
+            padding: 15px;
+            text-align: center;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            color: #718096;
+        }
+
+        .tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .tab-content {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            min-height: 600px;
+            width: 100%;
+            position: relative;
+        }
+
+        /* Simple table */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+
+        .data-table th, .data-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .data-table th {
+            background: #f7fafc;
+            font-weight: 600;
+        }
+
+        /* Notification */
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #38a169;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            z-index: 1001;
+            display: none;
+            animation: slideIn 0.3s ease;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+
+        .notification.error {
+            background: #e53e3e;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); }
+            to { transform: translateX(0); }
+        }
+    </style>
+</head>
+<body>
+    <!-- Status Banner -->
+    <div class="status-banner">
+        🚀 Wound Care RT Supply Tracker - Professional Edition
+    </div>
+
+    <!-- Login/Register Screen -->
+    <div id="loginContainer" class="login-container">
+        <div class="auth-form">
+            <h1>🏥 Wound Care RT Supply Tracker</h1>
+            
+            <!-- Login Form -->
+            <div id="loginForm">
+                <div class="form-group">
+                    <label for="loginEmail">Email Address</label>
+                    <input type="email" id="loginEmail" placeholder="Enter your email" value="admin@system.com">
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">Password</label>
+                    <input type="password" id="loginPassword" placeholder="Enter your password" value="admin123">
+                </div>
+                <button class="auth-btn" onclick="login()" id="loginBtn">Sign In</button>
+                <div id="loginError" class="error-message hidden">Invalid credentials</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Application -->
+    <div id="mainApp" class="main-app">
+        <div class="header">
+            <div>
+                <h1>🏥 Wound Care RT Supply Tracker</h1>
+                <div class="header-info">
+                    <div id="currentUserInfo"></div>
+                </div>
+            </div>
+            <div class="header-controls">
+                <button class="btn btn-danger" onclick="logout()">Logout</button>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('dashboard', this)">🏠 Dashboard</div>
+            <div class="tab" onclick="showTab('summary', this)">📋 Summary Report</div>
+            <div class="tab" id="usersTabButton" onclick="showTab('users', this)">👤 User Management</div>
+        </div>
+
+        <!-- Dashboard Tab -->
+        <div id="dashboardTab" class="tab-content">
+            <h2>🏠 Dashboard</h2>
+            <p>Dashboard loading...</p>
+        </div>
+
+        <!-- Summary Tab -->
+        <div id="summaryTab" class="tab-content hidden">
+            <h2>📋 Summary Report</h2>
+            <button class="btn btn-primary" onclick="updateSummaryReport()">🔄 Refresh Report</button>
+            <button class="btn btn-warning" onclick="runCleanup()" style="margin-left: 10px;">🧹 Cleanup Data</button>
+            
+            <div style="margin-top: 20px;">
+                <table class="data-table" id="summaryTable">
+                    <thead>
+                        <tr>
+                            <th>Patient Name</th>
+                            <th>Total Units</th>
+                            <th>Total Cost</th>
+                            <th>Last Updated</th>
+                        </tr>
+                    </thead>
+                    <tbody id="summaryTableBody">
+                        <tr>
+                            <td colspan="4">Loading...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- User Management Tab -->
+        <div id="usersTab" class="tab-content hidden">
+            <h2>👤 User Management</h2>
+            <p>User management features...</p>
+        </div>
+    </div>
+
+    <!-- Notification -->
+    <div id="notification" class="notification">
+        <span id="notificationText">Welcome!</span>
+    </div>
+
+    <script>
+        // Global variables
+        let currentUser = null;
+        let authToken = localStorage.getItem('authToken');
+
+        // Show notification
+        function showNotification(message, isError = false) {
+            const notification = document.getElementById('notification');
+            const text = document.getElementById('notificationText');
+            
+            text.textContent = message;
+            notification.className = 'notification' + (isError ? ' error' : '');
+            notification.style.display = 'block';
+
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 4000);
+        }
+
+        // API helper function
+        async function apiCall(endpoint, options = {}) {
+            const url = `/api${endpoint}`;
+            const config = {
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(authToken && { 'Authorization': `Bearer ${authToken}` })
+                },
+                ...options
+            };
+
+            if (options.body) {
+                config.body = JSON.stringify(options.body);
+            }
+
+            try {
+                const response = await fetch(url, config);
+                
+                // Check if response is JSON
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    const text = await response.text();
+                    console.error('Non-JSON response:', text);
+                    throw new Error('Server returned an unexpected response');
+                }
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || `HTTP ${response.status}`);
+                }
+                
+                return data;
+            } catch (error) {
+                console.error('API Error:', error);
+                throw error;
+            }
+        }
+
+        // Login function
+        async function login() {
+            const email = document.getElementById('loginEmail').value.trim();
+            const password = document.getElementById('loginPassword').value.trim();
+            const loginBtn = document.getElementById('loginBtn');
+            const loginError = document.getElementById('loginError');
+
+            if (!email || !password) {
+                loginError.textContent = 'Please enter both email and password';
+                loginError.classList.remove('hidden');
+                return;
+            }
+
+            loginBtn.disabled = true;
+            loginBtn.innerHTML = 'Signing In...';
+            loginError.classList.add('hidden');
+
+            try {
+                const response = await apiCall('/auth/login', {
+                    method: 'POST',
+                    body: { email, password }
+                });
+
+                authToken = response.token;
+                currentUser = response.user;
+                localStorage.setItem('authToken', authToken);
+
+                document.getElementById('loginContainer').style.display = 'none';
+                document.getElementById('mainApp').style.display = 'block';
+
+                // Setup user info
+                document.getElementById('currentUserInfo').innerHTML = 
+                    `<div style="font-weight: 600;">${currentUser.name}</div>` +
+                    `<div>${currentUser.role === 'admin' ? '🔑 Admin' : '👤 User'}</div>`;
+
+                showNotification('✅ Login successful!');
+                
+                // Load dashboard
+                loadDashboard();
+
+            } catch (error) {
+                loginError.textContent = error.message;
+                loginError.classList.remove('hidden');
+            } finally {
+                loginBtn.disabled = false;
+                loginBtn.innerHTML = 'Sign In';
+            }
+        }
+
+        // Logout function
+        function logout() {
+            authToken = null;
+            currentUser = null;
+            localStorage.removeItem('authToken');
+
+            document.getElementById('loginContainer').style.display = 'flex';
+            document.getElementById('mainApp').style.display = 'none';
+        }
+
+        // Tab navigation
+        function showTab(tabName, clickedElement) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.add('hidden');
+            });
+
+            // Remove active class from all tabs
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            // Show target tab and mark as active
+            const targetTab = document.getElementById(tabName + 'Tab');
+            if (targetTab) {
+                targetTab.classList.remove('hidden');
+            }
+
+            if (clickedElement) {
+                clickedElement.classList.add('active');
+            }
+
+            // Load tab-specific data
+            if (tabName === 'dashboard') {
+                loadDashboard();
+            } else if (tabName === 'summary') {
+                updateSummaryReport();
+            }
+        }
+
+        // Load dashboard
+        async function loadDashboard() {
+            document.getElementById('dashboardTab').innerHTML = '<h2>🏠 Dashboard</h2><p>Connected to server successfully!</p>';
+        }
+
+        // Update summary report
+        async function updateSummaryReport() {
+            try {
+                const summaryData = await apiCall('/dashboard/summary');
+                const tbody = document.getElementById('summaryTableBody');
+                tbody.innerHTML = '';
+
+                if (summaryData.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4">No data found</td></tr>';
+                    return;
+                }
+
+                summaryData.forEach(patient => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${patient.name}</td>
+                        <td>${patient.total_units || 0}</td>
+                        <td>$${(patient.total_cost || 0).toFixed(2)}</td>
+                        <td>${new Date(patient.updated_at).toLocaleDateString()}</td>
+                    `;
+                    tbody.appendChild(row);
+                });
+
+                showNotification('📊 Summary report updated');
+            } catch (error) {
+                showNotification('Failed to load summary: ' + error.message, true);
+                console.error('Summary error:', error);
+            }
+        }
+
+        // Run cleanup
+        async function runCleanup() {
+            if (!currentUser || currentUser.role !== 'admin') {
+                showNotification('Admin access required', true);
+                return;
+            }
+
+            if (confirm('Remove all tracking records with 0 quantities?')) {
+                try {
+                    const response = await apiCall('/tracking/cleanup', { method: 'DELETE' });
+                    showNotification(`✅ Cleanup complete! Removed ${response.recordsDeleted} records`);
+                    updateSummaryReport();
+                } catch (error) {
+                    showNotification('Cleanup failed: ' + error.message, true);
+                }
+            }
+        }
+
+        // Auto-login check
+        if (authToken) {
+            apiCall('/auth/verify').then(response => {
+                currentUser = response.user;
+                document.getElementById('loginContainer').style.display = 'none';
+                document.getElementById('mainApp').style.display = 'block';
+                
+                document.getElementById('currentUserInfo').innerHTML = 
+                    `<div style="font-weight: 600;">${currentUser.name}</div>` +
+                    `<div>${currentUser.role === 'admin' ? '🔑 Admin' : '👤 User'}</div>`;
+                
+                loadDashboard();
+            }).catch(() => {
+                localStorage.removeItem('authToken');
+                authToken = null;
+            });
+        }
+
+        // Enter key login support
+        document.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && document.getElementById('loginContainer').style.display !== 'none') {
+                login();
+            }
+        });
+
+        console.log('🎉 Wound Care Tracker loaded!');
+    </script>
+</body>
+</html>
