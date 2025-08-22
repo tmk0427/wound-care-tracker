@@ -20,13 +20,21 @@ const pool = new Pool({
 // Trust proxy for Heroku
 app.set('trust proxy', 1);
 
-// Rate limiting
+// Rate limiting - More generous for healthcare application
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // limit each IP to 100 requests per windowMs
+    max: 500, // Increased from 100 to 500 requests per windowMs
     trustProxy: true, // Trust X-Forwarded-For headers
     standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
     legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+    message: { error: 'Too many requests, please try again later.' }, // JSON response instead of HTML
+    skip: (req) => {
+        // Skip rate limiting for authenticated users making tracking updates
+        if (req.path.includes('/api/tracking') && req.headers.authorization) {
+            return true;
+        }
+        return false;
+    }
 });
 
 // Middleware
