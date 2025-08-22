@@ -317,14 +317,14 @@ app.get('/api/dashboard/summary', authenticateToken, async (req, res) => {
                 f.name as facility_name,
                 p.created_at,
                 p.updated_at,
-                COALESCE(SUM(t.quantity), 0) as total_units,
-                COALESCE(SUM(t.quantity * s.cost), 0) as total_cost,
-                STRING_AGG(DISTINCT t.wound_dx, '; ') FILTER (WHERE t.wound_dx IS NOT NULL AND t.wound_dx != '') as wound_diagnoses,
+                COALESCE(SUM(CASE WHEN t.quantity > 0 THEN t.quantity ELSE 0 END), 0) as total_units,
+                COALESCE(SUM(CASE WHEN t.quantity > 0 THEN t.quantity * s.cost ELSE 0 END), 0) as total_cost,
+                STRING_AGG(DISTINCT t.wound_dx, '; ') FILTER (WHERE t.wound_dx IS NOT NULL AND t.wound_dx != '' AND t.quantity > 0) as wound_diagnoses,
                 STRING_AGG(DISTINCT s.code::text, ', ') FILTER (WHERE t.quantity > 0) as supply_codes,
                 STRING_AGG(DISTINCT s.hcpcs, ', ') FILTER (WHERE s.hcpcs IS NOT NULL AND t.quantity > 0) as hcpcs_codes
             FROM patients p
             LEFT JOIN facilities f ON p.facility_id = f.id
-            LEFT JOIN tracking t ON p.id = t.patient_id
+            LEFT JOIN tracking t ON p.id = t.patient_id AND t.quantity > 0
             LEFT JOIN supplies s ON t.supply_id = s.id
             ${whereClause}
             GROUP BY p.id, p.name, p.mrn, p.month, p.facility_id, f.name, p.created_at, p.updated_at
@@ -651,6 +651,9 @@ app.post('/api/tracking', authenticateToken, async (req, res) => {
             return res.status(404).json({ error: 'Patient not found or access denied' });
         }
 
+        // Update patient's updated_at timestamp
+        await pool.query('UPDATE patients SET updated_at = CURRENT_TIMESTAMP WHERE id = $1', [patientId]);
+
         // For wound diagnosis updates, we need to handle them specially
         if (woundDx !== undefined && woundDx !== null) {
             // Check if there's existing tracking data for this patient and supply
@@ -679,18 +682,79 @@ app.post('/api/tracking', authenticateToken, async (req, res) => {
         // Regular quantity update
         const cleanQuantity = parseInt(quantity) || 0;
         
-        const result = await pool.query(`
-            INSERT INTO tracking (patient_id, supply_id, day_of_month, quantity)
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT (patient_id, supply_id, day_of_month)
-            DO UPDATE SET quantity = $4, updated_at = CURRENT_TIMESTAMP
-            RETURNING *
-        `, [patientId, supplyId, dayOfMonth, cleanQuantity]);
+        if (cleanQuantity === 0) {
+            // Delete the record if quantity is 0
+            await pool.query(
+                'DELETE FROM tracking WHERE patient_id = $1 AND supply_id = $2 AND day_of_month = $3',
+                [patientId, supplyId, dayOfMonth]
+            );
+            
+            return res.json({ message: 'Tracking record cleared successfully' });
+        } else {
+            // Insert or update with non-zero quantity
+            const result = await pool.query(`
+                INSERT INTO tracking (patient_id, supply_id, day_of_month, quantity)
+                VALUES ($1, $2, $3, $4)
+                ON CONFLICT (patient_id, supply_id, day_of_month)
+                DO UPDATE SET quantity = $4, updated_at = CURRENT_TIMESTAMP
+                RETURNING *
+            `, [patientId, supplyId, dayOfMonth, cleanQuantity]);
 
-        res.json(result.rows[0]);
+            return res.json(result.rows[0]);
+        }
     } catch (error) {
         console.error('Error updating tracking data:', error);
         res.status(500).json({ error: 'Internal server error while updating tracking data' });
+    }
+});
+
+// Clean up zero quantity tracking records (admin only)
+app.delete('/api/tracking/cleanup', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Admin access required' });
+        }
+
+        // Delete records with zero quantities
+        const zeroResult = await pool.query('DELETE FROM tracking WHERE quantity = 0 OR quantity IS NULL');
+        
+        // Update all patient timestamps to current time
+        const patientsResult = await pool.query('UPDATE patients SET updated_at = CURRENT_TIMESTAMP');
+        
+        res.json({ 
+            message: 'Cleanup completed successfully', 
+            recordsDeleted: zeroResult.rowCount,
+            patientsUpdated: patientsResult.rowCount
+        });
+    } catch (error) {
+        console.error('Error cleaning up tracking data:', error);
+        res.status(500).json({ error: 'Internal server error during cleanup' });
+    }
+});
+
+// Force manual data refresh for a specific patient (admin only)
+app.post('/api/patients/:id/refresh', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Admin access required' });
+        }
+
+        const { id } = req.params;
+        
+        // Update patient timestamp
+        const result = await pool.query(
+            'UPDATE patients SET updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *',
+            [id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Patient not found' });
+        }
+
+        res.json({ message: 'Patient timestamp refreshed', patient: result.rows[0] });
+    } catch (error) {
+        console.error('Error refreshing patient:', error);
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
