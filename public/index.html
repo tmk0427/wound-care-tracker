@@ -560,6 +560,8 @@
                 const tbody = document.getElementById('summaryTableBody');
                 tbody.innerHTML = '';
 
+                console.log('Summary data received:', summaryData); // Debug log
+
                 if (summaryData.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="4">No data found</td></tr>';
                     return;
@@ -567,11 +569,17 @@
 
                 summaryData.forEach(patient => {
                     const row = document.createElement('tr');
+                    
+                    // Safely convert to numbers
+                    const totalUnits = parseInt(patient.total_units) || 0;
+                    const totalCost = parseFloat(patient.total_cost) || 0;
+                    const updatedDate = patient.updated_at ? new Date(patient.updated_at).toLocaleDateString() : 'N/A';
+                    
                     row.innerHTML = `
-                        <td>${patient.name}</td>
-                        <td>${patient.total_units || 0}</td>
-                        <td>$${(patient.total_cost || 0).toFixed(2)}</td>
-                        <td>${new Date(patient.updated_at).toLocaleDateString()}</td>
+                        <td>${patient.name || 'Unknown'}</td>
+                        <td>${totalUnits}</td>
+                        <td>${totalCost.toFixed(2)}</td>
+                        <td>${updatedDate}</td>
                     `;
                     tbody.appendChild(row);
                 });
