@@ -619,6 +619,16 @@ app.post('/api/tracking', authenticateToken, async (req, res) => {
     try {
         const { patientId, supplyId, dayOfMonth, quantity, woundDx } = req.body;
 
+        // Validate required fields
+        if (!patientId || !supplyId || dayOfMonth === undefined) {
+            return res.status(400).json({ error: 'Patient ID, Supply ID, and day of month are required' });
+        }
+
+        // Validate day of month
+        if (dayOfMonth < 1 || dayOfMonth > 31) {
+            return res.status(400).json({ error: 'Day of month must be between 1 and 31' });
+        }
+
         // Verify patient access
         let patientQuery = 'SELECT * FROM patients WHERE id = $1';
         let patientParams = [patientId];
@@ -659,18 +669,20 @@ app.post('/api/tracking', authenticateToken, async (req, res) => {
         }
 
         // Regular quantity update
+        const cleanQuantity = parseInt(quantity) || 0;
+        
         const result = await pool.query(`
             INSERT INTO tracking (patient_id, supply_id, day_of_month, quantity)
             VALUES ($1, $2, $3, $4)
             ON CONFLICT (patient_id, supply_id, day_of_month)
             DO UPDATE SET quantity = $4, updated_at = CURRENT_TIMESTAMP
             RETURNING *
-        `, [patientId, supplyId, dayOfMonth, quantity || 0]);
+        `, [patientId, supplyId, dayOfMonth, cleanQuantity]);
 
         res.json(result.rows[0]);
     } catch (error) {
         console.error('Error updating tracking data:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: 'Internal server error while updating tracking data' });
     }
 });
 
