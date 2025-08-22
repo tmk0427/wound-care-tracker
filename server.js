@@ -1,800 +1,2997 @@
-require('dotenv').config();
-const express = require('express');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const { Pool } = require('pg');
-const multer = require('multer');
-const XLSX = require('xlsx');
-const rateLimit = require('express-rate-limit');
-const path = require('path');
-
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-// Database connection
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-});
-
-// Trust proxy for Heroku
-app.set('trust proxy', 1);
-
-// Rate limiting - More generous for healthcare application
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 500, // Increased from 100 to 500 requests per windowMs
-    trustProxy: true, // Trust X-Forwarded-For headers
-    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-    legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-    message: { error: 'Too many requests, please try again later.' }, // JSON response instead of HTML
-    skip: (req) => {
-        // Skip rate limiting for authenticated users making tracking updates
-        if (req.path.includes('/api/tracking') && req.headers.authorization) {
-            return true;
-        }
-        return false;
-    }
-});
-
-// Middleware
-app.use(limiter);
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-
-// Serve static files from public directory
-app.use(express.static('public'));
-
-// JWT Secret
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
-
-// Middleware to verify JWT token
-const authenticateToken = (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-
-    if (!token) {
-        return res.status(401).json({ error: 'Access token required' });
-    }
-
-    jwt.verify(token, JWT_SECRET, (err, user) => {
-        if (err) {
-            return res.status(403).json({ error: 'Invalid or expired token' });
-        }
-        req.user = user;
-        next();
-    });
-};
-
-// ===== AUTHENTICATION ROUTES =====
-
-// Register new user
-app.post('/api/auth/register', async (req, res) => {
-    try {
-        const { name, email, password, facilityId } = req.body;
-
-        if (!name || !email || !password) {
-            return res.status(400).json({ error: 'Name, email, and password are required' });
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wound Care RT Supply Tracker - Professional Edition</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
 
-        if (password.length < 6) {
-            return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
         }
 
-        // Check if user already exists
-        const existingUser = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
-        if (existingUser.rows.length > 0) {
-            return res.status(400).json({ error: 'User with this email already exists' });
+        .status-banner {
+            background: #e6fffa;
+            color: #234e52;
+            text-align: center;
+            padding: 8px;
+            font-size: 14px;
+            border-bottom: 1px solid #81e6d9;
         }
 
-        // Hash password
-        const saltRounds = 12;
-        const hashedPassword = await bcrypt.hash(password, saltRounds);
-
-        // Insert user
-        const result = await pool.query(
-            'INSERT INTO users (name, email, password, facility_id, is_approved) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, email, role, facility_id, is_approved',
-            [name, email, hashedPassword, facilityId || null, false] // Users need approval by default
-        );
-
-        res.status(201).json({
-            message: 'User registered successfully. Please wait for admin approval.',
-            user: result.rows[0]
-        });
-    } catch (error) {
-        console.error('Registration error:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-// Login user
-app.post('/api/auth/login', async (req, res) => {
-    try {
-        const { email, password } = req.body;
-
-        if (!email || !password) {
-            return res.status(400).json({ error: 'Email and password are required' });
+        /* Login Styles */
+        .login-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
         }
 
-        // Get user with facility name
-        const result = await pool.query(`
-            SELECT u.*, f.name as facility_name 
-            FROM users u 
-            LEFT JOIN facilities f ON u.facility_id = f.id 
-            WHERE u.email = $1
-        `, [email]);
-
-        if (result.rows.length === 0) {
-            return res.status(401).json({ error: 'Invalid credentials' });
+        .auth-form {
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
         }
 
-        const user = result.rows[0];
-
-        if (!user.is_approved) {
-            return res.status(401).json({ error: 'Account pending approval' });
+        .auth-form h1 {
+            color: #4a5568;
+            margin-bottom: 30px;
+            font-size: 24px;
         }
 
-        // Verify password
-        const isValidPassword = await bcrypt.compare(password, user.password);
-        if (!isValidPassword) {
-            return res.status(401).json({ error: 'Invalid credentials' });
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
         }
 
-        // Generate JWT token
-        const token = jwt.sign(
-            { 
-                userId: user.id, 
-                email: user.email, 
-                role: user.role,
-                facilityId: user.facility_id 
-            },
-            JWT_SECRET,
-            { expiresIn: '24h' }
-        );
-
-        // Remove password from response
-        delete user.password;
-
-        res.json({
-            message: 'Login successful',
-            token,
-            user
-        });
-    } catch (error) {
-        console.error('Login error:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-// Verify token
-app.get('/api/auth/verify', authenticateToken, async (req, res) => {
-    try {
-        const result = await pool.query(`
-            SELECT u.*, f.name as facility_name 
-            FROM users u 
-            LEFT JOIN facilities f ON u.facility_id = f.id 
-            WHERE u.id = $1
-        `, [req.user.userId]);
-
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'User not found' });
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #4a5568;
         }
 
-        const user = result.rows[0];
-        delete user.password;
-
-        res.json({ user });
-    } catch (error) {
-        console.error('Token verification error:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-// ===== USER MANAGEMENT ROUTES =====
-
-// Get all users (admin only)
-app.get('/api/users', authenticateToken, async (req, res) => {
-    try {
-        if (req.user.role !== 'admin') {
-            return res.status(403).json({ error: 'Admin access required' });
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            background: white;
         }
 
-        const result = await pool.query(`
-            SELECT u.id, u.name, u.email, u.role, u.is_approved, u.created_at, u.updated_at,
-                   f.name as facility_name
-            FROM users u
-            LEFT JOIN facilities f ON u.facility_id = f.id
-            ORDER BY u.created_at DESC
-        `);
-
-        res.json(result.rows);
-    } catch (error) {
-        console.error('Error fetching users:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-// Update user approval status (admin only)
-app.put('/api/users/:id/approval', authenticateToken, async (req, res) => {
-    try {
-        if (req.user.role !== 'admin') {
-            return res.status(403).json({ error: 'Admin access required' });
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
 
-        const { id } = req.params;
-        const { isApproved } = req.body;
-
-        if (typeof isApproved !== 'boolean') {
-            return res.status(400).json({ error: 'isApproved must be a boolean' });
+        .auth-btn {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease;
         }
 
-        const result = await pool.query(
-            'UPDATE users SET is_approved = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
-            [isApproved, id]
-        );
-
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'User not found' });
+        .auth-btn:hover {
+            transform: translateY(-2px);
         }
 
-        res.json({ 
-            message: `User ${isApproved ? 'approved' : 'suspended'} successfully`,
-            user: result.rows[0] 
-        });
-    } catch (error) {
-        console.error('Error updating user approval:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-// Delete user (admin only)
-app.delete('/api/users/:id', authenticateToken, async (req, res) => {
-    try {
-        if (req.user.role !== 'admin') {
-            return res.status(403).json({ error: 'Admin access required' });
+        .auth-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
         }
 
-        const { id } = req.params;
-
-        // Prevent deleting admin users
-        const userCheck = await pool.query('SELECT role FROM users WHERE id = $1', [id]);
-        if (userCheck.rows.length === 0) {
-            return res.status(404).json({ error: 'User not found' });
+        .error-message {
+            color: #e53e3e;
+            margin-top: 10px;
+            font-size: 14px;
         }
 
-        if (userCheck.rows[0].role === 'admin') {
-            return res.status(400).json({ error: 'Cannot delete admin users' });
+        .success-message {
+            color: #38a169;
+            margin-top: 10px;
+            font-size: 14px;
         }
 
-        // Prevent self-deletion
-        if (parseInt(id) === req.user.userId) {
-            return res.status(400).json({ error: 'Cannot delete your own account' });
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
         }
 
-        await pool.query('DELETE FROM users WHERE id = $1', [id]);
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
 
-        res.json({ message: 'User deleted successfully' });
-    } catch (error) {
-        console.error('Error deleting user:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
+        .hidden {
+            display: none !important;
+        }
 
-// ===== DASHBOARD ROUTES =====
+        /* Main Application Styles */
+        .main-app {
+            display: none;
+            padding: 20px;
+            max-width: 1600px;
+            margin: 0 auto;
+            margin-top: 40px;
+        }
 
-// Get dashboard summary data
-app.get('/api/dashboard/summary', authenticateToken, async (req, res) => {
-    try {
-        const { facilityId, month } = req.query;
+        .header {
+            background: white;
+            padding: 20px 30px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .header h1 {
+            color: #4a5568;
+            font-size: 28px;
+            margin: 0;
+        }
+
+        .header-info {
+            text-align: right;
+            color: #718096;
+            font-size: 14px;
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        /* Button Styles */
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 14px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #e2e8f0;
+            color: #4a5568;
+        }
+
+        .btn-danger {
+            background: #e53e3e;
+            color: white;
+        }
+
+        .btn-success {
+            background: #38a169;
+            color: white;
+        }
+
+        .btn-warning {
+            background: #ed8936;
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        /* Tab Styles */
+        .tabs {
+            display: flex;
+            background: white;
+            border-radius: 15px;
+            padding: 5px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            overflow-x: auto;
+        }
+
+        .tab {
+            flex: 1;
+            min-width: 120px;
+            padding: 15px;
+            text-align: center;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            color: #718096;
+        }
+
+        .tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .tab-content {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            min-height: 600px;
+            width: 100%;
+            position: relative;
+        }
+
+        /* Dashboard Cards */
+        .dashboard-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .dashboard-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .dashboard-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255,255,255,0.1);
+            transform: skewY(-5deg);
+            transform-origin: top left;
+        }
+
+        .dashboard-card-content {
+            position: relative;
+            z-index: 1;
+        }
+
+        .dashboard-card h3 {
+            font-size: 16px;
+            margin-bottom: 15px;
+            opacity: 0.9;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .dashboard-card .value {
+            font-size: 36px;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        .dashboard-card .subtitle {
+            font-size: 14px;
+            opacity: 0.8;
+        }
+
+        /* Enhanced Table Styles */
+        .table-container {
+            overflow-x: auto;
+            margin-top: 20px;
+            width: 100%;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .data-table th, .data-table td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .data-table th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: 600;
+            font-size: 14px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .data-table tbody tr:hover {
+            background-color: #f7fafc;
+        }
+
+        .data-table tbody tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+
+        /* Enhanced Tracking Grid */
+        .tracking-container {
+            background: white;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            margin-top: 20px;
+        }
+
+        .tracking-grid {
+            position: relative;
+            overflow: auto;
+            max-height: 70vh;
+            border: 1px solid #e2e8f0;
+        }
+
+        .tracking-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            font-size: 13px;
+        }
+
+        .tracking-table th,
+        .tracking-table td {
+            border: 1px solid #e2e8f0;
+            padding: 10px;
+            text-align: center;
+            position: relative;
+        }
+
+        /* Enhanced Frozen Columns - Dynamic based on user role */
+        .tracking-table th:nth-child(1),
+        .tracking-table td:nth-child(1) {
+            position: sticky;
+            left: 0;
+            background: inherit;
+            z-index: 5;
+            min-width: 80px;
+        }
+
+        .tracking-table th:nth-child(2),
+        .tracking-table td:nth-child(2) {
+            position: sticky;
+            left: 80px;
+            background: inherit;
+            z-index: 5;
+            min-width: 200px;
+            text-align: left;
+        }
+
+        .tracking-table th:nth-child(3),
+        .tracking-table td:nth-child(3) {
+            position: sticky;
+            left: 280px;
+            background: inherit;
+            z-index: 5;
+            min-width: 150px;
+            text-align: left;
+        }
+
+        .tracking-table th:nth-child(4),
+        .tracking-table td:nth-child(4) {
+            position: sticky;
+            left: 430px;
+            background: inherit;
+            z-index: 5;
+            min-width: 100px;
+        }
+
+        /* Admin-only frozen columns */
+        .tracking-table.admin-view th:nth-child(5),
+        .tracking-table.admin-view td:nth-child(5) {
+            position: sticky;
+            left: 530px;
+            background: inherit;
+            z-index: 5;
+            min-width: 100px;
+        }
+
+        .tracking-table.admin-view th:nth-child(6),
+        .tracking-table.admin-view td:nth-child(6) {
+            position: sticky;
+            left: 630px;
+            background: inherit;
+            z-index: 5;
+            min-width: 100px;
+        }
+
+        .tracking-table.admin-view th:nth-child(7),
+        .tracking-table.admin-view td:nth-child(7) {
+            position: sticky;
+            left: 730px;
+            background: inherit;
+            z-index: 5;
+            min-width: 100px;
+        }
+
+        .tracking-table th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+            color: white;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            font-size: 12px;
+        }
+
+        .tracking-table th:nth-child(-n+4) {
+            z-index: 15;
+        }
+
+        .tracking-table.admin-view th:nth-child(-n+7) {
+            z-index: 15;
+        }
+
+        .tracking-table td:nth-child(-n+4) {
+            background: white;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.05);
+        }
+
+        .tracking-table.admin-view td:nth-child(-n+7) {
+            background: white;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.05);
+        }
+
+        .tracking-input {
+            width: 70px;
+            padding: 6px;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 13px;
+            background: white;
+        }
+
+        .tracking-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+        }
+
+        .wound-dx-input {
+            width: 100%;
+            padding: 6px;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            font-size: 11px;
+            resize: vertical;
+            min-height: 35px;
+        }
+
+        .wound-dx-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+        }
+
+        .total-cell {
+            background: #f7fafc !important;
+            font-weight: bold;
+            color: #4a5568;
+        }
+
+        .cost-cell {
+            background: #e6fffa !important;
+            font-weight: bold;
+            color: #2d3748;
+        }
+
+        /* Form Styles */
+        .supply-form {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+            padding: 25px;
+            background: #f7fafc;
+            border-radius: 12px;
+            border-left: 4px solid #667eea;
+        }
+
+        .supply-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        /* Filter Section */
+        .filter-section {
+            background: #f7fafc;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            border-left: 4px solid #667eea;
+        }
+
+        .filter-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .filter-actions {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        /* Import Section */
+        .import-section {
+            background: linear-gradient(135deg, #e6f3ff 0%, #cce7ff 100%);
+            padding: 25px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            border-left: 4px solid #4299e1;
+            border: 1px solid #bee3f8;
+        }
+
+        .import-section h3 {
+            color: #2b6cb0;
+            margin-bottom: 15px;
+        }
+
+        .import-section p {
+            color: #4299e1;
+            margin-bottom: 20px;
+        }
+
+        .import-actions {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .import-info {
+            background: #ebf8ff;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #4299e1;
+        }
+
+        .import-info h4 {
+            color: #2b6cb0;
+            margin-bottom: 10px;
+        }
+
+        .import-info ul {
+            color: #2b6cb0;
+            margin-left: 20px;
+        }
+
+        /* Modal Styles */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            max-width: 800px;
+            width: 90%;
+            max-height: 90%;
+            overflow-y: auto;
+        }
+
+        .modal-content h2 {
+            margin-bottom: 20px;
+            color: #4a5568;
+        }
+
+        /* File Drop Zone */
+        .file-drop-zone {
+            border: 2px dashed #4299e1;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            background: #f7faff;
+            margin: 20px 0;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .file-drop-zone:hover {
+            border-color: #667eea;
+            background: #edf2f7;
+        }
+
+        .file-drop-zone.dragover {
+            border-color: #667eea;
+            background: #e6f3ff;
+        }
+
+        .file-icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+
+        /* Notification */
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #38a169;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            z-index: 1001;
+            display: none;
+            animation: slideIn 0.3s ease;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+
+        .notification.error {
+            background: #e53e3e;
+        }
+
+        .notification.warning {
+            background: #ed8936;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); }
+            to { transform: translateX(0); }
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .header {
+                text-align: center;
+            }
+
+            .header h1 {
+                font-size: 24px;
+            }
+
+            .supply-form {
+                grid-template-columns: 1fr;
+            }
+
+            .dashboard-cards {
+                grid-template-columns: 1fr;
+            }
+
+            .tabs {
+                overflow-x: auto;
+            }
+
+            .tracking-table {
+                font-size: 11px;
+            }
+
+            .tracking-table th,
+            .tracking-table td {
+                padding: 8px;
+            }
+
+            .tracking-input {
+                width: 60px;
+            }
+        }
+
+        /* Additional utility classes */
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        .mb-20 { margin-bottom: 20px; }
+        .mt-20 { margin-top: 20px; }
+        .p-20 { padding: 20px; }
         
-        let whereConditions = [];
-        let params = [];
-        let paramCount = 0;
+        .bg-success { background-color: #38a169; }
+        .bg-warning { background-color: #ed8936; }
+        .bg-danger { background-color: #e53e3e; }
+        .bg-info { background-color: #4299e1; }
+        
+        .text-success { color: #38a169; }
+        .text-warning { color: #ed8936; }
+        .text-danger { color: #e53e3e; }
+        .text-info { color: #4299e1; }
 
-        // Non-admin users can only see their facility data
-        if (req.user.role !== 'admin' && req.user.facilityId) {
-            whereConditions.push(`p.facility_id = $${++paramCount}`);
-            params.push(req.user.facilityId);
-        } else if (facilityId && req.user.role === 'admin') {
-            whereConditions.push(`p.facility_id = $${++paramCount}`);
-            params.push(facilityId);
+        .font-bold { font-weight: bold; }
+        .font-sm { font-size: 12px; }
+        .font-lg { font-size: 18px; }
+    </style>
+</head>
+<body>
+    <!-- Status Banner -->
+    <div class="status-banner">
+        🚀 Enhanced Wound Care RT Supply Tracker - Professional Edition
+    </div>
+
+    <!-- Login/Register Screen -->
+    <div id="loginContainer" class="login-container">
+        <div class="auth-form">
+            <h1>🏥 Wound Care RT Supply Tracker</h1>
+            
+            <!-- Login Form -->
+            <div id="loginForm">
+                <div class="form-group">
+                    <label for="loginEmail">Email Address</label>
+                    <input type="email" id="loginEmail" placeholder="Enter your email">
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">Password</label>
+                    <input type="password" id="loginPassword" placeholder="Enter your password">
+                </div>
+                <button class="auth-btn" onclick="login()" id="loginBtn">Sign In</button>
+                <div id="loginError" class="error-message hidden">Invalid credentials</div>
+                
+                <div style="margin-top: 20px; text-align: center;">
+                    <button type="button" class="btn btn-secondary" onclick="showRegisterForm()" style="margin-right: 10px;">Register</button>
+                    <button type="button" class="btn btn-secondary" onclick="showResetForm()">Reset Password</button>
+                </div>
+            </div>
+
+            <!-- Registration Form -->
+            <div id="registerForm" class="hidden">
+                <div class="form-group">
+                    <label for="registerName">Full Name</label>
+                    <input type="text" id="registerName" placeholder="Enter your full name">
+                </div>
+                <div class="form-group">
+                    <label for="registerEmail">Email Address</label>
+                    <input type="email" id="registerEmail" placeholder="Enter your email">
+                </div>
+                <div class="form-group">
+                    <label for="registerPassword">Password</label>
+                    <input type="password" id="registerPassword" placeholder="Create a password">
+                </div>
+                <div class="form-group">
+                    <label for="registerFacility">Select Facility</label>
+                    <select id="registerFacility">
+                        <option value="">Select Facility</option>
+                    </select>
+                </div>
+                <button class="auth-btn" onclick="register()" id="registerBtn">Register</button>
+                <div id="registerError" class="error-message hidden"></div>
+                <div id="registerSuccess" class="success-message hidden"></div>
+                
+                <div style="margin-top: 20px; text-align: center;">
+                    <button type="button" class="btn btn-secondary" onclick="showLoginForm()">Back to Login</button>
+                </div>
+            </div>
+
+            <!-- Password Reset Form -->
+            <div id="resetForm" class="hidden">
+                <div class="form-group">
+                    <label for="resetEmail">Email Address</label>
+                    <input type="email" id="resetEmail" placeholder="Enter your email">
+                </div>
+                <button class="auth-btn" onclick="resetPassword()" id="resetBtn">Reset Password</button>
+                <div id="resetError" class="error-message hidden"></div>
+                <div id="resetSuccess" class="success-message hidden"></div>
+                
+                <div style="margin-top: 20px; text-align: center;">
+                    <button type="button" class="btn btn-secondary" onclick="showLoginForm()">Back to Login</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Application -->
+    <div id="mainApp" class="main-app">
+        <div class="header">
+            <div>
+                <h1>🏥 Wound Care RT Supply Tracker</h1>
+                <div class="header-info">
+                    <div id="currentUserInfo"></div>
+                </div>
+            </div>
+            <div class="header-controls">
+                <button class="btn btn-danger" onclick="logout()">Logout</button>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('dashboard', this)">🏠 Dashboard</div>
+            <div class="tab" onclick="showTab('patients', this)">👥 Patient Management</div>
+            <div class="tab" onclick="showTab('tracking', this)">📊 Supply Tracking</div>
+            <div class="tab" onclick="showTab('summary', this)">📋 Summary Report</div>
+            <div class="tab" id="suppliesTabButton" onclick="showTab('supplies', this)">🛠️ Supply Management</div>
+            <div class="tab" id="usersTabButton" onclick="showTab('users', this)">👤 User Management</div>
+        </div>
+
+        <!-- Dashboard Tab -->
+        <div id="dashboardTab" class="tab-content">
+            <h2 style="margin-bottom: 30px; color: #4a5568;">🏠 Dashboard</h2>
+
+            <!-- Dashboard Filters -->
+            <div class="filter-section">
+                <h3 style="margin-bottom: 15px; color: #4a5568;">Dashboard Filters</h3>
+                <div class="filter-grid">
+                    <div class="form-group">
+                        <label for="dashboardFacilityFilter">Filter by Facility</label>
+                        <select id="dashboardFacilityFilter" onchange="loadDashboard()">
+                            <option value="">All Facilities</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="dashboardMonthFilter">Filter by Month/Year</label>
+                        <select id="dashboardMonthFilter" onchange="loadDashboard()">
+                            <option value="">All Months</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dashboard Cards -->
+            <div class="dashboard-cards">
+                <div class="dashboard-card">
+                    <div class="dashboard-card-content">
+                        <h3>Total Patients</h3>
+                        <div class="value" id="dashboardTotalPatients">0</div>
+                        <div class="subtitle">Active tracking records</div>
+                    </div>
+                </div>
+                <div class="dashboard-card">
+                    <div class="dashboard-card-content">
+                        <h3>Total Units</h3>
+                        <div class="value" id="dashboardTotalUnits">0</div>
+                        <div class="subtitle">Supply units used</div>
+                    </div>
+                </div>
+                <div class="dashboard-card">
+                    <div class="dashboard-card-content">
+                        <h3>Total Facilities</h3>
+                        <div class="value" id="dashboardTotalFacilities">0</div>
+                        <div class="subtitle">Healthcare locations</div>
+                    </div>
+                </div>
+                <div class="dashboard-card" id="dashboardCostCard">
+                    <div class="dashboard-card-content">
+                        <h3>Total Costs</h3>
+                        <div class="value" id="dashboardTotalCosts">$0</div>
+                        <div class="subtitle">Supply expenditure</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Patient Data Table -->
+            <div class="table-container">
+                <table class="data-table" id="dashboardPatientsTable">
+                    <thead>
+                        <tr id="dashboardTableHeader">
+                            <th>Patient Name</th>
+                            <th>MRN</th>
+                            <th>Wound Dx</th>
+                            <th>AR Code</th>
+                            <th>HCPCS</th>
+                            <th>Month/Year</th>
+                            <th>Facility</th>
+                            <th>Total Units</th>
+                            <th>Total Costs</th>
+                            <th>Last Updated</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dashboardPatientsTableBody">
+                        <!-- Dashboard patient data will be populated here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Patient Management Tab -->
+        <div id="patientsTab" class="tab-content hidden">
+            <h2 style="margin-bottom: 30px; color: #4a5568;">👥 Patient Management</h2>
+
+            <!-- Excel Import Section -->
+            <div class="import-section">
+                <h3>📁 Bulk Import Patients from Excel</h3>
+                <p>Import multiple patients at once using an Excel file (.xlsx or .xls)</p>
+                
+                <div class="import-actions">
+                    <button class="btn btn-secondary" onclick="downloadExcelTemplate()">📥 Download Template</button>
+                    <button class="btn btn-primary" onclick="showExcelImportModal()">📤 Import Excel File</button>
+                </div>
+
+                <div class="import-info">
+                    <h4>Required Excel Columns:</h4>
+                    <ul>
+                        <li><strong>Name</strong> - Patient full name (e.g., "Smith, John")</li>
+                        <li><strong>MRN</strong> - Medical Record Number (optional)</li>
+                        <li><strong>Month</strong> - Format: MM-YYYY (e.g., "01-2025")</li>
+                        <li><strong>Facility</strong> - Facility name (Spalding Post Acute)</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="supply-form" id="patientFormSection">
+                <div class="form-group">
+                    <label>Patient Name</label>
+                    <input type="text" id="patientName" placeholder="Last, First">
+                </div>
+                <div class="form-group">
+                    <label>Select Month/Year</label>
+                    <input type="month" id="patientMonth">
+                </div>
+                <div class="form-group">
+                    <label>MRN (Medical Record Number)</label>
+                    <input type="text" id="mrnNumber" placeholder="MRN">
+                </div>
+                <div class="form-group">
+                    <label>Select Facility</label>
+                    <select id="patientFacility">
+                        <option value="">Select Facility</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>&nbsp;</label>
+                    <button class="btn btn-primary" onclick="addPatient()" id="addPatientBtn" style="margin-top: 0; width: 100%;">➕ Add Patient</button>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table class="data-table" id="patientTable">
+                    <thead>
+                        <tr>
+                            <th>Patient Name</th>
+                            <th>MRN</th>
+                            <th>Month/Year</th>
+                            <th>Facility</th>
+                            <th>Updated</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="patientTableBody">
+                        <!-- Patients will be populated here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Supply Tracking Tab -->
+        <div id="trackingTab" class="tab-content hidden">
+            <h2 style="margin-bottom: 30px; color: #4a5568;">📊 Enhanced Supply Tracking</h2>
+
+            <div class="filter-section">
+                <h3 style="margin-bottom: 15px; color: #4a5568;">Patient & Supply Filters</h3>
+                <div class="filter-grid">
+                    <div class="form-group">
+                        <label for="trackingFacilitySelect">Filter by Facility</label>
+                        <select id="trackingFacilitySelect" onchange="refreshPatientSelect()">
+                            <option value="">All Facilities</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="trackingMonthFilter">Filter by Month/Year</label>
+                        <select id="trackingMonthFilter" onchange="refreshPatientSelect()">
+                            <option value="">All Months</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="patientSelect">Select Patient</label>
+                        <select id="patientSelect" onchange="loadPatientTracking()">
+                            <option value="">Select Patient</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="supplySearchInput">Search Supplies</label>
+                        <input type="text" id="supplySearchInput" placeholder="Search by AR Code or Description" class="search-input" onkeyup="filterSupplies()">
+                    </div>
+                </div>
+            </div>
+
+            <div id="trackingContent">
+                <div id="trackingPlaceholder" style="text-align: center; color: #718096; font-size: 18px; margin-top: 100px; padding: 40px; border: 2px dashed #e2e8f0; border-radius: 15px;">
+                    <div style="font-size: 48px; margin-bottom: 20px;">📊</div>
+                    <h3 style="margin-bottom: 15px;">Enhanced Supply Tracking Ready</h3>
+                    <p>Select a patient above to begin tracking supplies with our advanced interface featuring:</p>
+                    <ul style="text-align: left; max-width: 500px; margin: 20px auto; color: #4a5568;">
+                        <li>✅ Frozen columns for easy navigation</li>
+                        <li>✅ Real-time auto-save functionality</li>
+                        <li>✅ Wound diagnosis tracking</li>
+                        <li>✅ Cost calculations</li>
+                        <li>✅ Search and filter capabilities</li>
+                    </ul>
+                </div>
+
+                <div id="trackingGrid" class="tracking-container hidden">
+                    <div class="tracking-grid">
+                        <table class="tracking-table" id="trackingTable">
+                            <thead id="trackingTableHead">
+                                <!-- Dynamic tracking table headers will be inserted here -->
+                            </thead>
+                            <tbody id="trackingTableBody">
+                                <!-- Dynamic tracking table content will be inserted here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Summary Tab -->
+        <div id="summaryTab" class="tab-content hidden">
+            <h2 style="margin-bottom: 30px; color: #4a5568;">📋 Summary Report</h2>
+
+            <div class="filter-section">
+                <h3 style="margin-bottom: 15px; color: #4a5568;">Report Filters & Export Options</h3>
+                
+                <div class="filter-grid">
+                    <div class="form-group">
+                        <label for="summaryFacilityFilter">Filter by Facility</label>
+                        <select id="summaryFacilityFilter" onchange="updateSummaryReport()">
+                            <option value="">All Facilities</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="summaryMonthFilter">Filter by Month/Year</label>
+                        <select id="summaryMonthFilter" onchange="updateSummaryReport()">
+                            <option value="">All Months</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="filter-actions">
+                    <button class="btn btn-success" onclick="downloadSummaryReport()">📥 Download Report</button>
+                    <button class="btn btn-primary" onclick="updateSummaryReport()">🔄 Refresh Report</button>
+                    <button class="btn btn-warning" id="cleanupBtn" onclick="cleanupTrackingData()" style="display: none;">🧹 Cleanup Data</button>
+                    <button class="btn btn-secondary" onclick="debugSummaryData()" style="margin-left: 10px;">🔍 Debug Data</button>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table class="data-table" id="summaryTable">
+                    <thead>
+                        <tr id="summaryTableHeader">
+                            <th>Patient Name</th>
+                            <th>MRN</th>
+                            <th>Wound Dx</th>
+                            <th>Month/Year</th>
+                            <th>Facility</th>
+                            <th>Total Units</th>
+                            <th>Last Updated</th>
+                        </tr>
+                    </thead>
+                    <tbody id="summaryTableBody">
+                        <!-- Summary data will be populated here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Supply Management Tab (Admin Only) -->
+        <div id="suppliesTab" class="tab-content hidden">
+            <h2 style="margin-bottom: 30px; color: #4a5568;">🛠️ Supply Management</h2>
+
+            <!-- Import Section -->
+            <div class="import-section">
+                <h3>📁 Bulk Import Supplies from Excel</h3>
+                <p>Import multiple supply items at once using an Excel file (.xlsx or .xls)</p>
+                
+                <div class="import-actions">
+                    <button class="btn btn-secondary" onclick="downloadSupplyTemplate()">📥 Download Template</button>
+                    <button class="btn btn-primary" onclick="showSupplyImportModal()">📤 Import Excel File</button>
+                </div>
+
+                <div class="import-info">
+                    <h4>Required Excel Columns:</h4>
+                    <ul>
+                        <li><strong>Code</strong> - Unique supply code (e.g., "701")</li>
+                        <li><strong>Description</strong> - Full description of the supply</li>
+                        <li><strong>HCPCS</strong> - Healthcare billing code (optional)</li>
+                        <li><strong>Cost</strong> - Cost per unit in dollars (e.g., 5.50)</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Add New Supply Form -->
+            <div class="supply-form">
+                <div class="form-group">
+                    <label for="supplyArCode">Supply Code</label>
+                    <input type="number" id="supplyArCode" placeholder="e.g., 701">
+                </div>
+                <div class="form-group">
+                    <label for="supplyDescription">Item Description</label>
+                    <input type="text" id="supplyDescription" placeholder="e.g., Foam Dressing 4x4">
+                </div>
+                <div class="form-group">
+                    <label for="supplyHcpcs">HCPCS Code</label>
+                    <input type="text" id="supplyHcpcs" placeholder="e.g., A6209">
+                </div>
+                <div class="form-group">
+                    <label for="supplyUnitCost">Unit Cost ($)</label>
+                    <input type="number" id="supplyUnitCost" placeholder="0.00" step="0.01" min="0">
+                </div>
+                <div class="form-group">
+                    <label>&nbsp;</label>
+                    <div class="supply-actions">
+                        <button class="btn btn-primary" onclick="addSupply()" id="addSupplyBtn" style="width: 100%;">➕ Add Supply</button>
+                        <button class="btn btn-secondary" onclick="clearSupplyForm()" id="clearSupplyBtn" style="width: 100%; margin-top: 10px;">🗑️ Clear Form</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table class="data-table" id="suppliesTable">
+                    <thead>
+                        <tr>
+                            <th>Code</th>
+                            <th>Item Description</th>
+                            <th>HCPCS Code</th>
+                            <th>Unit Cost</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="suppliesTableBody">
+                        <!-- Supplies will be populated here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- User Management Tab (Admin Only) -->
+        <div id="usersTab" class="tab-content hidden">
+            <h2 style="margin-bottom: 30px; color: #4a5568;">👤 User Management</h2>
+
+            <div class="filter-section">
+                <h3 style="margin-bottom: 15px; color: #4a5568;">User Account Management</h3>
+                <div class="filter-actions">
+                    <button class="btn btn-primary" onclick="refreshUsersList()">🔄 Refresh Users</button>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table class="data-table" id="usersTable">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Facility</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th>Registered</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usersTableBody">
+                        <!-- Users will be populated here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="excelImportModal" class="modal">
+        <div class="modal-content">
+            <h2>📤 Import Patients from Excel</h2>
+            
+            <div class="file-drop-zone" onclick="document.getElementById('excelFileInput').click()">
+                <div class="file-icon">📁</div>
+                <h3 style="color: #4299e1; margin-bottom: 10px;">Drag & Drop Excel File Here</h3>
+                <p style="color: #718096; margin-bottom: 20px;">or click to browse for file</p>
+                <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display: none;" onchange="handleExcelFile(this.files[0])">
+                <button class="btn btn-primary">Choose Excel File</button>
+            </div>
+
+            <div id="importResults" style="display: none; margin-top: 20px; padding: 15px; border-radius: 8px; max-height: 200px; overflow-y: auto;"></div>
+
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                <button class="btn btn-secondary" onclick="closeExcelImportModal()">Close</button>
+                <button class="btn btn-primary" onclick="processExcelImport()" id="processImportBtn" disabled>Import Data</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="supplyImportModal" class="modal">
+        <div class="modal-content">
+            <h2>📤 Import Supplies from Excel</h2>
+            
+            <div class="file-drop-zone" onclick="document.getElementById('supplyFileInput').click()">
+                <div class="file-icon">📋</div>
+                <h3 style="color: #4299e1; margin-bottom: 10px;">Drag & Drop Excel File Here</h3>
+                <p style="color: #718096; margin-bottom: 20px;">or click to browse for file</p>
+                <input type="file" id="supplyFileInput" accept=".xlsx,.xls" style="display: none;" onchange="handleSupplyFile(this.files[0])">
+                <button class="btn btn-primary">Choose Excel File</button>
+            </div>
+
+            <div id="supplyImportResults" style="display: none; margin-top: 20px; padding: 15px; border-radius: 8px; max-height: 200px; overflow-y: auto;"></div>
+
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                <button class="btn btn-secondary" onclick="closeSupplyImportModal()">Close</button>
+                <button class="btn btn-primary" onclick="processSupplyImport()" id="processSupplyImportBtn" disabled>Import Data</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification -->
+    <div id="notification" class="notification">
+        <span id="notificationText">Welcome to the enhanced system!</span>
+    </div>
+
+    <script>
+        // ===== ENHANCED WOUND CARE RT SUPPLY TRACKER =====
+        // Complete implementation with API integration
+
+        // Global variables
+        let currentUser = null;
+        let authToken = localStorage.getItem('authToken');
+        let excelData = null;
+        let supplyExcelData = null;
+        let allSupplies = [];
+        let filteredSupplies = [];
+        let editingSupplyId = null;
+
+        // Utility functions
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: 'USD'
+            }).format(amount || 0);
         }
 
-        if (month) {
-            whereConditions.push(`p.month = $${++paramCount}`);
-            params.push(month);
+        function formatDate(dateStr) {
+            if (!dateStr) return 'N/A';
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'short', 
+                day: 'numeric' 
+            });
         }
 
-        const whereClause = whereConditions.length > 0 ? 'WHERE ' + whereConditions.join(' AND ') : '';
-
-        const query = `
-            SELECT 
-                p.id,
-                p.name,
-                p.mrn,
-                p.month,
-                p.facility_id,
-                f.name as facility_name,
-                p.created_at,
-                p.updated_at,
-                COALESCE(SUM(CASE WHEN t.quantity > 0 THEN t.quantity ELSE 0 END), 0) as total_units,
-                COALESCE(SUM(CASE WHEN t.quantity > 0 THEN t.quantity * s.cost ELSE 0 END), 0) as total_cost,
-                STRING_AGG(DISTINCT t.wound_dx, '; ') FILTER (WHERE t.wound_dx IS NOT NULL AND t.wound_dx != '' AND t.quantity > 0) as wound_diagnoses,
-                STRING_AGG(DISTINCT s.code::text, ', ') FILTER (WHERE t.quantity > 0) as supply_codes,
-                STRING_AGG(DISTINCT s.hcpcs, ', ') FILTER (WHERE s.hcpcs IS NOT NULL AND t.quantity > 0) as hcpcs_codes
-            FROM patients p
-            LEFT JOIN facilities f ON p.facility_id = f.id
-            LEFT JOIN tracking t ON p.id = t.patient_id AND t.quantity > 0
-            LEFT JOIN supplies s ON t.supply_id = s.id
-            ${whereClause}
-            GROUP BY p.id, p.name, p.mrn, p.month, p.facility_id, f.name, p.created_at, p.updated_at
-            ORDER BY p.name, p.month
-        `;
-
-        const result = await pool.query(query, params);
-        res.json(result.rows);
-    } catch (error) {
-        console.error('Error fetching dashboard summary:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-// ===== FACILITY ROUTES =====
-
-// Get all facilities (public for registration)
-app.get('/api/facilities/public', async (req, res) => {
-    try {
-        const result = await pool.query('SELECT id, name FROM facilities ORDER BY name');
-        res.json(result.rows);
-    } catch (error) {
-        console.error('Error fetching facilities:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-// Get facilities (authenticated)
-app.get('/api/facilities', authenticateToken, async (req, res) => {
-    try {
-        let query = 'SELECT * FROM facilities ORDER BY name';
-        let params = [];
-
-        // Non-admin users can only see their facility
-        if (req.user.role !== 'admin' && req.user.facilityId) {
-            query = 'SELECT * FROM facilities WHERE id = $1 ORDER BY name';
-            params = [req.user.facilityId];
+        function formatMonthForDisplay(monthStr) {
+            if (!monthStr) return 'N/A';
+            if (monthStr.includes('-')) {
+                const [year, month] = monthStr.split('-');
+                return `${month}-${year}`;
+            }
+            return monthStr;
         }
 
-        const result = await pool.query(query, params);
-        res.json(result.rows);
-    } catch (error) {
-        console.error('Error fetching facilities:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-// Add facility (admin only)
-app.post('/api/facilities', authenticateToken, async (req, res) => {
-    try {
-        if (req.user.role !== 'admin') {
-            return res.status(403).json({ error: 'Admin access required' });
+        function formatMonthForAPI(monthStr) {
+            if (!monthStr) return '';
+            if (monthStr.includes('-') && monthStr.length === 7) {
+                return monthStr; // Already in YYYY-MM format
+            }
+            if (monthStr.includes('-') && monthStr.length === 7) {
+                const [month, year] = monthStr.split('-');
+                return `${year}-${month.padStart(2, '0')}`;
+            }
+            return monthStr;
         }
 
-        const { name } = req.body;
-        if (!name) {
-            return res.status(400).json({ error: 'Facility name is required' });
-        }
-
-        const result = await pool.query(
-            'INSERT INTO facilities (name) VALUES ($1) RETURNING *',
-            [name]
-        );
-
-        res.status(201).json(result.rows[0]);
-    } catch (error) {
-        console.error('Error adding facility:', error);
-        if (error.code === '23505') { // Unique violation
-            res.status(400).json({ error: 'Facility name already exists' });
-        } else {
-            res.status(500).json({ error: 'Internal server error' });
-        }
-    }
-});
-
-// ===== SUPPLY ROUTES =====
-
-// Get supplies
-app.get('/api/supplies', authenticateToken, async (req, res) => {
-    try {
-        const result = await pool.query('SELECT * FROM supplies ORDER BY code');
-        res.json(result.rows);
-    } catch (error) {
-        console.error('Error fetching supplies:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-// Add supply (admin only)
-app.post('/api/supplies', authenticateToken, async (req, res) => {
-    try {
-        if (req.user.role !== 'admin') {
-            return res.status(403).json({ error: 'Admin access required' });
-        }
-
-        const { code, description, hcpcs, cost } = req.body;
-        if (!code || !description) {
-            return res.status(400).json({ error: 'Code and description are required' });
-        }
-
-        const result = await pool.query(
-            'INSERT INTO supplies (code, description, hcpcs, cost, is_custom) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-            [code, description, hcpcs || null, cost || 0, true]
-        );
-
-        res.status(201).json(result.rows[0]);
-    } catch (error) {
-        console.error('Error adding supply:', error);
-        if (error.code === '23505') { // Unique violation
-            res.status(400).json({ error: 'Supply code already exists' });
-        } else {
-            res.status(500).json({ error: 'Internal server error' });
-        }
-    }
-});
-
-// Update supply (admin only)
-app.put('/api/supplies/:id', authenticateToken, async (req, res) => {
-    try {
-        if (req.user.role !== 'admin') {
-            return res.status(403).json({ error: 'Admin access required' });
-        }
-
-        const { id } = req.params;
-        const { code, description, hcpcs, cost } = req.body;
-
-        if (!code || !description) {
-            return res.status(400).json({ error: 'Code and description are required' });
-        }
-
-        const result = await pool.query(
-            'UPDATE supplies SET code = $1, description = $2, hcpcs = $3, cost = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5 AND is_custom = true RETURNING *',
-            [code, description, hcpcs || null, cost || 0, id]
-        );
-
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Supply not found or not editable' });
-        }
-
-        res.json(result.rows[0]);
-    } catch (error) {
-        console.error('Error updating supply:', error);
-        if (error.code === '23505') { // Unique violation
-            res.status(400).json({ error: 'Supply code already exists' });
-        } else {
-            res.status(500).json({ error: 'Internal server error' });
-        }
-    }
-});
-
-// Delete supply (admin only)
-app.delete('/api/supplies/:id', authenticateToken, async (req, res) => {
-    try {
-        if (req.user.role !== 'admin') {
-            return res.status(403).json({ error: 'Admin access required' });
-        }
-
-        const { id } = req.params;
-
-        // Check if supply is custom before deleting
-        const supplyCheck = await pool.query('SELECT is_custom FROM supplies WHERE id = $1', [id]);
-        if (supplyCheck.rows.length === 0) {
-            return res.status(404).json({ error: 'Supply not found' });
-        }
-
-        if (!supplyCheck.rows[0].is_custom) {
-            return res.status(400).json({ error: 'Cannot delete system supplies' });
-        }
-
-        await pool.query('DELETE FROM supplies WHERE id = $1', [id]);
-
-        res.json({ message: 'Supply deleted successfully' });
-    } catch (error) {
-        console.error('Error deleting supply:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-// ===== PATIENT ROUTES =====
-
-// Get patients
-app.get('/api/patients', authenticateToken, async (req, res) => {
-    try {
-        let query = `
-            SELECT p.*, f.name as facility_name 
-            FROM patients p 
-            LEFT JOIN facilities f ON p.facility_id = f.id 
-        `;
-        let params = [];
-
-        // Non-admin users can only see patients from their facility
-        if (req.user.role !== 'admin' && req.user.facilityId) {
-            query += ' WHERE p.facility_id = $1';
-            params = [req.user.facilityId];
-        }
-
-        query += ' ORDER BY p.name, p.month';
-
-        const result = await pool.query(query, params);
-        res.json(result.rows);
-    } catch (error) {
-        console.error('Error fetching patients:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-// Add patient
-app.post('/api/patients', authenticateToken, async (req, res) => {
-    try {
-        const { name, month, mrn, facilityId } = req.body;
-
-        if (!name || !month || !facilityId) {
-            return res.status(400).json({ error: 'Name, month, and facility are required' });
-        }
-
-        // Non-admin users can only add patients to their facility
-        if (req.user.role !== 'admin' && req.user.facilityId !== parseInt(facilityId)) {
-            return res.status(403).json({ error: 'Can only add patients to your facility' });
-        }
-
-        const result = await pool.query(
-            'INSERT INTO patients (name, month, mrn, facility_id) VALUES ($1, $2, $3, $4) RETURNING *',
-            [name, month, mrn || null, facilityId]
-        );
-
-        res.status(201).json(result.rows[0]);
-    } catch (error) {
-        console.error('Error adding patient:', error);
-        if (error.code === '23505') { // Unique violation
-            res.status(400).json({ error: 'Patient already exists for this month and facility' });
-        } else {
-            res.status(500).json({ error: 'Internal server error' });
-        }
-    }
-});
-
-// Delete patient
-app.delete('/api/patients/:id', authenticateToken, async (req, res) => {
-    try {
-        const { id } = req.params;
-
-        // Verify patient access
-        let patientQuery = 'SELECT * FROM patients WHERE id = $1';
-        let patientParams = [id];
-
-        if (req.user.role !== 'admin' && req.user.facilityId) {
-            patientQuery += ' AND facility_id = $2';
-            patientParams.push(req.user.facilityId);
-        }
-
-        const patientResult = await pool.query(patientQuery, patientParams);
-        if (patientResult.rows.length === 0) {
-            return res.status(404).json({ error: 'Patient not found or access denied' });
-        }
-
-        await pool.query('DELETE FROM patients WHERE id = $1', [id]);
-
-        res.json({ message: 'Patient deleted successfully' });
-    } catch (error) {
-        console.error('Error deleting patient:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-// ===== TRACKING ROUTES =====
-
-// Get tracking data
-app.get('/api/tracking/:patientId', authenticateToken, async (req, res) => {
-    try {
-        const { patientId } = req.params;
-
-        // Verify patient access
-        let patientQuery = 'SELECT * FROM patients WHERE id = $1';
-        let patientParams = [patientId];
-
-        if (req.user.role !== 'admin' && req.user.facilityId) {
-            patientQuery += ' AND facility_id = $2';
-            patientParams.push(req.user.facilityId);
-        }
-
-        const patientResult = await pool.query(patientQuery, patientParams);
-        if (patientResult.rows.length === 0) {
-            return res.status(404).json({ error: 'Patient not found or access denied' });
-        }
-
-        const result = await pool.query(
-            'SELECT * FROM tracking WHERE patient_id = $1 ORDER BY supply_id, day_of_month',
-            [patientId]
-        );
-
-        res.json(result.rows);
-    } catch (error) {
-        console.error('Error fetching tracking data:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-// Update tracking data
-app.post('/api/tracking', authenticateToken, async (req, res) => {
-    try {
-        const { patientId, supplyId, dayOfMonth, quantity, woundDx } = req.body;
-
-        // Validate required fields
-        if (!patientId || !supplyId || dayOfMonth === undefined) {
-            return res.status(400).json({ error: 'Patient ID, Supply ID, and day of month are required' });
-        }
-
-        // Validate day of month
-        if (dayOfMonth < 1 || dayOfMonth > 31) {
-            return res.status(400).json({ error: 'Day of month must be between 1 and 31' });
-        }
-
-        // Verify patient access
-        let patientQuery = 'SELECT * FROM patients WHERE id = $1';
-        let patientParams = [patientId];
-
-        if (req.user.role !== 'admin' && req.user.facilityId) {
-            patientQuery += ' AND facility_id = $2';
-            patientParams.push(req.user.facilityId);
-        }
-
-        const patientResult = await pool.query(patientQuery, patientParams);
-        if (patientResult.rows.length === 0) {
-            return res.status(404).json({ error: 'Patient not found or access denied' });
-        }
-
-        // Update patient's updated_at timestamp
-        await pool.query('UPDATE patients SET updated_at = CURRENT_TIMESTAMP WHERE id = $1', [patientId]);
-
-        // For wound diagnosis updates, we need to handle them specially
-        if (woundDx !== undefined && woundDx !== null) {
-            // Check if there's existing tracking data for this patient and supply
-            const existingTracking = await pool.query(
-                'SELECT * FROM tracking WHERE patient_id = $1 AND supply_id = $2 LIMIT 1',
-                [patientId, supplyId]
-            );
-
-            if (existingTracking.rows.length > 0) {
-                // Update wound_dx on all tracking records for this patient and supply
-                await pool.query(
-                    'UPDATE tracking SET wound_dx = $1, updated_at = CURRENT_TIMESTAMP WHERE patient_id = $2 AND supply_id = $3',
-                    [woundDx.trim() || null, patientId, supplyId]
-                );
-            } else if (woundDx.trim()) {
-                // Create a new tracking record with wound_dx if it doesn't exist
-                await pool.query(
-                    'INSERT INTO tracking (patient_id, supply_id, day_of_month, quantity, wound_dx) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (patient_id, supply_id, day_of_month) DO UPDATE SET wound_dx = $5, updated_at = CURRENT_TIMESTAMP',
-                    [patientId, supplyId, dayOfMonth || 1, 0, woundDx.trim()]
-                );
+        function generateMonthOptions() {
+            const months = [];
+            const startDate = new Date(2024, 7); // August 2024 (month is 0-indexed)
+            const currentDate = new Date();
+            const endDate = new Date(currentDate.getFullYear() + 2, currentDate.getMonth()); // 2 years into future
+            
+            let date = new Date(startDate);
+            while (date <= endDate) {
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const monthStr = `${year}-${month}`;
+                const displayStr = `${month}-${year}`;
+                months.push({ value: monthStr, display: displayStr });
+                date.setMonth(date.getMonth() + 1);
             }
             
-            return res.json({ message: 'Wound diagnosis updated successfully' });
+            return months;
         }
 
-        // Regular quantity update
-        const cleanQuantity = parseInt(quantity) || 0;
-        
-        if (cleanQuantity === 0) {
-            // Delete the record if quantity is 0
-            await pool.query(
-                'DELETE FROM tracking WHERE patient_id = $1 AND supply_id = $2 AND day_of_month = $3',
-                [patientId, supplyId, dayOfMonth]
-            );
+        function populateMonthDropdowns() {
+            const monthOptions = generateMonthOptions();
+            const monthSelects = [
+                'dashboardMonthFilter', 'trackingMonthFilter', 'summaryMonthFilter'
+            ];
             
-            return res.json({ message: 'Tracking record cleared successfully' });
+            monthSelects.forEach(selectId => {
+                const select = document.getElementById(selectId);
+                if (select) {
+                    const currentValue = select.value;
+                    select.innerHTML = '<option value="">All Months</option>';
+                    
+                    monthOptions.forEach(month => {
+                        const option = document.createElement('option');
+                        option.value = month.value;
+                        option.textContent = month.display;
+                        select.appendChild(option);
+                    });
+                    
+                    if (currentValue) select.value = currentValue;
+                }
+            });
+        }
+
+        function showNotification(message, isError = false) {
+            const notification = document.getElementById('notification');
+            const text = document.getElementById('notificationText');
+            
+            text.textContent = message;
+            notification.className = 'notification' + (isError ? ' error' : '');
+            notification.style.display = 'block';
+
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 4000);
+        }
+
+        // API helper function
+        async function apiCall(endpoint, options = {}) {
+            const url = `/api${endpoint}`;
+            const config = {
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(authToken && { 'Authorization': `Bearer ${authToken}` })
+                },
+                ...options
+            };
+
+            if (options.body) {
+                config.body = JSON.stringify(options.body);
+            }
+
+            try {
+                const response = await fetch(url, config);
+                
+                // Check if response is JSON
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    const text = await response.text();
+                    console.error('Non-JSON response:', text);
+                    throw new Error('Server returned an unexpected response. Please check the console for details.');
+                }
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || `HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                return data;
+            } catch (error) {
+                console.error('API Error:', error);
+                throw error;
+            }
+        }
+
+        // ===== AUTHENTICATION FUNCTIONS =====
+        function showLoginForm() {
+            document.getElementById('loginForm').classList.remove('hidden');
+            document.getElementById('registerForm').classList.add('hidden');
+            document.getElementById('resetForm').classList.add('hidden');
+            clearAuthForms();
+        }
+
+        function showRegisterForm() {
+            document.getElementById('loginForm').classList.add('hidden');
+            document.getElementById('registerForm').classList.remove('hidden');
+            document.getElementById('resetForm').classList.add('hidden');
+            loadFacilitiesForRegistration();
+            clearAuthForms();
+        }
+
+        function showResetForm() {
+            document.getElementById('loginForm').classList.add('hidden');
+            document.getElementById('registerForm').classList.add('hidden');
+            document.getElementById('resetForm').classList.remove('hidden');
+            clearAuthForms();
+        }
+
+        function clearAuthForms() {
+            // Clear login form
+            document.getElementById('loginEmail').value = '';
+            document.getElementById('loginPassword').value = '';
+            document.getElementById('loginError').classList.add('hidden');
+
+            // Clear register form
+            document.getElementById('registerName').value = '';
+            document.getElementById('registerEmail').value = '';
+            document.getElementById('registerPassword').value = '';
+            document.getElementById('registerFacility').value = '';
+            document.getElementById('registerError').classList.add('hidden');
+            document.getElementById('registerSuccess').classList.add('hidden');
+
+            // Clear reset form
+            document.getElementById('resetEmail').value = '';
+            document.getElementById('resetError').classList.add('hidden');
+            document.getElementById('resetSuccess').classList.add('hidden');
+        }
+
+        async function loadFacilitiesForRegistration() {
+            try {
+                const facilities = await apiCall('/facilities/public');
+                const select = document.getElementById('registerFacility');
+                select.innerHTML = '<option value="">Select Facility</option>';
+                
+                facilities.forEach(facility => {
+                    const option = document.createElement('option');
+                    option.value = facility.id;
+                    option.textContent = facility.name;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Failed to load facilities for registration:', error);
+            }
+        }
+
+        async function register() {
+            const name = document.getElementById('registerName').value.trim();
+            const email = document.getElementById('registerEmail').value.trim();
+            const password = document.getElementById('registerPassword').value.trim();
+            const facilityId = document.getElementById('registerFacility').value;
+            const registerBtn = document.getElementById('registerBtn');
+            const registerError = document.getElementById('registerError');
+            const registerSuccess = document.getElementById('registerSuccess');
+
+            if (!name || !email || !password || !facilityId) {
+                showRegisterError('Please fill in all fields');
+                return;
+            }
+
+            if (password.length < 6) {
+                showRegisterError('Password must be at least 6 characters long');
+                return;
+            }
+
+            registerBtn.disabled = true;
+            registerBtn.innerHTML = '<span class="loading"></span>Registering...';
+            registerError.classList.add('hidden');
+            registerSuccess.classList.add('hidden');
+
+            try {
+                await apiCall('/auth/register', {
+                    method: 'POST',
+                    body: { name, email, password, facilityId: parseInt(facilityId) }
+                });
+
+                registerSuccess.textContent = 'Registration successful! Please wait for admin approval before logging in.';
+                registerSuccess.classList.remove('hidden');
+                
+                // Clear form
+                clearAuthForms();
+                
+                // Switch back to login after delay
+                setTimeout(() => {
+                    showLoginForm();
+                }, 3000);
+                
+            } catch (error) {
+                showRegisterError(error.message);
+            } finally {
+                registerBtn.disabled = false;
+                registerBtn.innerHTML = 'Register';
+            }
+        }
+
+        async function resetPassword() {
+            const email = document.getElementById('resetEmail').value.trim();
+            const resetBtn = document.getElementById('resetBtn');
+            const resetError = document.getElementById('resetError');
+            const resetSuccess = document.getElementById('resetSuccess');
+
+            if (!email) {
+                showResetError('Please enter your email address');
+                return;
+            }
+
+            resetBtn.disabled = true;
+            resetBtn.innerHTML = '<span class="loading"></span>Sending...';
+            resetError.classList.add('hidden');
+            resetSuccess.classList.add('hidden');
+
+            try {
+                await apiCall('/auth/reset-password', {
+                    method: 'POST',
+                    body: { email }
+                });
+
+                resetSuccess.textContent = 'Password reset instructions sent to your email address.';
+                resetSuccess.classList.remove('hidden');
+                
+                // Switch back to login after delay
+                setTimeout(() => {
+                    showLoginForm();
+                }, 3000);
+                
+            } catch (error) {
+                showResetError(error.message);
+            } finally {
+                resetBtn.disabled = false;
+                resetBtn.innerHTML = 'Reset Password';
+            }
+        }
+
+        function showRegisterError(message) {
+            const registerError = document.getElementById('registerError');
+            registerError.textContent = message;
+            registerError.classList.remove('hidden');
+        }
+
+        function showResetError(message) {
+            const resetError = document.getElementById('resetError');
+            resetError.textContent = message;
+            resetError.classList.remove('hidden');
+        }
+
+        async function login() {
+            const email = document.getElementById('loginEmail').value.trim();
+            const password = document.getElementById('loginPassword').value.trim();
+            const loginBtn = document.getElementById('loginBtn');
+            const loginError = document.getElementById('loginError');
+
+            if (!email || !password) {
+                showError('Please enter both email and password');
+                return;
+            }
+
+            loginBtn.disabled = true;
+            loginBtn.innerHTML = '<span class="loading"></span>Signing In...';
+            loginError.classList.add('hidden');
+
+            try {
+                const response = await apiCall('/auth/login', {
+                    method: 'POST',
+                    body: { email, password }
+                });
+
+                authToken = response.token;
+                currentUser = response.user;
+                localStorage.setItem('authToken', authToken);
+
+                document.getElementById('loginContainer').style.display = 'none';
+                document.getElementById('mainApp').style.display = 'block';
+
+                initApp();
+                showNotification('🎉 Welcome to your enhanced wound care system!');
+            } catch (error) {
+                showError(error.message);
+            } finally {
+                loginBtn.disabled = false;
+                loginBtn.innerHTML = 'Sign In';
+            }
+        }
+
+        function logout() {
+            authToken = null;
+            currentUser = null;
+            localStorage.removeItem('authToken');
+
+            document.getElementById('loginContainer').style.display = 'flex';
+            document.getElementById('mainApp').style.display = 'none';
+            document.getElementById('loginEmail').value = '';
+            document.getElementById('loginPassword').value = '';
+        }
+
+        function showError(message) {
+            const loginError = document.getElementById('loginError');
+            loginError.textContent = message;
+            loginError.classList.remove('hidden');
+            setTimeout(() => {
+                loginError.classList.add('hidden');
+            }, 5000);
+        }
+
+        // ===== APP INITIALIZATION =====
+        async function initApp() {
+            setupUserInterface();
+            
+            try {
+                const [facilities, supplies, patients] = await Promise.all([
+                    apiCall('/facilities'),
+                    apiCall('/supplies'),
+                    apiCall('/patients')
+                ]);
+
+                allSupplies = supplies;
+                filteredSupplies = supplies;
+
+                // Populate dropdowns
+                populateFacilityDropdowns(facilities);
+                populateMonthDropdowns();
+                
+                // Load data
+                await loadDashboard();
+                await refreshPatientList();
+                await refreshSuppliesList();
+                
+                console.log('✅ Enhanced wound care system fully loaded!');
+                showNotification('🎯 All enhanced features are now active and ready to use!');
+            } catch (error) {
+                console.error('Failed to load data:', error);
+                showNotification('Failed to load some data: ' + error.message, true);
+            }
+        }
+
+        function setupUserInterface() {
+            if (!currentUser) return;
+            
+            const facilityName = currentUser.role === 'admin' ? "All Facilities" : 
+                               (currentUser.facility_name || "User");
+            
+            document.getElementById('currentUserInfo').innerHTML = 
+                `<div style="font-weight: 600;">${currentUser.name || currentUser.email}</div>` +
+                `<div>${currentUser.role === 'admin' ? '🔑 System Administrator' : '👤 User'} • ${facilityName}</div>`;
+
+            const suppliesTabButton = document.getElementById('suppliesTabButton');
+            const usersTabButton = document.getElementById('usersTabButton');
+            const dashboardCostCard = document.getElementById('dashboardCostCard');
+            const cleanupBtn = document.getElementById('cleanupBtn');
+
+            if (currentUser.role === 'admin') {
+                suppliesTabButton.style.display = 'block';
+                usersTabButton.style.display = 'block';
+                dashboardCostCard.style.display = 'block';
+                if (cleanupBtn) cleanupBtn.style.display = 'inline-block';
+                
+                // Update table headers for admin
+                document.getElementById('summaryTableHeader').innerHTML = 
+                    '<th>Patient Name</th>' +
+                    '<th>MRN</th>' +
+                    '<th>Wound Dx</th>' +
+                    '<th>AR Code</th>' +
+                    '<th>HCPCS</th>' +
+                    '<th>Month/Year</th>' +
+                    '<th>Facility</th>' +
+                    '<th>Total Units</th>' +
+                    '<th>Total Costs</th>' +
+                    '<th>Last Updated</th>';
+                
+                document.getElementById('dashboardTableHeader').innerHTML = 
+                    '<th>Patient Name</th>' +
+                    '<th>MRN</th>' +
+                    '<th>Wound Dx</th>' +
+                    '<th>AR Code</th>' +
+                    '<th>HCPCS</th>' +
+                    '<th>Month/Year</th>' +
+                    '<th>Facility</th>' +
+                    '<th>Total Units</th>' +
+                    '<th>Total Costs</th>' +
+                    '<th>Last Updated</th>';
+            } else {
+                suppliesTabButton.style.display = 'none';
+                usersTabButton.style.display = 'none';
+                dashboardCostCard.style.display = 'none';
+                if (cleanupBtn) cleanupBtn.style.display = 'none';
+                
+                // Update table headers for regular users
+                document.getElementById('summaryTableHeader').innerHTML = 
+                    '<th>Patient Name</th>' +
+                    '<th>MRN</th>' +
+                    '<th>Wound Dx</th>' +
+                    '<th>Month/Year</th>' +
+                    '<th>Facility</th>' +
+                    '<th>Total Units</th>' +
+                    '<th>Last Updated</th>';
+                
+                document.getElementById('dashboardTableHeader').innerHTML = 
+                    '<th>Patient Name</th>' +
+                    '<th>MRN</th>' +
+                    '<th>Wound Dx</th>' +
+                    '<th>Month/Year</th>' +
+                    '<th>Facility</th>' +
+                    '<th>Total Units</th>';
+            }
+        }
+
+        function populateFacilityDropdowns(facilities) {
+            const facilitySelects = [
+                'patientFacility', 'trackingFacilitySelect', 'dashboardFacilityFilter', 'summaryFacilityFilter'
+            ];
+            
+            facilitySelects.forEach(selectId => {
+                const select = document.getElementById(selectId);
+                if (select) {
+                    const currentValue = select.value;
+                    const isFiltering = selectId.includes('Filter') || selectId.includes('tracking');
+                    
+                    select.innerHTML = isFiltering ? '<option value="">All Facilities</option>' : '<option value="">Select Facility</option>';
+                    
+                    const facilitiesToShow = currentUser.role === 'admin' ? facilities : 
+                                            facilities.filter(f => f.id === currentUser.facility_id);
+                    
+                    facilitiesToShow.forEach(facility => {
+                        const option = document.createElement('option');
+                        option.value = facility.id;
+                        option.textContent = facility.name;
+                        select.appendChild(option);
+                    });
+                    
+                    if (currentValue) select.value = currentValue;
+                }
+            });
+        }
+
+        // ===== NAVIGATION FUNCTIONS =====
+        function showTab(tabName, clickedElement) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.add('hidden');
+            });
+
+            // Remove active class from all tabs
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            // Show target tab and mark as active
+            const targetTab = document.getElementById(tabName + 'Tab');
+            if (targetTab) {
+                targetTab.classList.remove('hidden');
+            }
+
+            if (clickedElement) {
+                clickedElement.classList.add('active');
+            }
+
+            // Load specific tab data
+            if (tabName === 'dashboard') {
+                loadDashboard();
+            } else if (tabName === 'supplies') {
+                refreshSuppliesList();
+            } else if (tabName === 'summary') {
+                updateSummaryReport();
+                // Add debug buttons for summary tab
+                addDebugButtons();
+            } else if (tabName === 'tracking') {
+                refreshPatientSelect();
+            } else if (tabName === 'users') {
+                refreshUsersList();
+            }
+        }
+
+        // Add debug buttons to summary tab
+        function addDebugButtons() {
+            const filterActions = document.querySelector('#summaryTab .filter-actions');
+            if (filterActions && !document.getElementById('debugBtn')) {
+                const debugBtn = document.createElement('button');
+                debugBtn.id = 'debugBtn';
+                debugBtn.className = 'btn btn-secondary';
+                debugBtn.textContent = '🔍 Debug Data';
+                debugBtn.onclick = debugSummaryData;
+                filterActions.appendChild(debugBtn);
+
+                if (currentUser && currentUser.role === 'admin') {
+                    const cleanupBtn = document.createElement('button');
+                    cleanupBtn.id = 'cleanupBtn';
+                    cleanupBtn.className = 'btn btn-warning';
+                    cleanupBtn.textContent = '🧹 Cleanup Data';
+                    cleanupBtn.onclick = cleanupTrackingData;
+                    filterActions.appendChild(cleanupBtn);
+                }
+            }
+        }
+
+        // ===== USER MANAGEMENT FUNCTIONS =====
+        async function refreshUsersList() {
+            if (currentUser.role !== 'admin') return;
+            
+            try {
+                const users = await apiCall('/users');
+                const tbody = document.getElementById('usersTableBody');
+                tbody.innerHTML = '';
+
+                users.forEach(user => {
+                    const row = document.createElement('tr');
+                    const statusClass = user.is_approved ? 'btn-success' : 'btn-warning';
+                    const statusText = user.is_approved ? 'Approved' : 'Pending';
+                    const actionButton = user.is_approved ? 
+                        `<button class="btn btn-warning btn-sm" onclick="toggleUserApproval(${user.id}, false)">Suspend</button>` :
+                        `<button class="btn btn-success btn-sm" onclick="toggleUserApproval(${user.id}, true)">Approve</button>`;
+                    
+                    row.innerHTML = `
+                        <td>${user.name}</td>
+                        <td>${user.email}</td>
+                        <td>${user.facility_name || 'N/A'}</td>
+                        <td>${user.role}</td>
+                        <td>
+                            <span class="btn btn-sm ${statusClass}">
+                                ${statusText}
+                            </span>
+                        </td>
+                        <td>${formatDate(user.created_at)}</td>
+                        <td>
+                            <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                                ${actionButton}
+                                ${user.role !== 'admin' ? `<button class="btn btn-danger btn-sm" onclick="deleteUser(${user.id})">Delete</button>` : ''}
+                            </div>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            } catch (error) {
+                showNotification('Failed to load users', true);
+            }
+        }
+
+        async function toggleUserApproval(userId, approve) {
+            try {
+                await apiCall(`/users/${userId}/approval`, {
+                    method: 'PUT',
+                    body: { isApproved: approve }
+                });
+
+                await refreshUsersList();
+                showNotification(`User ${approve ? 'approved' : 'suspended'} successfully`);
+            } catch (error) {
+                showNotification('Failed to update user status: ' + error.message, true);
+            }
+        }
+
+        async function deleteUser(userId) {
+            if (confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
+                try {
+                    await apiCall(`/users/${userId}`, { method: 'DELETE' });
+                    await refreshUsersList();
+                    showNotification('User deleted successfully');
+                } catch (error) {
+                    showNotification('Failed to delete user: ' + error.message, true);
+                }
+            }
+        }
+
+        // ===== PATIENT MANAGEMENT =====
+        async function addPatient() {
+            const name = document.getElementById('patientName').value.trim();
+            const month = document.getElementById('patientMonth').value;
+            const mrn = document.getElementById('mrnNumber').value.trim();
+            const facilityId = document.getElementById('patientFacility').value;
+
+            if (!name || !month || !facilityId) {
+                showNotification('Please fill in all required fields', true);
+                return;
+            }
+
+            try {
+                await apiCall('/patients', {
+                    method: 'POST',
+                    body: { 
+                        name: name, 
+                        month: month, 
+                        mrn: mrn || null, 
+                        facilityId: parseInt(facilityId) 
+                    }
+                });
+
+                // Clear form
+                document.getElementById('patientName').value = '';
+                document.getElementById('patientMonth').value = '';
+                document.getElementById('mrnNumber').value = '';
+                document.getElementById('patientFacility').value = '';
+
+                await refreshPatientList();
+                await refreshPatientSelect();
+                await loadDashboard();
+                showNotification('✅ Patient added successfully!');
+            } catch (error) {
+                showNotification(error.message, true);
+            }
+        }
+
+        async function refreshPatientList() {
+            try {
+                const patients = await apiCall('/patients');
+                const tbody = document.getElementById('patientTableBody');
+                tbody.innerHTML = '';
+
+                patients.forEach(patient => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${patient.name}</td>
+                        <td>${patient.mrn || 'N/A'}</td>
+                        <td>${formatMonthForDisplay(patient.month)}</td>
+                        <td>${patient.facility_name || 'Unknown'}</td>
+                        <td>${formatDate(patient.updated_at)}</td>
+                        <td>
+                            <button class="btn btn-danger btn-sm" onclick="deletePatient(${patient.id})">Delete</button>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            } catch (error) {
+                showNotification('Failed to load patients', true);
+            }
+        }
+
+        async function deletePatient(patientId) {
+            if (confirm('Are you sure you want to delete this patient? All tracking data will be lost.')) {
+                try {
+                    await apiCall(`/patients/${patientId}`, { method: 'DELETE' });
+                    await refreshPatientList();
+                    await refreshPatientSelect();
+                    await loadDashboard();
+                    showNotification('Patient deleted successfully');
+                } catch (error) {
+                    showNotification('Failed to delete patient: ' + error.message, true);
+                }
+            }
+        }
+
+        // ===== SUPPLY TRACKING =====
+        async function refreshPatientSelect() {
+            try {
+                const patients = await apiCall('/patients');
+                const facilityFilter = document.getElementById('trackingFacilitySelect').value;
+                const monthFilter = document.getElementById('trackingMonthFilter').value;
+                const patientSelect = document.getElementById('patientSelect');
+                
+                patientSelect.innerHTML = '<option value="">Select Patient</option>';
+
+                let filteredPatients = patients;
+
+                // Apply facility filter
+                if (facilityFilter) {
+                    filteredPatients = filteredPatients.filter(p => p.facility_id === parseInt(facilityFilter));
+                }
+
+                // Apply month filter
+                if (monthFilter) {
+                    filteredPatients = filteredPatients.filter(p => p.month === monthFilter);
+                }
+
+                filteredPatients.forEach(patient => {
+                    const option = document.createElement('option');
+                    option.value = patient.id;
+                    option.textContent = `${patient.name} (${formatMonthForDisplay(patient.month)}) - ${patient.facility_name || 'Unknown'}`;
+                    patientSelect.appendChild(option);
+                });
+            } catch (error) {
+                showNotification('Failed to load patients for tracking', true);
+            }
+        }
+
+        function filterSupplies() {
+            const searchTerm = document.getElementById('supplySearchInput').value.toLowerCase();
+            
+            if (!searchTerm) {
+                filteredSupplies = allSupplies;
+            } else {
+                filteredSupplies = allSupplies.filter(supply => 
+                    supply.code.toString().includes(searchTerm) ||
+                    supply.description.toLowerCase().includes(searchTerm)
+                );
+            }
+
+            // Reload the tracking grid if a patient is selected
+            const patientId = document.getElementById('patientSelect').value;
+            if (patientId) {
+                loadPatientTracking();
+            }
+        }
+
+        async function loadPatientTracking() {
+            const patientId = parseInt(document.getElementById('patientSelect').value);
+            if (!patientId) {
+                document.getElementById('trackingPlaceholder').classList.remove('hidden');
+                document.getElementById('trackingGrid').classList.add('hidden');
+                return;
+            }
+
+            try {
+                const trackingData = await apiCall(`/tracking/${patientId}`);
+
+                document.getElementById('trackingPlaceholder').classList.add('hidden');
+                document.getElementById('trackingGrid').classList.remove('hidden');
+                
+                generateTrackingGrid(patientId, trackingData, filteredSupplies);
+                showNotification(`✅ Loaded tracking for patient`);
+            } catch (error) {
+                showNotification('Failed to load tracking data: ' + error.message, true);
+            }
+        }
+
+        function generateTrackingGrid(patientId, trackingData, supplies) {
+            const table = document.getElementById('trackingTable');
+            const thead = document.getElementById('trackingTableHead');
+            const tbody = document.getElementById('trackingTableBody');
+
+            // Add CSS class based on user role
+            if (currentUser.role === 'admin') {
+                table.classList.add('admin-view');
+            } else {
+                table.classList.remove('admin-view');
+            }
+
+            // Generate header based on user role
+            let headerHTML = `<tr>`;
+            
+            if (currentUser.role === 'admin') {
+                // Admin sees all columns
+                headerHTML += `
+                    <th>AR Code</th>
+                    <th>Item Description</th>
+                    <th>All Wound Dx</th>
+                    <th>HCPCS</th>
+                    <th>Unit Cost</th>
+                    <th>Total Units</th>
+                    <th>Total Costs</th>
+                `;
+            } else {
+                // Regular users see limited columns
+                headerHTML += `
+                    <th>AR Code</th>
+                    <th>Item Description</th>
+                    <th>All Wound Dx</th>
+                    <th>Total Units</th>
+                `;
+            }
+
+            // Add day columns (1-31) for both user types
+            for (let day = 1; day <= 31; day++) {
+                headerHTML += `<th>${day}</th>`;
+            }
+            headerHTML += '</tr>';
+            thead.innerHTML = headerHTML;
+
+            // Generate body
+            tbody.innerHTML = '';
+            let grandTotalUnits = 0;
+            let grandTotalCost = 0;
+
+            supplies.forEach(supply => {
+                const row = document.createElement('tr');
+                
+                // Get tracking data for this supply
+                const trackingForSupply = trackingData.filter(t => t.supply_id === supply.id);
+                
+                let totalUnits = 0;
+                const woundDxList = [];
+                
+                // Calculate total and collect wound diagnoses
+                trackingForSupply.forEach(track => {
+                    totalUnits += track.quantity || 0;
+                    if (track.wound_dx && track.wound_dx.trim() && !woundDxList.includes(track.wound_dx.trim())) {
+                        woundDxList.push(track.wound_dx.trim());
+                    }
+                });
+
+                const allWoundDx = woundDxList.join('; ');
+                const totalCost = totalUnits * (supply.cost || 0);
+                grandTotalUnits += totalUnits;
+                grandTotalCost += totalCost;
+
+                let rowHTML = '';
+                
+                if (currentUser.role === 'admin') {
+                    // Admin sees all columns
+                    rowHTML = `
+                        <td style="font-weight: bold; color: #667eea;">${supply.code}</td>
+                        <td style="text-align: left;" title="${supply.description}">${supply.description}</td>
+                        <td style="text-align: left;">
+                            <textarea class="wound-dx-input" 
+                                      onchange="updateWoundDx(${patientId}, ${supply.id}, this.value)"
+                                      placeholder="Enter wound diagnosis">${allWoundDx}</textarea>
+                        </td>
+                        <td>${supply.hcpcs || 'N/A'}</td>
+                        <td>${formatCurrency(supply.cost)}</td>
+                        <td class="total-cell" id="total-${supply.id}">${totalUnits}</td>
+                        <td class="cost-cell" id="cost-${supply.id}">${formatCurrency(totalCost)}</td>
+                    `;
+                } else {
+                    // Regular users see limited columns
+                    rowHTML = `
+                        <td style="font-weight: bold; color: #667eea;">${supply.code}</td>
+                        <td style="text-align: left;" title="${supply.description}">${supply.description}</td>
+                        <td style="text-align: left;">
+                            <textarea class="wound-dx-input" 
+                                      onchange="updateWoundDx(${patientId}, ${supply.id}, this.value)"
+                                      placeholder="Enter wound diagnosis">${allWoundDx}</textarea>
+                        </td>
+                        <td class="total-cell" id="total-${supply.id}">${totalUnits}</td>
+                    `;
+                }
+
+                // Add day columns for both user types
+                for (let day = 1; day <= 31; day++) {
+                    const tracking = trackingForSupply.find(t => t.day_of_month === day);
+                    const quantity = tracking ? tracking.quantity : 0;
+                    
+                    rowHTML += `
+                        <td>
+                            <input type="number" 
+                                   class="tracking-input" 
+                                   value="${quantity}" 
+                                   min="0" 
+                                   onchange="updateTracking(${patientId}, ${supply.id}, ${day}, this.value)"
+                                   data-supply-id="${supply.id}"
+                                   data-day="${day}">
+                        </td>
+                    `;
+                }
+
+                row.innerHTML = rowHTML;
+                tbody.appendChild(row);
+            });
+
+            // Add totals row
+            const totalsRow = document.createElement('tr');
+            totalsRow.style.background = '#f0f8ff';
+            totalsRow.style.fontWeight = 'bold';
+            
+            let totalsHTML = '';
+            
+            if (currentUser.role === 'admin') {
+                totalsHTML = `
+                    <td style="font-weight: bold;">TOTALS</td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td class="total-cell" id="grand-total-units">${grandTotalUnits}</td>
+                    <td class="cost-cell" id="grand-total-cost">${formatCurrency(grandTotalCost)}</td>
+                `;
+            } else {
+                totalsHTML = `
+                    <td style="font-weight: bold;">TOTALS</td>
+                    <td></td>
+                    <td></td>
+                    <td class="total-cell" id="grand-total-units">${grandTotalUnits}</td>
+                `;
+            }
+
+            // Calculate daily totals
+            for (let day = 1; day <= 31; day++) {
+                const dayTotal = trackingData
+                    .filter(t => t.day_of_month === day && filteredSupplies.some(s => s.id === t.supply_id))
+                    .reduce((sum, t) => sum + (t.quantity || 0), 0);
+                
+                totalsHTML += `<td class="total-cell" id="day-total-${day}">${dayTotal}</td>`;
+            }
+
+            totalsRow.innerHTML = totalsHTML;
+            tbody.appendChild(totalsRow);
+        }
+
+        async function updateTracking(patientId, supplyId, day, value) {
+            const quantity = parseInt(value) || 0;
+            
+            try {
+                const response = await apiCall('/tracking', {
+                    method: 'POST',
+                    body: { 
+                        patientId: patientId,
+                        supplyId: supplyId,
+                        dayOfMonth: day,
+                        quantity: quantity,
+                        woundDx: null
+                    }
+                });
+
+                // Update totals in real-time without full reload
+                updateTrackingTotals();
+                
+                // Update dashboard and summary reports after a short delay
+                setTimeout(async () => {
+                    await loadDashboard();
+                    // Update summary report if it's the active tab
+                    const summaryTab = document.getElementById('summaryTab');
+                    if (!summaryTab.classList.contains('hidden')) {
+                        await updateSummaryReport();
+                    }
+                }, 500);
+            } catch (error) {
+                showNotification('Failed to update tracking: ' + error.message, true);
+            }
+        }
+
+        function updateTrackingTotals() {
+            // Get all supplies and calculate totals
+            const allInputs = document.querySelectorAll('.tracking-input');
+            const supplyTotals = {};
+            const dayTotals = {};
+            let grandTotal = 0;
+            let grandCost = 0;
+
+            // Initialize totals
+            for (let day = 1; day <= 31; day++) {
+                dayTotals[day] = 0;
+            }
+
+            // Calculate totals
+            allInputs.forEach(input => {
+                const supplyId = input.getAttribute('data-supply-id');
+                const day = parseInt(input.getAttribute('data-day'));
+                const quantity = parseInt(input.value) || 0;
+
+                if (!supplyTotals[supplyId]) {
+                    supplyTotals[supplyId] = 0;
+                }
+                
+                supplyTotals[supplyId] += quantity;
+                dayTotals[day] += quantity;
+                grandTotal += quantity;
+            });
+
+            // Update supply totals and costs
+            Object.keys(supplyTotals).forEach(supplyId => {
+                const totalCell = document.getElementById(`total-${supplyId}`);
+                const costCell = document.getElementById(`cost-${supplyId}`);
+                
+                if (totalCell) {
+                    totalCell.textContent = supplyTotals[supplyId];
+                }
+                
+                if (costCell) {
+                    // Get the supply cost from the page
+                    const supplyRow = totalCell?.closest('tr');
+                    const costText = supplyRow?.cells[4]?.textContent || '$0.00';
+                    const cost = parseFloat(costText.replace(/[$,]/g, '')) || 0;
+                    const totalCost = supplyTotals[supplyId] * cost;
+                    costCell.textContent = formatCurrency(totalCost);
+                    grandCost += totalCost;
+                }
+            });
+
+            // Update day totals
+            for (let day = 1; day <= 31; day++) {
+                const dayTotalCell = document.getElementById(`day-total-${day}`);
+                if (dayTotalCell) {
+                    dayTotalCell.textContent = dayTotals[day];
+                }
+            }
+
+            // Update grand totals
+            const grandTotalCell = document.getElementById('grand-total-units');
+            const grandCostCell = document.getElementById('grand-total-cost');
+            
+            if (grandTotalCell) grandTotalCell.textContent = grandTotal;
+            if (grandCostCell) grandCostCell.textContent = formatCurrency(grandCost);
+        }
+
+        async function updateWoundDx(patientId, supplyId, value) {
+            try {
+                await apiCall('/tracking', {
+                    method: 'POST',
+                    body: { 
+                        patientId: patientId,
+                        supplyId: supplyId,
+                        dayOfMonth: 1, // Use day 1 as default for wound diagnosis
+                        quantity: 0,
+                        woundDx: value.trim()
+                    }
+                });
+            } catch (error) {
+                console.error('Failed to update wound diagnosis:', error);
+            }
+        }
+
+        // ===== SUPPLY MANAGEMENT =====
+        async function addSupply() {
+            const code = document.getElementById('supplyArCode').value.trim();
+            const description = document.getElementById('supplyDescription').value.trim();
+            const hcpcs = document.getElementById('supplyHcpcs').value.trim();
+            const cost = parseFloat(document.getElementById('supplyUnitCost').value) || 0;
+
+            if (!code || !description) {
+                showNotification('Please fill in Code and Description', true);
+                return;
+            }
+
+            try {
+                if (editingSupplyId) {
+                    // Update existing supply
+                    await apiCall(`/supplies/${editingSupplyId}`, {
+                        method: 'PUT',
+                        body: { 
+                            code: parseInt(code), 
+                            description: description, 
+                            hcpcs: hcpcs || null, 
+                            cost: cost 
+                        }
+                    });
+                    showNotification('✅ Supply updated successfully!');
+                    editingSupplyId = null;
+                    document.getElementById('addSupplyBtn').textContent = '➕ Add Supply';
+                } else {
+                    // Add new supply
+                    await apiCall('/supplies', {
+                        method: 'POST',
+                        body: { 
+                            code: parseInt(code), 
+                            description: description, 
+                            hcpcs: hcpcs || null, 
+                            cost: cost 
+                        }
+                    });
+                    showNotification('✅ Supply added successfully!');
+                }
+
+                clearSupplyForm();
+                await refreshSuppliesList();
+                
+                // Refresh supplies data
+                const supplies = await apiCall('/supplies');
+                allSupplies = supplies;
+                filteredSupplies = supplies;
+            } catch (error) {
+                showNotification(error.message, true);
+            }
+        }
+
+        function editSupply(supplyId, code, description, hcpcs, cost) {
+            editingSupplyId = supplyId;
+            document.getElementById('supplyArCode').value = code;
+            document.getElementById('supplyDescription').value = description;
+            document.getElementById('supplyHcpcs').value = hcpcs || '';
+            document.getElementById('supplyUnitCost').value = cost || 0;
+            document.getElementById('addSupplyBtn').textContent = '💾 Update Supply';
+            
+            // Scroll to form
+            document.getElementById('supplyArCode').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function clearSupplyForm() {
+            editingSupplyId = null;
+            document.getElementById('supplyArCode').value = '';
+            document.getElementById('supplyDescription').value = '';
+            document.getElementById('supplyHcpcs').value = '';
+            document.getElementById('supplyUnitCost').value = '';
+            document.getElementById('addSupplyBtn').textContent = '➕ Add Supply';
+        }
+
+        async function refreshSuppliesList() {
+            try {
+                const supplies = await apiCall('/supplies');
+                const tbody = document.getElementById('suppliesTableBody');
+                tbody.innerHTML = '';
+
+                supplies.sort((a, b) => a.code - b.code).forEach(supply => {
+                    const row = document.createElement('tr');
+                    
+                    row.innerHTML = `
+                        <td><strong>${supply.code}</strong></td>
+                        <td>${supply.description}</td>
+                        <td>${supply.hcpcs || 'N/A'}</td>
+                        <td>${formatCurrency(supply.cost)}</td>
+                        <td>
+                            <span class="btn btn-sm ${supply.is_custom ? 'btn-warning' : 'btn-success'}">
+                                ${supply.is_custom ? 'Custom' : 'System'}
+                            </span>
+                        </td>
+                        <td>
+                            <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                                ${supply.is_custom ? `<button class="btn btn-secondary btn-sm edit-supply-btn" data-supply-id="${supply.id}">Edit</button>` : ''}
+                                ${supply.is_custom ? `<button class="btn btn-danger btn-sm delete-supply-btn" data-supply-id="${supply.id}">Delete</button>` : '<span style="color: #718096;">System Supply</span>'}
+                            </div>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+
+                // Add event listeners for edit and delete buttons
+                document.querySelectorAll('.edit-supply-btn').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const supplyId = this.getAttribute('data-supply-id');
+                        const supply = supplies.find(s => s.id === parseInt(supplyId));
+                        if (supply) {
+                            editSupply(supply.id, supply.code, supply.description, supply.hcpcs, supply.cost);
+                        }
+                    });
+                });
+
+                document.querySelectorAll('.delete-supply-btn').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const supplyId = this.getAttribute('data-supply-id');
+                        deleteSupply(parseInt(supplyId));
+                    });
+                });
+
+            } catch (error) {
+                showNotification('Failed to load supplies', true);
+            }
+        }
+
+        async function deleteSupply(supplyId) {
+            if (confirm('Are you sure you want to delete this supply? All associated tracking data will be lost.')) {
+                try {
+                    await apiCall(`/supplies/${supplyId}`, { method: 'DELETE' });
+                    await refreshSuppliesList();
+                    
+                    // Refresh supplies data
+                    const supplies = await apiCall('/supplies');
+                    allSupplies = supplies;
+                    filteredSupplies = supplies;
+                    
+                    await loadDashboard();
+                    showNotification('Supply deleted successfully');
+                } catch (error) {
+                    showNotification('Failed to delete supply: ' + error.message, true);
+                }
+            }
+        }
+
+        // ===== DASHBOARD FUNCTIONS =====
+        async function loadDashboard() {
+            try {
+                const [facilities] = await Promise.all([
+                    apiCall('/facilities')
+                ]);
+
+                // Get filters
+                const facilityFilter = document.getElementById('dashboardFacilityFilter')?.value;
+                const monthFilter = document.getElementById('dashboardMonthFilter')?.value;
+
+                // Build query parameters
+                const params = new URLSearchParams();
+                if (facilityFilter) params.append('facilityId', facilityFilter);
+                if (monthFilter) params.append('month', monthFilter);
+
+                // Get dashboard summary data
+                let dashboardData = [];
+                try {
+                    dashboardData = await apiCall(`/dashboard/summary?${params.toString()}`);
+                } catch (error) {
+                    console.warn('Dashboard summary endpoint not available, using basic patient data');
+                    // Fallback to basic patient data if dashboard/summary endpoint fails
+                    const patients = await apiCall('/patients');
+                    let filteredPatients = patients;
+                    if (facilityFilter) {
+                        filteredPatients = filteredPatients.filter(p => p.facility_id === parseInt(facilityFilter));
+                    }
+                    if (monthFilter) {
+                        filteredPatients = filteredPatients.filter(p => p.month === monthFilter);
+                    }
+                    dashboardData = filteredPatients.map(patient => ({
+                        ...patient,
+                        total_units: 0,
+                        total_cost: 0,
+                        wound_diagnoses: 'N/A',
+                        supply_codes: 'N/A',
+                        hcpcs_codes: 'N/A'
+                    }));
+                }
+
+                // Calculate statistics
+                const totalPatients = dashboardData.length;
+                const totalFacilities = currentUser.role === 'admin' ? facilities.length : 1;
+                const totalUnits = dashboardData.reduce((sum, patient) => sum + (parseInt(patient.total_units) || 0), 0);
+                const totalCosts = dashboardData.reduce((sum, patient) => sum + (parseFloat(patient.total_cost) || 0), 0);
+
+                // Update dashboard cards
+                document.getElementById('dashboardTotalPatients').textContent = totalPatients;
+                document.getElementById('dashboardTotalUnits').textContent = totalUnits.toLocaleString();
+                document.getElementById('dashboardTotalFacilities').textContent = totalFacilities;
+                if (currentUser.role === 'admin') {
+                    document.getElementById('dashboardTotalCosts').textContent = formatCurrency(totalCosts);
+                }
+
+                // Update patient table with detailed data
+                updateDashboardTable(dashboardData);
+            } catch (error) {
+                console.error('Dashboard error:', error);
+                showNotification('Failed to load dashboard data: ' + error.message, true);
+            }
+        }
+
+        function updateDashboardTable(dashboardData) {
+            const tbody = document.getElementById('dashboardPatientsTableBody');
+            tbody.innerHTML = '';
+
+            dashboardData.forEach(patient => {
+                const row = document.createElement('tr');
+                
+                if (currentUser.role === 'admin') {
+                    row.innerHTML = `
+                        <td>${patient.name}</td>
+                        <td>${patient.mrn || 'N/A'}</td>
+                        <td>${patient.wound_diagnoses || 'N/A'}</td>
+                        <td>${patient.supply_codes || 'N/A'}</td>
+                        <td>${patient.hcpcs_codes || 'N/A'}</td>
+                        <td>${formatMonthForDisplay(patient.month)}</td>
+                        <td>${patient.facility_name || 'Unknown'}</td>
+                        <td>${patient.total_units || 0}</td>
+                        <td>${formatCurrency(patient.total_cost || 0)}</td>
+                        <td>${formatDate(patient.updated_at)}</td>
+                    `;
+                } else {
+                    row.innerHTML = `
+                        <td>${patient.name}</td>
+                        <td>${patient.mrn || 'N/A'}</td>
+                        <td>${patient.wound_diagnoses || 'N/A'}</td>
+                        <td>${formatMonthForDisplay(patient.month)}</td>
+                        <td>${patient.facility_name || 'Unknown'}</td>
+                        <td>${patient.total_units || 0}</td>
+                    `;
+                }
+                
+                tbody.appendChild(row);
+            });
+        }
+
+        // ===== SUMMARY REPORT =====
+        async function updateSummaryReport() {
+            try {
+                // Get filters
+                const facilityFilter = document.getElementById('summaryFacilityFilter')?.value;
+                const monthFilter = document.getElementById('summaryMonthFilter')?.value;
+
+                // Build query parameters
+                const params = new URLSearchParams();
+                if (facilityFilter) params.append('facilityId', facilityFilter);
+                if (monthFilter) params.append('month', monthFilter);
+
+                // Get summary data
+                let summaryData = [];
+                try {
+                    summaryData = await apiCall(`/dashboard/summary?${params.toString()}`);
+                } catch (error) {
+                    console.warn('Dashboard summary endpoint not available, using basic patient data');
+                    // Fallback to basic patient data if dashboard/summary endpoint fails
+                    const patients = await apiCall('/patients');
+                    let filteredPatients = patients;
+                    if (facilityFilter) {
+                        filteredPatients = filteredPatients.filter(p => p.facility_id === parseInt(facilityFilter));
+                    }
+                    if (monthFilter) {
+                        filteredPatients = filteredPatients.filter(p => p.month === monthFilter);
+                    }
+                    summaryData = filteredPatients.map(patient => ({
+                        ...patient,
+                        total_units: 0,
+                        total_cost: 0,
+                        wound_diagnoses: 'N/A',
+                        supply_codes: 'N/A',
+                        hcpcs_codes: 'N/A'
+                    }));
+                }
+
+                const tbody = document.getElementById('summaryTableBody');
+                tbody.innerHTML = '';
+
+                summaryData.forEach(patient => {
+                    const row = document.createElement('tr');
+                    
+                    if (currentUser.role === 'admin') {
+                        row.innerHTML = `
+                            <td>${patient.name}</td>
+                            <td>${patient.mrn || 'N/A'}</td>
+                            <td>${patient.wound_diagnoses || 'N/A'}</td>
+                            <td>${patient.supply_codes || 'N/A'}</td>
+                            <td>${patient.hcpcs_codes || 'N/A'}</td>
+                            <td>${formatMonthForDisplay(patient.month)}</td>
+                            <td>${patient.facility_name || 'Unknown'}</td>
+                            <td>${patient.total_units || 0}</td>
+                            <td>${formatCurrency(patient.total_cost || 0)}</td>
+                            <td>${formatDate(patient.updated_at)}</td>
+                        `;
+                    } else {
+                        row.innerHTML = `
+                            <td>${patient.name}</td>
+                            <td>${patient.mrn || 'N/A'}</td>
+                            <td>${patient.wound_diagnoses || 'N/A'}</td>
+                            <td>${formatMonthForDisplay(patient.month)}</td>
+                            <td>${patient.facility_name || 'Unknown'}</td>
+                            <td>${patient.total_units || 0}</td>
+                            <td>${formatDate(patient.updated_at)}</td>
+                        `;
+                    }
+                    
+                    tbody.appendChild(row);
+                });
+                
+                showNotification('Summary report updated');
+            } catch (error) {
+                console.error('Summary report error:', error);
+                showNotification('Failed to update summary report: ' + error.message, true);
+            }
+        }
+
+        async function downloadSummaryReport() {
+            try {
+                // Get filters
+                const facilityFilter = document.getElementById('summaryFacilityFilter')?.value;
+                const monthFilter = document.getElementById('summaryMonthFilter')?.value;
+
+                // Build query parameters
+                const params = new URLSearchParams();
+                if (facilityFilter) params.append('facilityId', facilityFilter);
+                if (monthFilter) params.append('month', monthFilter);
+
+                // Get summary data
+                let summaryData = [];
+                try {
+                    summaryData = await apiCall(`/dashboard/summary?${params.toString()}`);
+                } catch (error) {
+                    console.warn('Dashboard summary endpoint not available, using basic patient data');
+                    // Fallback to basic patient data if dashboard/summary endpoint fails
+                    const patients = await apiCall('/patients');
+                    let filteredPatients = patients;
+                    if (facilityFilter) {
+                        filteredPatients = filteredPatients.filter(p => p.facility_id === parseInt(facilityFilter));
+                    }
+                    if (monthFilter) {
+                        filteredPatients = filteredPatients.filter(p => p.month === monthFilter);
+                    }
+                    summaryData = filteredPatients.map(patient => ({
+                        ...patient,
+                        total_units: 0,
+                        total_cost: 0,
+                        wound_diagnoses: 'N/A',
+                        supply_codes: 'N/A',
+                        hcpcs_codes: 'N/A'
+                    }));
+                }
+
+                // Prepare data for export
+                const exportData = summaryData.map(patient => {
+                    if (currentUser.role === 'admin') {
+                        return {
+                            'Patient Name': patient.name,
+                            'MRN': patient.mrn || 'N/A',
+                            'Wound Dx': patient.wound_diagnoses || 'N/A',
+                            'AR Code': patient.supply_codes || 'N/A',
+                            'HCPCS': patient.hcpcs_codes || 'N/A',
+                            'Month/Year': formatMonthForDisplay(patient.month),
+                            'Facility': patient.facility_name || 'Unknown',
+                            'Total Units': patient.total_units || 0,
+                            'Total Costs': formatCurrency(patient.total_cost || 0),
+                            'Last Updated': formatDate(patient.updated_at)
+                        };
+                    } else {
+                        return {
+                            'Patient Name': patient.name,
+                            'MRN': patient.mrn || 'N/A',
+                            'Wound Dx': patient.wound_diagnoses || 'N/A',
+                            'Month/Year': formatMonthForDisplay(patient.month),
+                            'Facility': patient.facility_name || 'Unknown',
+                            'Total Units': patient.total_units || 0,
+                            'Last Updated': formatDate(patient.updated_at)
+                        };
+                    }
+                });
+
+                const filename = `Summary_Report_${new Date().toISOString().split('T')[0]}`;
+                downloadExcel(exportData, filename);
+                showNotification('📥 Summary report downloaded successfully!');
+            } catch (error) {
+                showNotification('Failed to download summary report: ' + error.message, true);
+            }
+        }
+
+        // Clean up tracking data (admin only)
+        async function cleanupTrackingData() {
+            if (currentUser.role !== 'admin') return;
+
+            if (confirm('This will remove all tracking records with 0 quantities. This action cannot be undone. Continue?')) {
+                try {
+                    const response = await apiCall('/tracking/cleanup', { method: 'DELETE' });
+                    
+                    showNotification(`✅ Cleanup completed! Removed ${response.recordsDeleted} zero-quantity records.`);
+                    
+                    // Refresh all data
+                    await loadDashboard();
+                    await updateSummaryReport();
+                    
+                    // Refresh tracking if a patient is selected
+                    const patientId = document.getElementById('patientSelect')?.value;
+                    if (patientId) {
+                        await loadPatientTracking();
+                    }
+                } catch (error) {
+                    showNotification('Failed to cleanup data: ' + error.message, true);
+                }
+            }
+        }
+
+        // Debug summary data to see what's happening
+        async function debugSummaryData() {
+            try {
+                console.log('=== DEBUGGING SUMMARY DATA ===');
+                
+                // Get all patients
+                const patients = await apiCall('/patients');
+                console.log('All patients:', patients);
+                
+                // Get summary data
+                const summaryData = await apiCall('/dashboard/summary');
+                console.log('Summary data:', summaryData);
+                
+                // Find patients with non-zero totals
+                const problematicPatients = summaryData.filter(p => p.total_units > 0 || p.total_cost > 0);
+                console.log('Patients with non-zero totals:', problematicPatients);
+                
+                // For each problematic patient, get their tracking data
+                for (const patient of problematicPatients) {
+                    try {
+                        const trackingData = await apiCall(`/tracking/${patient.id}`);
+                        console.log(`Tracking data for ${patient.name} (ID: ${patient.id}):`, trackingData);
+                    } catch (error) {
+                        console.log(`Could not get tracking data for patient ${patient.id}:`, error.message);
+                    }
+                }
+                
+                showNotification('🔍 Debug data logged to console. Press F12 to view.');
+            } catch (error) {
+                console.error('Debug error:', error);
+                showNotification('Debug failed: ' + error.message, true);
+            }
+        }
+
+        // Manual cleanup function that can be called from console
+        window.manualCleanup = async function() {
+            if (!currentUser || currentUser.role !== 'admin') {
+                console.log('Admin access required for cleanup');
+                return;
+            }
+            
+            try {
+                const response = await apiCall('/tracking/cleanup', { method: 'DELETE' });
+                console.log('Cleanup response:', response);
+                await loadDashboard();
+                await updateSummaryReport();
+                showNotification(`✅ Cleanup completed! Removed ${response.recordsDeleted} records.`);
+            } catch (error) {
+                console.error('Cleanup failed:', error);
+                showNotification('Cleanup failed: ' + error.message, true);
+            }
+        };
+
+        // Manual debug function that can be called from console
+        window.manualDebug = debugSummaryData;
+
+        // Force refresh patient timestamp
+        async function forceRefreshPatient(patientId) {
+            if (!patientId) return;
+            
+            try {
+                // Update patient timestamp by making a dummy tracking update
+                await apiCall('/tracking', {
+                    method: 'POST',
+                    body: { 
+                        patientId: patientId,
+                        supplyId: 1, // dummy supply
+                        dayOfMonth: 1,
+                        quantity: 0 // this should clear/delete the record
+                    }
+                });
+                
+                showNotification('Patient timestamp refreshed');
+            } catch (error) {
+                console.error('Failed to refresh patient:', error);
+            }
+        }
+
+        // ===== EXCEL IMPORT/EXPORT FUNCTIONS =====
+        function downloadExcelTemplate() {
+            const templateData = [
+                {
+                    'Name': 'Smith, John',
+                    'MRN': 'MRN12345',
+                    'Month': '01-2025',
+                    'Facility': 'Spalding Post Acute'
+                },
+                {
+                    'Name': 'Johnson, Mary',
+                    'MRN': 'MRN67890',
+                    'Month': '01-2025',
+                    'Facility': 'Main Hospital'
+                }
+            ];
+
+            downloadExcel(templateData, 'Patient_Import_Template');
+            showNotification('✅ Patient import template downloaded!');
+        }
+
+        function downloadSupplyTemplate() {
+            const templateData = [
+                {
+                    'Code': 800,
+                    'Description': 'Custom Foam Dressing 8x8',
+                    'HCPCS': 'A6211',
+                    'Cost': 15.50
+                },
+                {
+                    'Code': 801,
+                    'Description': 'Custom Hydrogel Dressing 6x6',
+                    'HCPCS': 'A6242',
+                    'Cost': 12.75
+                }
+            ];
+
+            downloadExcel(templateData, 'Supply_Import_Template');
+            showNotification('✅ Supply import template downloaded!');
+        }
+
+        function downloadExcel(data, filename) {
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.json_to_sheet(data);
+            XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+            XLSX.writeFile(wb, `${filename}_${new Date().toISOString().split('T')[0]}.xlsx`);
+        }
+
+        function showExcelImportModal() {
+            document.getElementById('excelImportModal').style.display = 'flex';
+        }
+
+        function closeExcelImportModal() {
+            document.getElementById('excelImportModal').style.display = 'none';
+            document.getElementById('importResults').style.display = 'none';
+            document.getElementById('processImportBtn').disabled = true;
+            excelData = null;
+        }
+
+        function handleExcelFile(file) {
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+                    excelData = jsonData;
+                    displayImportPreview(jsonData);
+                    document.getElementById('processImportBtn').disabled = false;
+                } catch (error) {
+                    showNotification('Error reading Excel file: ' + error.message, true);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function displayImportPreview(data) {
+            const resultsDiv = document.getElementById('importResults');
+            resultsDiv.innerHTML = `
+                <h4>Import Preview (${data.length} records)</h4>
+                <div style="max-height: 150px; overflow-y: auto; background: #f7fafc; padding: 10px; border-radius: 4px;">
+                    ${data.slice(0, 5).map(row => `
+                        <div style="margin-bottom: 5px; padding: 5px; background: white; border-radius: 3px;">
+                            <strong>${row.Name || 'N/A'}</strong> - ${row.MRN || 'No MRN'} - ${row.Month || 'N/A'} - ${row.Facility || 'N/A'}
+                        </div>
+                    `).join('')}
+                    ${data.length > 5 ? `<div style="text-align: center; color: #718096; font-style: italic;">... and ${data.length - 5} more records</div>` : ''}
+                </div>
+            `;
+            resultsDiv.style.display = 'block';
+        }
+
+        async function processExcelImport() {
+            if (!excelData) return;
+
+            showNotification('Excel import feature ready for implementation');
+        }
+
+        function showSupplyImportModal() {
+            document.getElementById('supplyImportModal').style.display = 'flex';
+        }
+
+        function closeSupplyImportModal() {
+            document.getElementById('supplyImportModal').style.display = 'none';
+            document.getElementById('supplyImportResults').style.display = 'none';
+            document.getElementById('processSupplyImportBtn').disabled = true;
+            supplyExcelData = null;
+        }
+
+        function handleSupplyFile(file) {
+            showNotification('Supply import feature ready for implementation');
+        }
+
+        async function processSupplyImport() {
+            showNotification('Supply import feature ready for implementation');
+        }
+
+        // ===== AUTO-LOGIN CHECK =====
+        if (authToken) {
+            console.log('🔐 Checking stored auth token...');
+            
+            apiCall('/auth/verify').then(response => {
+                currentUser = response.user;
+                
+                console.log('✅ Token valid, auto-logging in user:', currentUser.email);
+                
+                document.getElementById('loginContainer').style.display = 'none';
+                document.getElementById('mainApp').style.display = 'block';
+                
+                initApp();
+            }).catch(error => {
+                console.log('❌ Stored token invalid, showing login');
+                localStorage.removeItem('authToken');
+                authToken = null;
+                currentUser = null;
+            });
         } else {
-            // Insert or update with non-zero quantity
-            const result = await pool.query(`
-                INSERT INTO tracking (patient_id, supply_id, day_of_month, quantity)
-                VALUES ($1, $2, $3, $4)
-                ON CONFLICT (patient_id, supply_id, day_of_month)
-                DO UPDATE SET quantity = $4, updated_at = CURRENT_TIMESTAMP
-                RETURNING *
-            `, [patientId, supplyId, dayOfMonth, cleanQuantity]);
-
-            return res.json(result.rows[0]);
-        }
-    } catch (error) {
-        console.error('Error updating tracking data:', error);
-        res.status(500).json({ error: 'Internal server error while updating tracking data' });
-    }
-});
-
-// Clean up zero quantity tracking records (admin only)
-app.delete('/api/tracking/cleanup', authenticateToken, async (req, res) => {
-    try {
-        if (req.user.role !== 'admin') {
-            return res.status(403).json({ error: 'Admin access required' });
+            console.log('📝 No stored token, showing login screen');
         }
 
-        // Delete records with zero quantities
-        const zeroResult = await pool.query('DELETE FROM tracking WHERE quantity = 0 OR quantity IS NULL');
+        // ===== EVENT LISTENERS =====
         
-        // Update all patient timestamps to current time
-        const patientsResult = await pool.query('UPDATE patients SET updated_at = CURRENT_TIMESTAMP');
-        
-        res.json({ 
-            message: 'Cleanup completed successfully', 
-            recordsDeleted: zeroResult.rowCount,
-            patientsUpdated: patientsResult.rowCount
+        // Enter key login support
+        document.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && document.getElementById('loginContainer').style.display !== 'none') {
+                login();
+            }
         });
-    } catch (error) {
-        console.error('Error cleaning up tracking data:', error);
-        res.status(500).json({ error: 'Internal server error during cleanup' });
-    }
-});
 
-// Force manual data refresh for a specific patient (admin only)
-app.post('/api/patients/:id/refresh', authenticateToken, async (req, res) => {
-    try {
-        if (req.user.role !== 'admin') {
-            return res.status(403).json({ error: 'Admin access required' });
-        }
+        // Close modals when clicking outside
+        document.addEventListener('click', function(e) {
+            const modals = document.querySelectorAll('.modal');
+            modals.forEach(modal => {
+                if (e.target === modal) {
+                    modal.style.display = 'none';
+                }
+            });
+        });
 
-        const { id } = req.params;
-        
-        // Update patient timestamp
-        const result = await pool.query(
-            'UPDATE patients SET updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *',
-            [id]
-        );
-
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Patient not found' });
-        }
-
-        res.json({ message: 'Patient timestamp refreshed', patient: result.rows[0] });
-    } catch (error) {
-        console.error('Error refreshing patient:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-// ===== DEFAULT ROUTE =====
-
-// Serve main application
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// ===== ERROR HANDLING =====
-
-// 404 handler
-app.use((req, res) => {
-    res.status(404).json({ error: 'Endpoint not found' });
-});
-
-// Global error handler
-app.use((err, req, res, next) => {
-    console.error('Unhandled error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-});
-
-// ===== START SERVER =====
-
-app.listen(PORT, () => {
-    console.log(`🚀 Wound Care RT Supply Tracker Server running on port ${PORT}`);
-    console.log(`📊 Database: ${process.env.DATABASE_URL ? 'Connected' : 'Using DATABASE_URL from environment'}`);
-    console.log(`🌐 Access your application at: http://localhost:${PORT}`);
-});
-
-// Graceful shutdown
-process.on('SIGTERM', async () => {
-    console.log('SIGTERM signal received: closing HTTP server');
-    await pool.end();
-    process.exit(0);
-});
-
-process.on('SIGINT', async () => {
-    console.log('SIGINT signal received: closing HTTP server');
-    await pool.end();
-    process.exit(0);
-});
+        console.log('🎉 Enhanced Wound Care RT Supply Tracker initialized!');
+    </script>
+</body>
+</html>
