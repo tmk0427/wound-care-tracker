@@ -268,11 +268,12 @@
             position: relative;
         }
 
-        /* Simple table */
+        /* Data table styles */
         .data-table {
             width: 100%;
             border-collapse: collapse;
             background: white;
+            margin-top: 20px;
         }
 
         .data-table th, .data-table td {
@@ -284,6 +285,72 @@
         .data-table th {
             background: #f7fafc;
             font-weight: 600;
+            position: sticky;
+            top: 0;
+        }
+
+        .data-table tr:hover {
+            background: #f7fafc;
+        }
+
+        .data-table .actions {
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        .data-table .actions .btn {
+            margin-left: 5px;
+            padding: 4px 8px;
+            font-size: 12px;
+        }
+
+        /* Modal styles */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .modal-header h3 {
+            color: #4a5568;
+            margin: 0;
+        }
+
+        .close {
+            font-size: 28px;
+            cursor: pointer;
+            color: #666;
+            line-height: 1;
+        }
+
+        .close:hover {
+            color: #e53e3e;
         }
 
         /* Debug modal styles */
@@ -327,6 +394,86 @@
             overflow: auto;
         }
 
+        /* Dashboard cards */
+        .dashboard-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .dashboard-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+        }
+
+        .dashboard-card h3 {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+
+        .dashboard-card .number {
+            font-size: 36px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .dashboard-card .label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        /* Filters */
+        .filters {
+            background: #f7fafc;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .filters label {
+            font-weight: 600;
+            color: #4a5568;
+        }
+
+        .filters select, .filters input {
+            padding: 8px 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        /* Status badges */
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-approved {
+            background: #c6f6d5;
+            color: #2d5016;
+        }
+
+        .status-pending {
+            background: #fed7d7;
+            color: #742a2a;
+        }
+
+        .status-admin {
+            background: #bee3f8;
+            color: #2a4365;
+        }
+
         /* Notification */
         .notification {
             position: fixed;
@@ -349,6 +496,67 @@
         @keyframes slideIn {
             from { transform: translateX(100%); }
             to { transform: translateX(0); }
+        }
+
+        /* Loading overlay */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+
+        .loading-spinner {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .main-app {
+                padding: 10px;
+                margin-top: 20px;
+            }
+
+            .header {
+                padding: 15px 20px;
+                text-align: center;
+            }
+
+            .header h1 {
+                font-size: 24px;
+            }
+
+            .tabs {
+                flex-direction: column;
+            }
+
+            .tab {
+                min-width: auto;
+                padding: 10px;
+            }
+
+            .dashboard-cards {
+                grid-template-columns: 1fr;
+            }
+
+            .filters {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .modal-content {
+                width: 95%;
+                padding: 20px;
+            }
         }
     </style>
 </head>
@@ -395,6 +603,8 @@
 
         <div class="tabs">
             <div class="tab active" onclick="showTab('dashboard', this)">🏠 Dashboard</div>
+            <div class="tab" onclick="showTab('patients', this)">🏥 Patients</div>
+            <div class="tab" onclick="showTab('supplies', this)">📦 Supplies</div>
             <div class="tab" onclick="showTab('summary', this)">📋 Summary Report</div>
             <div class="tab" id="usersTabButton" onclick="showTab('users', this)">👤 User Management</div>
         </div>
@@ -402,39 +612,308 @@
         <!-- Dashboard Tab -->
         <div id="dashboardTab" class="tab-content">
             <h2>🏠 Dashboard</h2>
-            <p>Dashboard loading...</p>
+            <div class="dashboard-cards">
+                <div class="dashboard-card">
+                    <h3>Total Patients</h3>
+                    <div class="number" id="totalPatients">-</div>
+                    <div class="label">This Month</div>
+                </div>
+                <div class="dashboard-card">
+                    <h3>Total Supplies Used</h3>
+                    <div class="number" id="totalSupplies">-</div>
+                    <div class="label">Units</div>
+                </div>
+                <div class="dashboard-card">
+                    <h3>Total Cost</h3>
+                    <div class="number" id="totalCost">$-</div>
+                    <div class="label">This Month</div>
+                </div>
+                <div class="dashboard-card">
+                    <h3>Active Facilities</h3>
+                    <div class="number" id="totalFacilities">-</div>
+                    <div class="label">Locations</div>
+                </div>
+            </div>
+            
+            <div class="filters">
+                <label>Quick Actions:</label>
+                <button class="btn btn-primary" onclick="showTab('patients', document.querySelector('[onclick*=\"patients\"]'))">Manage Patients</button>
+                <button class="btn btn-secondary" onclick="showTab('supplies', document.querySelector('[onclick*=\"supplies\"]'))">View Supplies</button>
+                <button class="btn btn-success" onclick="showTab('summary', document.querySelector('[onclick*=\"summary\"]'))">Generate Report</button>
+            </div>
+
+            <div>
+                <h3>Recent Activity</h3>
+                <div id="recentActivity">
+                    <p>Loading recent activity...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Patients Tab -->
+        <div id="patientsTab" class="tab-content hidden">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>🏥 Patient Management</h2>
+                <button class="btn btn-primary" onclick="openAddPatientModal()">+ Add Patient</button>
+            </div>
+
+            <div class="filters">
+                <label for="patientFacilityFilter">Facility:</label>
+                <select id="patientFacilityFilter" onchange="loadPatients()">
+                    <option value="">All Facilities</option>
+                </select>
+                
+                <label for="patientMonthFilter">Month:</label>
+                <input type="month" id="patientMonthFilter" onchange="loadPatients()">
+                
+                <button class="btn btn-secondary" onclick="loadPatients()">🔄 Refresh</button>
+            </div>
+
+            <table class="data-table" id="patientsTable">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>MRN</th>
+                        <th>Month</th>
+                        <th>Facility</th>
+                        <th>Total Units</th>
+                        <th>Total Cost</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="patientsTableBody">
+                    <tr><td colspan="7">Loading patients...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Supplies Tab -->
+        <div id="suppliesTab" class="tab-content hidden">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>📦 Supply Management</h2>
+                <button class="btn btn-primary" onclick="openAddSupplyModal()" id="addSupplyBtn">+ Add Supply</button>
+            </div>
+
+            <div class="filters">
+                <label for="supplySearch">Search:</label>
+                <input type="text" id="supplySearch" placeholder="Search supplies..." onkeyup="filterSupplies()">
+                
+                <label for="supplyTypeFilter">Type:</label>
+                <select id="supplyTypeFilter" onchange="filterSupplies()">
+                    <option value="">All Types</option>
+                    <option value="system">System</option>
+                    <option value="custom">Custom</option>
+                </select>
+                
+                <button class="btn btn-secondary" onclick="loadSupplies()">🔄 Refresh</button>
+            </div>
+
+            <table class="data-table" id="suppliesTable">
+                <thead>
+                    <tr>
+                        <th>Code</th>
+                        <th>Description</th>
+                        <th>HCPCS</th>
+                        <th>Cost</th>
+                        <th>Type</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="suppliesTableBody">
+                    <tr><td colspan="6">Loading supplies...</td></tr>
+                </tbody>
+            </table>
         </div>
 
         <!-- Summary Tab -->
         <div id="summaryTab" class="tab-content hidden">
             <h2>📋 Summary Report</h2>
-            <button class="btn btn-primary" onclick="updateSummaryReport()">🔄 Refresh Report</button>
-            <button class="btn btn-warning" onclick="runCleanup()" style="margin-left: 10px;">🧹 Cleanup Data</button>
-            <button class="btn btn-secondary" onclick="debugSummaryData()" style="margin-left: 10px;">🔍 Debug Data</button>
             
-            <div style="margin-top: 20px;">
-                <table class="data-table" id="summaryTable">
-                    <thead>
-                        <tr>
-                            <th>Patient Name</th>
-                            <th>Total Units</th>
-                            <th>Total Cost</th>
-                            <th>Last Updated</th>
-                        </tr>
-                    </thead>
-                    <tbody id="summaryTableBody">
-                        <tr>
-                            <td colspan="4">Loading...</td>
-                        </tr>
-                    </tbody>
-                </table>
+            <div class="filters">
+                <label for="summaryFacilityFilter">Facility:</label>
+                <select id="summaryFacilityFilter">
+                    <option value="">All Facilities</option>
+                </select>
+                
+                <label for="summaryMonthFilter">Month:</label>
+                <input type="month" id="summaryMonthFilter">
             </div>
+            
+            <div style="margin: 20px 0;">
+                <button class="btn btn-primary" onclick="updateSummaryReport()">🔄 Refresh Report</button>
+                <button class="btn btn-warning" onclick="runCleanup()" style="margin-left: 10px;">🧹 Cleanup Data</button>
+                <button class="btn btn-secondary" onclick="debugSummaryData()" style="margin-left: 10px;">🔍 Debug Data</button>
+                <button class="btn btn-success" onclick="exportSummaryReport()" style="margin-left: 10px;">📊 Export Excel</button>
+            </div>
+            
+            <table class="data-table" id="summaryTable">
+                <thead>
+                    <tr>
+                        <th>Patient Name</th>
+                        <th>MRN</th>
+                        <th>Month</th>
+                        <th>Facility</th>
+                        <th>Total Units</th>
+                        <th>Total Cost</th>
+                        <th>Wound Diagnoses</th>
+                        <th>Supply Codes</th>
+                        <th>Last Updated</th>
+                    </tr>
+                </thead>
+                <tbody id="summaryTableBody">
+                    <tr><td colspan="9">Loading...</td></tr>
+                </tbody>
+            </table>
         </div>
 
         <!-- User Management Tab -->
         <div id="usersTab" class="tab-content hidden">
-            <h2>👤 User Management</h2>
-            <p>User management features...</p>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>👤 User Management</h2>
+                <button class="btn btn-primary" onclick="openAddUserModal()">+ Add User</button>
+            </div>
+
+            <div class="filters">
+                <label for="userRoleFilter">Role:</label>
+                <select id="userRoleFilter" onchange="loadUsers()">
+                    <option value="">All Roles</option>
+                    <option value="admin">Admin</option>
+                    <option value="user">User</option>
+                </select>
+                
+                <label for="userStatusFilter">Status:</label>
+                <select id="userStatusFilter" onchange="loadUsers()">
+                    <option value="">All Status</option>
+                    <option value="approved">Approved</option>
+                    <option value="pending">Pending</option>
+                </select>
+                
+                <button class="btn btn-secondary" onclick="loadUsers()">🔄 Refresh</button>
+            </div>
+
+            <table class="data-table" id="usersTable">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Facility</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="usersTableBody">
+                    <tr><td colspan="7">Loading users...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Add Patient Modal -->
+    <div id="addPatientModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add New Patient</h3>
+                <span class="close" onclick="closeModal('addPatientModal')">&times;</span>
+            </div>
+            <form id="addPatientForm">
+                <div class="form-group">
+                    <label for="patientName">Patient Name *</label>
+                    <input type="text" id="patientName" required>
+                </div>
+                <div class="form-group">
+                    <label for="patientMRN">MRN</label>
+                    <input type="text" id="patientMRN">
+                </div>
+                <div class="form-group">
+                    <label for="patientMonth">Month *</label>
+                    <input type="month" id="patientMonth" required>
+                </div>
+                <div class="form-group">
+                    <label for="patientFacility">Facility *</label>
+                    <select id="patientFacility" required>
+                        <option value="">Select Facility</option>
+                    </select>
+                </div>
+                <div style="text-align: right;">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('addPatientModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Patient</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add Supply Modal -->
+    <div id="addSupplyModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add New Supply</h3>
+                <span class="close" onclick="closeModal('addSupplyModal')">&times;</span>
+            </div>
+            <form id="addSupplyForm">
+                <div class="form-group">
+                    <label for="supplyCode">Supply Code *</label>
+                    <input type="number" id="supplyCode" required>
+                </div>
+                <div class="form-group">
+                    <label for="supplyDescription">Description *</label>
+                    <input type="text" id="supplyDescription" required>
+                </div>
+                <div class="form-group">
+                    <label for="supplyHCPCS">HCPCS Code</label>
+                    <input type="text" id="supplyHCPCS">
+                </div>
+                <div class="form-group">
+                    <label for="supplyCost">Cost ($)</label>
+                    <input type="number" id="supplyCost" step="0.01" min="0">
+                </div>
+                <div style="text-align: right;">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('addSupplyModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Supply</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add User Modal -->
+    <div id="addUserModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add New User</h3>
+                <span class="close" onclick="closeModal('addUserModal')">&times;</span>
+            </div>
+            <form id="addUserForm">
+                <div class="form-group">
+                    <label for="userName">Name *</label>
+                    <input type="text" id="userName" required>
+                </div>
+                <div class="form-group">
+                    <label for="userEmail">Email *</label>
+                    <input type="email" id="userEmail" required>
+                </div>
+                <div class="form-group">
+                    <label for="userPassword">Password *</label>
+                    <input type="password" id="userPassword" required minlength="6">
+                </div>
+                <div class="form-group">
+                    <label for="userRole">Role</label>
+                    <select id="userRole">
+                        <option value="user">User</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="userFacility">Facility</label>
+                    <select id="userFacility">
+                        <option value="">No Facility</option>
+                    </select>
+                </div>
+                <div style="text-align: right;">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('addUserModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add User</button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -447,6 +926,14 @@
         </div>
     </div>
 
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-spinner">
+            <div class="loading"></div>
+            <p>Processing...</p>
+        </div>
+    </div>
+
     <!-- Notification -->
     <div id="notification" class="notification">
         <span id="notificationText">Welcome!</span>
@@ -456,7 +943,11 @@
         // Global variables
         let currentUser = null;
         let authToken = localStorage.getItem('authToken');
-        let lastSummaryData = null; // Store the last fetched summary data for debugging
+        let lastSummaryData = null;
+        let facilities = [];
+        let supplies = [];
+        let patients = [];
+        let users = [];
 
         // Show notification
         function showNotification(message, isError = false) {
@@ -470,6 +961,15 @@
             setTimeout(() => {
                 notification.style.display = 'none';
             }, 4000);
+        }
+
+        // Show loading overlay
+        function showLoading() {
+            document.getElementById('loadingOverlay').style.display = 'flex';
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingOverlay').style.display = 'none';
         }
 
         // API helper function
@@ -490,7 +990,6 @@
             try {
                 const response = await fetch(url, config);
                 
-                // Check if response is JSON
                 const contentType = response.headers.get('content-type');
                 if (!contentType || !contentType.includes('application/json')) {
                     const text = await response.text();
@@ -511,7 +1010,7 @@
             }
         }
 
-        // Login function
+        // Authentication functions
         async function login() {
             const email = document.getElementById('loginEmail').value.trim();
             const password = document.getElementById('loginPassword').value.trim();
@@ -541,14 +1040,16 @@
                 document.getElementById('loginContainer').style.display = 'none';
                 document.getElementById('mainApp').style.display = 'block';
 
-                // Setup user info
                 document.getElementById('currentUserInfo').innerHTML = 
                     `<div style="font-weight: 600;">${currentUser.name}</div>` +
                     `<div>${currentUser.role === 'admin' ? '🔑 Admin' : '👤 User'}</div>`;
 
+                // Hide user management tab for non-admin users
+                if (currentUser.role !== 'admin') {
+                    document.getElementById('usersTabButton').style.display = 'none';
+                }
+
                 showNotification('✅ Login successful!');
-                
-                // Load dashboard
                 loadDashboard();
 
             } catch (error) {
@@ -560,7 +1061,6 @@
             }
         }
 
-        // Logout function
         function logout() {
             authToken = null;
             currentUser = null;
@@ -572,17 +1072,14 @@
 
         // Tab navigation
         function showTab(tabName, clickedElement) {
-            // Hide all tab contents
             document.querySelectorAll('.tab-content').forEach(tab => {
                 tab.classList.add('hidden');
             });
 
-            // Remove active class from all tabs
             document.querySelectorAll('.tab').forEach(tab => {
                 tab.classList.remove('active');
             });
 
-            // Show target tab and mark as active
             const targetTab = document.getElementById(tabName + 'Tab');
             if (targetTab) {
                 targetTab.classList.remove('hidden');
@@ -593,45 +1090,258 @@
             }
 
             // Load tab-specific data
-            if (tabName === 'dashboard') {
-                loadDashboard();
-            } else if (tabName === 'summary') {
-                updateSummaryReport();
+            switch(tabName) {
+                case 'dashboard':
+                    loadDashboard();
+                    break;
+                case 'patients':
+                    loadPatients();
+                    break;
+                case 'supplies':
+                    loadSupplies();
+                    break;
+                case 'summary':
+                    updateSummaryReport();
+                    break;
+                case 'users':
+                    if (currentUser.role === 'admin') {
+                        loadUsers();
+                    }
+                    break;
             }
         }
 
-        // Load dashboard
+        // Dashboard functions
         async function loadDashboard() {
-            document.getElementById('dashboardTab').innerHTML = '<h2>🏠 Dashboard</h2><p>Connected to server successfully!</p>';
+            try {
+                showLoading();
+                
+                // Load dashboard data
+                await Promise.all([
+                    loadFacilities(),
+                    loadSummaryData()
+                ]);
+
+                // Calculate dashboard statistics
+                const summaryData = await apiCall('/dashboard/summary');
+                
+                const totalPatients = summaryData.length;
+                const totalUnits = summaryData.reduce((sum, p) => sum + (parseInt(p.total_units) || 0), 0);
+                const totalCost = summaryData.reduce((sum, p) => sum + (parseFloat(p.total_cost) || 0), 0);
+                const uniqueFacilities = new Set(summaryData.map(p => p.facility_name)).size;
+
+                document.getElementById('totalPatients').textContent = totalPatients;
+                document.getElementById('totalSupplies').textContent = totalUnits.toLocaleString();
+                document.getElementById('totalCost').textContent = '$' + totalCost.toFixed(2);
+                document.getElementById('totalFacilities').textContent = uniqueFacilities;
+
+                // Load recent activity
+                const recentActivity = summaryData
+                    .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))
+                    .slice(0, 5);
+
+                const activityHtml = recentActivity.length > 0 
+                    ? recentActivity.map(activity => `
+                        <div style="padding: 10px; border-bottom: 1px solid #e2e8f0;">
+                            <strong>${activity.name}</strong> - ${activity.facility_name}<br>
+                            <small>Updated: ${new Date(activity.updated_at).toLocaleDateString()}</small>
+                        </div>
+                    `).join('')
+                    : '<p>No recent activity found.</p>';
+
+                document.getElementById('recentActivity').innerHTML = activityHtml;
+
+            } catch (error) {
+                console.error('Error loading dashboard:', error);
+                showNotification('Failed to load dashboard: ' + error.message, true);
+            } finally {
+                hideLoading();
+            }
         }
 
-        // Update summary report
+        // Data loading functions
+        async function loadFacilities() {
+            try {
+                facilities = await apiCall('/facilities');
+                
+                // Populate facility dropdowns
+                const facilitySelects = document.querySelectorAll('#patientFacilityFilter, #summaryFacilityFilter, #patientFacility, #userFacility');
+                facilitySelects.forEach(select => {
+                    const currentValue = select.value;
+                    select.innerHTML = select.id.includes('Filter') || select.id === 'userFacility' ? 
+                        '<option value="">All Facilities</option>' : 
+                        '<option value="">Select Facility</option>';
+                    
+                    facilities.forEach(facility => {
+                        const option = document.createElement('option');
+                        option.value = facility.id;
+                        option.textContent = facility.name;
+                        select.appendChild(option);
+                    });
+                    
+                    select.value = currentValue;
+                });
+            } catch (error) {
+                console.error('Error loading facilities:', error);
+            }
+        }
+
+        async function loadSupplies() {
+            try {
+                supplies = await apiCall('/supplies');
+                const tbody = document.getElementById('suppliesTableBody');
+                tbody.innerHTML = '';
+
+                supplies.forEach(supply => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${supply.code}</td>
+                        <td>${supply.description}</td>
+                        <td>${supply.hcpcs || '-'}</td>
+                        <td>$${parseFloat(supply.cost || 0).toFixed(2)}</td>
+                        <td>
+                            <span class="status-badge ${supply.is_custom ? 'status-pending' : 'status-approved'}">
+                                ${supply.is_custom ? 'Custom' : 'System'}
+                            </span>
+                        </td>
+                        <td class="actions">
+                            ${supply.is_custom && currentUser.role === 'admin' ? `
+                                <button class="btn btn-sm btn-warning" onclick="editSupply(${supply.id})">Edit</button>
+                                <button class="btn btn-sm btn-danger" onclick="deleteSupply(${supply.id})">Delete</button>
+                            ` : ''}
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+
+                // Show/hide add button based on role
+                document.getElementById('addSupplyBtn').style.display = 
+                    currentUser.role === 'admin' ? 'inline-block' : 'none';
+
+            } catch (error) {
+                console.error('Error loading supplies:', error);
+                showNotification('Failed to load supplies: ' + error.message, true);
+            }
+        }
+
+        async function loadPatients() {
+            try {
+                const facilityFilter = document.getElementById('patientFacilityFilter').value;
+                const monthFilter = document.getElementById('patientMonthFilter').value;
+                
+                let queryParams = new URLSearchParams();
+                if (facilityFilter) queryParams.append('facilityId', facilityFilter);
+                if (monthFilter) queryParams.append('month', monthFilter);
+
+                const summaryData = await apiCall('/dashboard/summary?' + queryParams.toString());
+                const tbody = document.getElementById('patientsTableBody');
+                tbody.innerHTML = '';
+
+                summaryData.forEach(patient => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${patient.name}</td>
+                        <td>${patient.mrn || '-'}</td>
+                        <td>${patient.month}</td>
+                        <td>${patient.facility_name}</td>
+                        <td>${parseInt(patient.total_units) || 0}</td>
+                        <td>$${parseFloat(patient.total_cost || 0).toFixed(2)}</td>
+                        <td class="actions">
+                            <button class="btn btn-sm btn-primary" onclick="viewPatientDetails(${patient.id})">View</button>
+                            <button class="btn btn-sm btn-danger" onclick="deletePatient(${patient.id})">Delete</button>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+
+            } catch (error) {
+                console.error('Error loading patients:', error);
+                showNotification('Failed to load patients: ' + error.message, true);
+            }
+        }
+
+        async function loadUsers() {
+            try {
+                if (currentUser.role !== 'admin') return;
+                
+                users = await apiCall('/users');
+                const tbody = document.getElementById('usersTableBody');
+                tbody.innerHTML = '';
+
+                users.forEach(user => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${user.name}</td>
+                        <td>${user.email}</td>
+                        <td>
+                            <span class="status-badge ${user.role === 'admin' ? 'status-admin' : 'status-approved'}">
+                                ${user.role}
+                            </span>
+                        </td>
+                        <td>${user.facility_name || '-'}</td>
+                        <td>
+                            <span class="status-badge ${user.is_approved ? 'status-approved' : 'status-pending'}">
+                                ${user.is_approved ? 'Approved' : 'Pending'}
+                            </span>
+                        </td>
+                        <td>${new Date(user.created_at).toLocaleDateString()}</td>
+                        <td class="actions">
+                            ${!user.is_approved ? `
+                                <button class="btn btn-sm btn-success" onclick="approveUser(${user.id})">Approve</button>
+                            ` : ''}
+                            ${user.role !== 'admin' && user.id !== currentUser.id ? `
+                                <button class="btn btn-sm btn-danger" onclick="deleteUser(${user.id})">Delete</button>
+                            ` : ''}
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+
+            } catch (error) {
+                console.error('Error loading users:', error);
+                showNotification('Failed to load users: ' + error.message, true);
+            }
+        }
+
+        async function loadSummaryData() {
+            const facilityFilter = document.getElementById('summaryFacilityFilter')?.value;
+            const monthFilter = document.getElementById('summaryMonthFilter')?.value;
+            
+            let queryParams = new URLSearchParams();
+            if (facilityFilter) queryParams.append('facilityId', facilityFilter);
+            if (monthFilter) queryParams.append('month', monthFilter);
+
+            return await apiCall('/dashboard/summary?' + queryParams.toString());
+        }
+
+        // Summary report functions
         async function updateSummaryReport() {
             try {
-                const summaryData = await apiCall('/dashboard/summary');
-                lastSummaryData = summaryData; // Store for debugging
+                const summaryData = await loadSummaryData();
+                lastSummaryData = summaryData;
                 const tbody = document.getElementById('summaryTableBody');
                 tbody.innerHTML = '';
 
-                console.log('Summary data received:', summaryData); // Debug log
-
                 if (summaryData.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4">No data found</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="9">No data found</td></tr>';
                     return;
                 }
 
                 summaryData.forEach(patient => {
                     const row = document.createElement('tr');
-                    
-                    // Safely convert to numbers
                     const totalUnits = parseInt(patient.total_units) || 0;
                     const totalCost = parseFloat(patient.total_cost) || 0;
                     const updatedDate = patient.updated_at ? new Date(patient.updated_at).toLocaleDateString() : 'N/A';
                     
                     row.innerHTML = `
-                        <td>${patient.name || 'Unknown'}</td>
+                        <td>${patient.name}</td>
+                        <td>${patient.mrn || '-'}</td>
+                        <td>${patient.month}</td>
+                        <td>${patient.facility_name}</td>
                         <td>${totalUnits}</td>
-                        <td>${totalCost.toFixed(2)}</td>
+                        <td>$${totalCost.toFixed(2)}</td>
+                        <td>${patient.wound_diagnoses || '-'}</td>
+                        <td>${patient.supply_codes || '-'}</td>
                         <td>${updatedDate}</td>
                     `;
                     tbody.appendChild(row);
@@ -644,7 +1354,6 @@
             }
         }
 
-        // Debug summary data function - NEW
         function debugSummaryData() {
             if (!lastSummaryData) {
                 showNotification('No summary data available. Please refresh the report first.', true);
@@ -654,7 +1363,6 @@
             const debugInfo = document.getElementById('debugInfo');
             const debugModal = document.getElementById('debugModal');
             
-            // Create debug information
             let debugText = `Debug Information - Summary Report
 Generated: ${new Date().toLocaleString()}
 User: ${currentUser ? currentUser.name : 'Unknown'} (${currentUser ? currentUser.role : 'Unknown'})
@@ -674,7 +1382,6 @@ ${Array.from(new Set(lastSummaryData.map(p => p.facility_name))).join(', ')}
 Data Validation Issues:
 `;
 
-            // Check for data issues
             lastSummaryData.forEach((patient, index) => {
                 const issues = [];
                 if (!patient.name || patient.name === 'Unknown') issues.push('Missing name');
@@ -695,27 +1402,235 @@ Data Validation Issues:
             debugModal.style.display = 'flex';
         }
 
-        // Close debug modal
         function closeDebugModal() {
             document.getElementById('debugModal').style.display = 'none';
         }
 
-        // Run cleanup
         async function runCleanup() {
             if (!currentUser || currentUser.role !== 'admin') {
                 showNotification('Admin access required', true);
                 return;
             }
 
-            if (confirm('Remove all tracking records with 0 quantities?')) {
+            if (confirm('Remove all tracking records with 0 quantities and reset remaining data to zeros?')) {
                 try {
+                    showLoading();
                     const response = await apiCall('/tracking/cleanup', { method: 'DELETE' });
-                    showNotification(`✅ Cleanup complete! Removed ${response.recordsDeleted} records`);
+                    showNotification(`✅ Cleanup complete! Deleted ${response.recordsDeleted} records, reset ${response.recordsReset} records`);
                     updateSummaryReport();
                 } catch (error) {
                     showNotification('Cleanup failed: ' + error.message, true);
+                } finally {
+                    hideLoading();
                 }
             }
+        }
+
+        async function exportSummaryReport() {
+            if (!lastSummaryData) {
+                showNotification('No data to export. Please refresh the report first.', true);
+                return;
+            }
+
+            try {
+                // Create workbook
+                const wb = XLSX.utils.book_new();
+                
+                // Prepare data for export
+                const exportData = lastSummaryData.map(patient => ({
+                    'Patient Name': patient.name,
+                    'MRN': patient.mrn || '',
+                    'Month': patient.month,
+                    'Facility': patient.facility_name,
+                    'Total Units': parseInt(patient.total_units) || 0,
+                    'Total Cost': parseFloat(patient.total_cost) || 0,
+                    'Wound Diagnoses': patient.wound_diagnoses || '',
+                    'Supply Codes': patient.supply_codes || '',
+                    'HCPCS Codes': patient.hcpcs_codes || '',
+                    'Last Updated': patient.updated_at ? new Date(patient.updated_at).toLocaleDateString() : ''
+                }));
+
+                const ws = XLSX.utils.json_to_sheet(exportData);
+                XLSX.utils.book_append_sheet(wb, ws, 'Summary Report');
+
+                // Generate filename with current date
+                const filename = `wound_care_summary_${new Date().toISOString().split('T')[0]}.xlsx`;
+                
+                // Save file
+                XLSX.writeFile(wb, filename);
+                showNotification('📊 Report exported successfully!');
+
+            } catch (error) {
+                console.error('Export error:', error);
+                showNotification('Failed to export report: ' + error.message, true);
+            }
+        }
+
+        // Modal functions
+        function openAddPatientModal() {
+            document.getElementById('addPatientModal').style.display = 'flex';
+        }
+
+        function openAddSupplyModal() {
+            if (currentUser.role !== 'admin') {
+                showNotification('Admin access required', true);
+                return;
+            }
+            document.getElementById('addSupplyModal').style.display = 'flex';
+        }
+
+        function openAddUserModal() {
+            if (currentUser.role !== 'admin') {
+                showNotification('Admin access required', true);
+                return;
+            }
+            document.getElementById('addUserModal').style.display = 'flex';
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+        }
+
+        // Form submissions
+        document.getElementById('addPatientForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = {
+                name: document.getElementById('patientName').value,
+                mrn: document.getElementById('patientMRN').value,
+                month: document.getElementById('patientMonth').value,
+                facilityId: document.getElementById('patientFacility').value
+            };
+
+            try {
+                showLoading();
+                await apiCall('/patients', { method: 'POST', body: formData });
+                showNotification('✅ Patient added successfully!');
+                closeModal('addPatientModal');
+                document.getElementById('addPatientForm').reset();
+                loadPatients();
+            } catch (error) {
+                showNotification('Failed to add patient: ' + error.message, true);
+            } finally {
+                hideLoading();
+            }
+        });
+
+        document.getElementById('addSupplyForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = {
+                code: parseInt(document.getElementById('supplyCode').value),
+                description: document.getElementById('supplyDescription').value,
+                hcpcs: document.getElementById('supplyHCPCS').value,
+                cost: parseFloat(document.getElementById('supplyCost').value) || 0
+            };
+
+            try {
+                showLoading();
+                await apiCall('/supplies', { method: 'POST', body: formData });
+                showNotification('✅ Supply added successfully!');
+                closeModal('addSupplyModal');
+                document.getElementById('addSupplyForm').reset();
+                loadSupplies();
+            } catch (error) {
+                showNotification('Failed to add supply: ' + error.message, true);
+            } finally {
+                hideLoading();
+            }
+        });
+
+        document.getElementById('addUserForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = {
+                name: document.getElementById('userName').value,
+                email: document.getElementById('userEmail').value,
+                password: document.getElementById('userPassword').value,
+                role: document.getElementById('userRole').value,
+                facilityId: document.getElementById('userFacility').value || null
+            };
+
+            try {
+                showLoading();
+                await apiCall('/auth/register', { method: 'POST', body: formData });
+                showNotification('✅ User added successfully!');
+                closeModal('addUserModal');
+                document.getElementById('addUserForm').reset();
+                loadUsers();
+            } catch (error) {
+                showNotification('Failed to add user: ' + error.message, true);
+            } finally {
+                hideLoading();
+            }
+        });
+
+        // User management functions
+        async function approveUser(userId) {
+            try {
+                await apiCall(`/users/${userId}/approval`, {
+                    method: 'PUT',
+                    body: { isApproved: true }
+                });
+                showNotification('✅ User approved successfully!');
+                loadUsers();
+            } catch (error) {
+                showNotification('Failed to approve user: ' + error.message, true);
+            }
+        }
+
+        async function deleteUser(userId) {
+            if (confirm('Are you sure you want to delete this user?')) {
+                try {
+                    await apiCall(`/users/${userId}`, { method: 'DELETE' });
+                    showNotification('✅ User deleted successfully!');
+                    loadUsers();
+                } catch (error) {
+                    showNotification('Failed to delete user: ' + error.message, true);
+                }
+            }
+        }
+
+        async function deletePatient(patientId) {
+            if (confirm('Are you sure you want to delete this patient and all associated data?')) {
+                try {
+                    await apiCall(`/patients/${patientId}`, { method: 'DELETE' });
+                    showNotification('✅ Patient deleted successfully!');
+                    loadPatients();
+                } catch (error) {
+                    showNotification('Failed to delete patient: ' + error.message, true);
+                }
+            }
+        }
+
+        async function deleteSupply(supplyId) {
+            if (confirm('Are you sure you want to delete this supply?')) {
+                try {
+                    await apiCall(`/supplies/${supplyId}`, { method: 'DELETE' });
+                    showNotification('✅ Supply deleted successfully!');
+                    loadSupplies();
+                } catch (error) {
+                    showNotification('Failed to delete supply: ' + error.message, true);
+                }
+            }
+        }
+
+        // Filter functions
+        function filterSupplies() {
+            const searchTerm = document.getElementById('supplySearch').value.toLowerCase();
+            const typeFilter = document.getElementById('supplyTypeFilter').value;
+            const rows = document.querySelectorAll('#suppliesTable tbody tr');
+
+            rows.forEach(row => {
+                const description = row.cells[1]?.textContent.toLowerCase() || '';
+                const code = row.cells[0]?.textContent.toLowerCase() || '';
+                const type = row.cells[4]?.textContent.toLowerCase().includes('custom') ? 'custom' : 'system';
+                
+                const matchesSearch = description.includes(searchTerm) || code.includes(searchTerm);
+                const matchesType = !typeFilter || type === typeFilter;
+                
+                row.style.display = matchesSearch && matchesType ? '' : 'none';
+            });
         }
 
         // Auto-login check
@@ -729,24 +1644,31 @@ Data Validation Issues:
                     `<div style="font-weight: 600;">${currentUser.name}</div>` +
                     `<div>${currentUser.role === 'admin' ? '🔑 Admin' : '👤 User'}</div>`;
                 
+                if (currentUser.role !== 'admin') {
+                    document.getElementById('usersTabButton').style.display = 'none';
+                }
+                
                 loadDashboard();
+                loadFacilities();
             }).catch(() => {
                 localStorage.removeItem('authToken');
                 authToken = null;
             });
         }
 
-        // Enter key login support
+        // Event listeners
         document.addEventListener('keypress', function(e) {
             if (e.key === 'Enter' && document.getElementById('loginContainer').style.display !== 'none') {
                 login();
             }
         });
 
-        // Close debug modal when clicking outside
         document.addEventListener('click', function(e) {
-            const debugModal = document.getElementById('debugModal');
-            if (e.target === debugModal) {
+            // Close modals when clicking outside
+            if (e.target.classList.contains('modal')) {
+                e.target.style.display = 'none';
+            }
+            if (e.target === document.getElementById('debugModal')) {
                 closeDebugModal();
             }
         });
