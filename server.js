@@ -5,7 +5,6 @@ const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
 const multer = require('multer');
 const XLSX = require('xlsx');
-const rateLimit = require('express-rate-limit');
 const path = require('path');
 
 const app = express();
@@ -20,17 +19,7 @@ const pool = new Pool({
 // Trust proxy for Heroku
 app.set('trust proxy', 1);
 
-// Rate limiting
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // limit each IP to 100 requests per windowMs
-    trustProxy: true, // Trust X-Forwarded-For headers
-    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-    legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-});
-
-// Middleware
-app.use(limiter);
+// Essential middleware (NO RATE LIMITING)
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
@@ -333,7 +322,7 @@ app.get('/api/dashboard/summary', authenticateToken, async (req, res) => {
 
 // ===== REPORTS ROUTES =====
 
-// Get itemized summary report data - NEW ENDPOINT
+// Get itemized summary report data
 app.get('/api/reports/itemized-summary', authenticateToken, async (req, res) => {
     try {
         const { facilityId, month } = req.query;
@@ -679,8 +668,6 @@ app.get('/api/tracking/:patientId', authenticateToken, async (req, res) => {
     }
 });
 
-// Replace the tracking update route in your server.js with this enhanced debug version:
-
 // Update tracking data
 app.post('/api/tracking', authenticateToken, async (req, res) => {
     try {
@@ -866,10 +853,18 @@ app.use((err, req, res, next) => {
 
 // ===== START SERVER =====
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
     console.log(`🚀 Wound Care RT Supply Tracker Server running on port ${PORT}`);
     console.log(`📊 Database: ${process.env.DATABASE_URL ? 'Connected' : 'Using DATABASE_URL from environment'}`);
     console.log(`🌐 Access your application at: http://localhost:${PORT}`);
+    
+    // Test database connection
+    try {
+        const result = await pool.query('SELECT NOW()');
+        console.log('✅ Database connected:', result.rows[0].now);
+    } catch (error) {
+        console.error('❌ Database connection failed:', error.message);
+    }
 });
 
 // Graceful shutdown
@@ -884,4 +879,3 @@ process.on('SIGINT', async () => {
     await pool.end();
     process.exit(0);
 });
-
