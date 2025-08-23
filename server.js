@@ -679,10 +679,42 @@ app.get('/api/tracking/:patientId', authenticateToken, async (req, res) => {
     }
 });
 
+// Replace the tracking update route in your server.js with this enhanced debug version:
+
 // Update tracking data
 app.post('/api/tracking', authenticateToken, async (req, res) => {
     try {
+        console.log('📊 Tracking update request received:', {
+            user: req.user?.userId,
+            body: req.body,
+            headers: req.headers['content-type']
+        });
+
         const { patientId, supplyId, dayOfMonth, quantity, woundDx } = req.body;
+
+        // Validate required fields
+        if (!patientId || !supplyId || dayOfMonth === undefined) {
+            console.error('❌ Missing required fields:', { patientId, supplyId, dayOfMonth });
+            return res.status(400).json({ error: 'Missing required fields: patientId, supplyId, dayOfMonth' });
+        }
+
+        // Validate data types
+        if (isNaN(parseInt(patientId)) || isNaN(parseInt(supplyId)) || isNaN(parseInt(dayOfMonth))) {
+            console.error('❌ Invalid data types:', { 
+                patientId: typeof patientId, 
+                supplyId: typeof supplyId, 
+                dayOfMonth: typeof dayOfMonth 
+            });
+            return res.status(400).json({ error: 'patientId, supplyId, and dayOfMonth must be numbers' });
+        }
+
+        // Validate day range
+        if (parseInt(dayOfMonth) < 1 || parseInt(dayOfMonth) > 31) {
+            console.error('❌ Invalid day of month:', dayOfMonth);
+            return res.status(400).json({ error: 'dayOfMonth must be between 1 and 31' });
+        }
+
+        console.log('✅ Validation passed, checking patient access...');
 
         // Verify patient access
         let patientQuery = 'SELECT * FROM patients WHERE id = $1';
@@ -693,13 +725,20 @@ app.post('/api/tracking', authenticateToken, async (req, res) => {
             patientParams.push(req.user.facilityId);
         }
 
+        console.log('📋 Patient query:', { query: patientQuery, params: patientParams });
+
         const patientResult = await pool.query(patientQuery, patientParams);
         if (patientResult.rows.length === 0) {
+            console.error('❌ Patient not found or access denied:', { patientId, userId: req.user.userId });
             return res.status(404).json({ error: 'Patient not found or access denied' });
         }
 
+        console.log('✅ Patient access verified:', patientResult.rows[0]);
+
         // For wound diagnosis updates, we need to handle them specially
         if (woundDx !== undefined && woundDx !== null) {
+            console.log('📝 Processing wound diagnosis update:', woundDx);
+            
             // Check if there's existing tracking data for this patient and supply
             const existingTracking = await pool.query(
                 'SELECT * FROM tracking WHERE patient_id = $1 AND supply_id = $2 LIMIT 1',
@@ -708,20 +747,24 @@ app.post('/api/tracking', authenticateToken, async (req, res) => {
 
             if (existingTracking.rows.length > 0) {
                 // Update wound_dx on all tracking records for this patient and supply
-                await pool.query(
-                    'UPDATE tracking SET wound_dx = $1, updated_at = CURRENT_TIMESTAMP WHERE patient_id = $2 AND supply_id = $3',
+                const updateResult = await pool.query(
+                    'UPDATE tracking SET wound_dx = $1, updated_at = CURRENT_TIMESTAMP WHERE patient_id = $2 AND supply_id = $3 RETURNING *',
                     [woundDx.trim() || null, patientId, supplyId]
                 );
+                console.log('✅ Wound diagnosis updated:', updateResult.rowCount, 'records');
             } else if (woundDx.trim()) {
                 // Create a new tracking record with wound_dx if it doesn't exist
-                await pool.query(
-                    'INSERT INTO tracking (patient_id, supply_id, day_of_month, quantity, wound_dx) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (patient_id, supply_id, day_of_month) DO UPDATE SET wound_dx = $5, updated_at = CURRENT_TIMESTAMP',
+                const insertResult = await pool.query(
+                    'INSERT INTO tracking (patient_id, supply_id, day_of_month, quantity, wound_dx) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (patient_id, supply_id, day_of_month) DO UPDATE SET wound_dx = $5, updated_at = CURRENT_TIMESTAMP RETURNING *',
                     [patientId, supplyId, dayOfMonth || 1, 0, woundDx.trim()]
                 );
+                console.log('✅ Wound diagnosis record created:', insertResult.rows[0]);
             }
             
             return res.json({ message: 'Wound diagnosis updated successfully' });
         }
+
+        console.log('📊 Processing quantity update...');
 
         // Regular quantity update
         const result = await pool.query(`
@@ -730,12 +773,19 @@ app.post('/api/tracking', authenticateToken, async (req, res) => {
             ON CONFLICT (patient_id, supply_id, day_of_month)
             DO UPDATE SET quantity = $4, updated_at = CURRENT_TIMESTAMP
             RETURNING *
-        `, [patientId, supplyId, dayOfMonth, quantity || 0]);
+        `, [parseInt(patientId), parseInt(supplyId), parseInt(dayOfMonth), parseInt(quantity) || 0]);
+
+        console.log('✅ Tracking update successful:', result.rows[0]);
 
         res.json(result.rows[0]);
     } catch (error) {
-        console.error('Error updating tracking data:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        console.error('❌ Error updating tracking data:', {
+            error: error.message,
+            stack: error.stack,
+            body: req.body,
+            user: req.user?.userId
+        });
+        res.status(500).json({ error: 'Internal server error: ' + error.message });
     }
 });
 
@@ -834,3 +884,4 @@ process.on('SIGINT', async () => {
     await pool.end();
     process.exit(0);
 });
+
