@@ -331,6 +331,71 @@ app.get('/api/dashboard/summary', authenticateToken, async (req, res) => {
     }
 });
 
+// ===== REPORTS ROUTES =====
+
+// Get itemized summary report data - NEW ENDPOINT
+app.get('/api/reports/itemized-summary', authenticateToken, async (req, res) => {
+    try {
+        const { facilityId, month } = req.query;
+        
+        let whereConditions = [];
+        let params = [];
+        let paramCount = 0;
+
+        // Non-admin users can only see their facility data
+        if (req.user.role !== 'admin' && req.user.facilityId) {
+            whereConditions.push(`p.facility_id = $${++paramCount}`);
+            params.push(req.user.facilityId);
+        } else if (facilityId && req.user.role === 'admin') {
+            whereConditions.push(`p.facility_id = $${++paramCount}`);
+            params.push(facilityId);
+        }
+
+        if (month) {
+            whereConditions.push(`p.month = $${++paramCount}`);
+            params.push(month);
+        }
+
+        // Only include records where there's actual tracking data
+        whereConditions.push('t.quantity > 0');
+
+        const whereClause = whereConditions.length > 0 ? 'WHERE ' + whereConditions.join(' AND ') : 'WHERE t.quantity > 0';
+
+        const query = `
+            SELECT 
+                p.id as patient_id,
+                p.name as patient_name,
+                p.mrn,
+                p.month,
+                p.facility_id,
+                f.name as facility_name,
+                s.id as supply_id,
+                s.code as ar_code,
+                s.description as item_description,
+                s.hcpcs,
+                s.cost as unit_cost,
+                SUM(t.quantity) as total_units,
+                SUM(t.quantity * s.cost) as total_cost,
+                STRING_AGG(DISTINCT t.wound_dx, '; ') FILTER (WHERE t.wound_dx IS NOT NULL AND t.wound_dx != '') as wound_dx,
+                MAX(t.updated_at) as last_updated
+            FROM patients p
+            INNER JOIN facilities f ON p.facility_id = f.id
+            INNER JOIN tracking t ON p.id = t.patient_id
+            INNER JOIN supplies s ON t.supply_id = s.id
+            ${whereClause}
+            GROUP BY p.id, p.name, p.mrn, p.month, p.facility_id, f.name, s.id, s.code, s.description, s.hcpcs, s.cost
+            HAVING SUM(t.quantity) > 0
+            ORDER BY p.name, p.month, s.code
+        `;
+
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Error fetching itemized summary:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 // ===== FACILITY ROUTES =====
 
 // Get all facilities (public for registration)
@@ -673,8 +738,6 @@ app.post('/api/tracking', authenticateToken, async (req, res) => {
         res.status(500).json({ error: 'Internal server error' });
     }
 });
-
-// ===== NEW CLEANUP ROUTE =====
 
 // Cleanup tracking data (admin only)
 app.delete('/api/tracking/cleanup', authenticateToken, async (req, res) => {
