@@ -1244,15 +1244,18 @@
                         <tr id="summaryTableHeader">
                             <th>Patient Name</th>
                             <th>MRN</th>
-                            <th>Wound Dx</th>
+                            <th>AR Code</th>
+                            <th>Item Description</th>
+                            <th>HCPCS</th>
+                            <th>Total Units</th>
+                            <th>Total Cost</th>
                             <th>Month/Year</th>
                             <th>Facility</th>
-                            <th>Total Units</th>
                             <th>Last Updated</th>
                         </tr>
                     </thead>
                     <tbody id="summaryTableBody">
-                        <tr><td colspan="7">Loading...</td></tr>
+                        <tr><td colspan="10">Loading...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -1956,19 +1959,7 @@
                 usersTabButton.style.display = 'block';
                 if (dashboardCostCard) dashboardCostCard.style.display = 'block';
                 
-                // Update table headers for admin
-                document.getElementById('summaryTableHeader').innerHTML = 
-                    '<th>Patient Name</th>' +
-                    '<th>MRN</th>' +
-                    '<th>Wound Dx</th>' +
-                    '<th>AR Code</th>' +
-                    '<th>HCPCS</th>' +
-                    '<th>Month/Year</th>' +
-                    '<th>Facility</th>' +
-                    '<th>Total Units</th>' +
-                    '<th>Total Costs</th>' +
-                    '<th>Last Updated</th>';
-                
+                // Update table headers for admin - Dashboard
                 document.getElementById('dashboardTableHeader').innerHTML = 
                     '<th>Patient Name</th>' +
                     '<th>MRN</th>' +
@@ -1984,6 +1975,27 @@
                 suppliesTabButton.style.display = 'none';
                 usersTabButton.style.display = 'none';
                 if (dashboardCostCard) dashboardCostCard.style.display = 'none';
+                
+                // Update table headers for regular users - Dashboard  
+                document.getElementById('dashboardTableHeader').innerHTML = 
+                    '<th>Patient Name</th>' +
+                    '<th>MRN</th>' +
+                    '<th>Wound Dx</th>' +
+                    '<th>Month/Year</th>' +
+                    '<th>Facility</th>' +
+                    '<th>Total Units</th>';
+
+                // Update summary table headers for regular users (hide cost column)
+                document.getElementById('summaryTableHeader').innerHTML = 
+                    '<th>Patient Name</th>' +
+                    '<th>MRN</th>' +
+                    '<th>AR Code</th>' +
+                    '<th>Item Description</th>' +
+                    '<th>HCPCS</th>' +
+                    '<th>Total Units</th>' +
+                    '<th>Month/Year</th>' +
+                    '<th>Facility</th>' +
+                    '<th>Last Updated</th>';
             }
         }
 
@@ -2698,6 +2710,8 @@
         // ===== SUMMARY REPORT =====
         async function updateSummaryReport() {
             try {
+                showLoading();
+                
                 const facilityFilter = document.getElementById('summaryFacilityFilter')?.value;
                 const monthFilter = document.getElementById('summaryMonthFilter')?.value;
 
@@ -2705,56 +2719,122 @@
                 if (facilityFilter) params.append('facilityId', facilityFilter);
                 if (monthFilter) params.append('month', monthFilter);
 
-                const summaryData = await apiCall(`/dashboard/summary?${params.toString()}`);
-                lastSummaryData = summaryData;
+                // Get basic patient data
+                const patientsData = await apiCall(`/dashboard/summary?${params.toString()}`);
+                
+                // Get all patients that have actual tracking data
+                const patientsWithTracking = patientsData.filter(p => parseInt(p.total_units) > 0);
+                
+                const itemizedData = [];
+                
+                // For each patient with tracking data, get detailed breakdown
+                for (const patient of patientsWithTracking) {
+                    try {
+                        const trackingData = await apiCall(`/tracking/${patient.id}`);
+                        
+                        // Group tracking data by supply and calculate totals
+                        const supplyTotals = {};
+                        
+                        trackingData.forEach(track => {
+                            if (track.quantity > 0) { // Only include supplies with quantities > 0
+                                if (!supplyTotals[track.supply_id]) {
+                                    supplyTotals[track.supply_id] = {
+                                        supplyId: track.supply_id,
+                                        totalQuantity: 0
+                                    };
+                                }
+                                supplyTotals[track.supply_id].totalQuantity += track.quantity;
+                            }
+                        });
+                        
+                        // Create itemized rows for each supply used by this patient
+                        for (const supplyId of Object.keys(supplyTotals)) {
+                            const supply = supplies.find(s => s.id === parseInt(supplyId));
+                            if (supply && supplyTotals[supplyId].totalQuantity > 0) {
+                                const totalQuantity = supplyTotals[supplyId].totalQuantity;
+                                const totalCost = totalQuantity * (supply.cost || 0);
+                                
+                                itemizedData.push({
+                                    patientName: patient.name,
+                                    mrn: patient.mrn,
+                                    arCode: supply.code,
+                                    itemDescription: supply.description,
+                                    hcpcs: supply.hcpcs,
+                                    totalUnits: totalQuantity,
+                                    totalCost: totalCost,
+                                    month: patient.month,
+                                    facilityName: patient.facility_name,
+                                    updatedAt: patient.updated_at
+                                });
+                            }
+                        }
+                    } catch (error) {
+                        console.warn(`Could not get tracking data for patient ${patient.id}:`, error);
+                    }
+                }
+                
+                // Sort by patient name, then by AR code
+                itemizedData.sort((a, b) => {
+                    if (a.patientName !== b.patientName) {
+                        return a.patientName.localeCompare(b.patientName);
+                    }
+                    return a.arCode - b.arCode;
+                });
+                
+                lastSummaryData = itemizedData;
                 const tbody = document.getElementById('summaryTableBody');
                 tbody.innerHTML = '';
 
-                if (summaryData.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="10">No data found</td></tr>';
+                if (itemizedData.length === 0) {
+                    const colSpan = currentUser.role === 'admin' ? '10' : '9';
+                    tbody.innerHTML = `<tr><td colspan="${colSpan}">No itemized data found</td></tr>`;
                     return;
                 }
 
-                summaryData.forEach(patient => {
+                itemizedData.forEach(item => {
                     const row = document.createElement('tr');
                     
                     if (currentUser.role === 'admin') {
                         row.innerHTML = `
-                            <td>${patient.name}</td>
-                            <td>${patient.mrn || 'N/A'}</td>
-                            <td>${patient.wound_diagnoses || 'N/A'}</td>
-                            <td>${patient.supply_codes || 'N/A'}</td>
-                            <td>${patient.hcpcs_codes || 'N/A'}</td>
-                            <td>${formatMonthForDisplay(patient.month)}</td>
-                            <td>${patient.facility_name || 'Unknown'}</td>
-                            <td>${patient.total_units || 0}</td>
-                            <td>${formatCurrency(patient.total_cost || 0)}</td>
-                            <td>${formatDate(patient.updated_at)}</td>
+                            <td>${item.patientName}</td>
+                            <td>${item.mrn || 'N/A'}</td>
+                            <td><strong>${item.arCode}</strong></td>
+                            <td>${item.itemDescription}</td>
+                            <td>${item.hcpcs || 'N/A'}</td>
+                            <td>${item.totalUnits}</td>
+                            <td>${formatCurrency(item.totalCost)}</td>
+                            <td>${formatMonthForDisplay(item.month)}</td>
+                            <td>${item.facilityName || 'Unknown'}</td>
+                            <td>${formatDate(item.updatedAt)}</td>
                         `;
                     } else {
                         row.innerHTML = `
-                            <td>${patient.name}</td>
-                            <td>${patient.mrn || 'N/A'}</td>
-                            <td>${patient.wound_diagnoses || 'N/A'}</td>
-                            <td>${formatMonthForDisplay(patient.month)}</td>
-                            <td>${patient.facility_name || 'Unknown'}</td>
-                            <td>${patient.total_units || 0}</td>
-                            <td>${formatDate(patient.updated_at)}</td>
+                            <td>${item.patientName}</td>
+                            <td>${item.mrn || 'N/A'}</td>
+                            <td><strong>${item.arCode}</strong></td>
+                            <td>${item.itemDescription}</td>
+                            <td>${item.hcpcs || 'N/A'}</td>
+                            <td>${item.totalUnits}</td>
+                            <td>${formatMonthForDisplay(item.month)}</td>
+                            <td>${item.facilityName || 'Unknown'}</td>
+                            <td>${formatDate(item.updatedAt)}</td>
                         `;
                     }
                     
                     tbody.appendChild(row);
                 });
                 
-                showNotification('📊 Summary report updated');
+                showNotification('📊 Itemized summary report updated');
             } catch (error) {
                 console.error('Summary report error:', error);
                 showNotification('Failed to update summary report: ' + error.message, true);
+            } finally {
+                hideLoading();
             }
         }
 
         function debugSummaryData() {
-            if (!lastSummaryData) {
+            if (!lastSummaryData || lastSummaryData.length === 0) {
                 showNotification('No summary data available. Please refresh the report first.', true);
                 return;
             }
@@ -2762,38 +2842,45 @@
             const debugInfo = document.getElementById('debugInfo');
             const debugModal = document.getElementById('debugModal');
             
-            let debugText = `Debug Information - Summary Report
+            let debugText = `Debug Information - Itemized Summary Report
 Generated: ${new Date().toLocaleString()}
 User: ${currentUser ? currentUser.name : 'Unknown'} (${currentUser ? currentUser.role : 'Unknown'})
-Records: ${lastSummaryData.length}
+Records: ${lastSummaryData.length} itemized entries
 
 Data Structure:
 ${JSON.stringify(lastSummaryData, null, 2)}
 
 Summary Statistics:
-- Total Patients: ${lastSummaryData.length}
-- Total Cost: $${lastSummaryData.reduce((sum, p) => sum + (parseFloat(p.total_cost) || 0), 0).toFixed(2)}
-- Total Units: ${lastSummaryData.reduce((sum, p) => sum + (parseInt(p.total_units) || 0), 0)}
+- Total Itemized Records: ${lastSummaryData.length}
+- Unique Patients: ${new Set(lastSummaryData.map(item => item.patientName)).size}
+- Unique AR Codes: ${new Set(lastSummaryData.map(item => item.arCode)).size}
+- Total Units (All Items): ${lastSummaryData.reduce((sum, item) => sum + (item.totalUnits || 0), 0)}
+- Total Cost (All Items): ${lastSummaryData.reduce((sum, item) => sum + (item.totalCost || 0), 0).toFixed(2)}
 
 Facilities:
-${Array.from(new Set(lastSummaryData.map(p => p.facility_name))).join(', ')}
+${Array.from(new Set(lastSummaryData.map(item => item.facilityName))).join(', ')}
+
+AR Codes in Use:
+${Array.from(new Set(lastSummaryData.map(item => item.arCode))).sort((a, b) => a - b).join(', ')}
 
 Data Validation Issues:
 `;
 
-            lastSummaryData.forEach((patient, index) => {
+            lastSummaryData.forEach((item, index) => {
                 const issues = [];
-                if (!patient.name || patient.name === 'Unknown') issues.push('Missing name');
-                if (isNaN(parseFloat(patient.total_cost))) issues.push('Invalid total_cost');
-                if (isNaN(parseInt(patient.total_units))) issues.push('Invalid total_units');
-                if (!patient.updated_at) issues.push('Missing updated_at');
+                if (!item.patientName) issues.push('Missing patient name');
+                if (!item.arCode) issues.push('Missing AR code');
+                if (!item.itemDescription) issues.push('Missing item description');
+                if (isNaN(parseFloat(item.totalCost))) issues.push('Invalid total cost');
+                if (isNaN(parseInt(item.totalUnits))) issues.push('Invalid total units');
+                if (!item.updatedAt) issues.push('Missing updated date');
                 
                 if (issues.length > 0) {
-                    debugText += `\nPatient ${index + 1}: ${issues.join(', ')}`;
+                    debugText += `\nRecord ${index + 1} (${item.patientName} - AR ${item.arCode}): ${issues.join(', ')}`;
                 }
             });
 
-            if (debugText.indexOf('Patient ') === -1) {
+            if (debugText.indexOf('Record ') === -1) {
                 debugText += '\nNo data validation issues found.';
             }
 
