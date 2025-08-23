@@ -1212,7 +1212,7 @@
 
         <!-- Summary Tab -->
         <div id="summaryTab" class="tab-content hidden">
-            <h2 style="margin-bottom: 30px; color: #4a5568;">📋 Summary Report</h2>
+            <h2 style="margin-bottom: 30px; color: #4a5568;">📋 Itemized Summary Report</h2>
 
             <div class="filter-section">
                 <h3 style="margin-bottom: 15px; color: #4a5568;">Report Filters & Export Options</h3>
@@ -1235,6 +1235,7 @@
                 <div class="filter-actions">
                     <button class="btn btn-primary" onclick="updateSummaryReport()">🔄 Refresh Report</button>
                     <button class="btn btn-success" onclick="downloadSummaryReport()">📥 Download Report</button>
+                    <button class="btn btn-secondary" onclick="debugSummaryData()" style="margin-left: 20px;">🔍 Debug Data</button>
                 </div>
             </div>
 
@@ -2707,7 +2708,7 @@
             });
         }
 
-        // ===== SUMMARY REPORT =====
+        // ===== UPDATED SUMMARY REPORT FUNCTIONS =====
         async function updateSummaryReport() {
             try {
                 showLoading();
@@ -2719,74 +2720,10 @@
                 if (facilityFilter) params.append('facilityId', facilityFilter);
                 if (monthFilter) params.append('month', monthFilter);
 
-                // Get the summary data (this is what works in dashboard)
-                const summaryData = await apiCall(`/dashboard/summary?${params.toString()}`);
+                // Use the new itemized summary endpoint
+                const itemizedData = await apiCall(`/api/reports/itemized-summary?${params.toString()}`);
                 
-                console.log('Raw summary data:', summaryData);
-                
-                // Transform the data to show itemized format
-                // For now, we'll break down the supply_codes and show individual lines
-                const itemizedData = [];
-                
-                summaryData.forEach(patient => {
-                    console.log('Processing patient:', patient);
-                    
-                    // If patient has supply codes, create separate rows for each
-                    if (patient.supply_codes && patient.supply_codes !== 'N/A' && patient.supply_codes.trim()) {
-                        const supplyCodes = patient.supply_codes.split(',').map(code => code.trim());
-                        const hcpcsCodes = patient.hcpcs_codes ? patient.hcpcs_codes.split(',').map(code => code.trim()) : [];
-                        
-                        supplyCodes.forEach((supplyCode, index) => {
-                            // Find the supply info from our supplies array
-                            const supply = allSupplies.find(s => s.code.toString() === supplyCode);
-                            const hcpcsCode = hcpcsCodes[index] || 'N/A';
-                            
-                            // For now, distribute total units evenly across supply codes
-                            // This is a temporary solution until we get proper itemized tracking
-                            const totalUnits = parseInt(patient.total_units) || 0;
-                            const totalCost = parseFloat(patient.total_cost) || 0;
-                            const unitsPerSupply = Math.floor(totalUnits / supplyCodes.length);
-                            const costPerSupply = totalCost / supplyCodes.length;
-                            
-                            itemizedData.push({
-                                patientName: patient.name || 'Unknown',
-                                mrn: patient.mrn || 'N/A',
-                                arCode: supplyCode,
-                                itemDescription: supply ? supply.description : 'Unknown Item',
-                                hcpcs: hcpcsCode,
-                                totalUnits: unitsPerSupply,
-                                totalCost: costPerSupply,
-                                month: patient.month,
-                                facilityName: patient.facility_name || 'Unknown',
-                                updatedAt: patient.updated_at
-                            });
-                        });
-                    } else {
-                        // No specific supply codes, show as single row
-                        itemizedData.push({
-                            patientName: patient.name || 'Unknown',
-                            mrn: patient.mrn || 'N/A', 
-                            arCode: 'N/A',
-                            itemDescription: 'No supplies recorded',
-                            hcpcs: 'N/A',
-                            totalUnits: parseInt(patient.total_units) || 0,
-                            totalCost: parseFloat(patient.total_cost) || 0,
-                            month: patient.month,
-                            facilityName: patient.facility_name || 'Unknown',
-                            updatedAt: patient.updated_at
-                        });
-                    }
-                });
-                
-                console.log('Processed itemized data:', itemizedData);
-                
-                // Sort by patient name, then by AR code
-                itemizedData.sort((a, b) => {
-                    if (a.patientName !== b.patientName) {
-                        return a.patientName.localeCompare(b.patientName);
-                    }
-                    return String(a.arCode).localeCompare(String(b.arCode));
-                });
+                console.log('Itemized summary data:', itemizedData);
                 
                 lastSummaryData = itemizedData;
                 const tbody = document.getElementById('summaryTableBody');
@@ -2794,7 +2731,11 @@
 
                 if (itemizedData.length === 0) {
                     const colSpan = currentUser.role === 'admin' ? '10' : '9';
-                    tbody.innerHTML = `<tr><td colspan="${colSpan}">No data found</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="${colSpan}" style="text-align: center; padding: 40px; color: #718096; font-style: italic;">
+                        <div style="font-size: 48px; margin-bottom: 15px;">📊</div>
+                        <div>No tracking data found for the selected filters</div>
+                        <div style="font-size: 14px; margin-top: 10px; color: #a0aec0;">Try adjusting your facility or month filters</div>
+                    </td></tr>`;
                     return;
                 }
 
@@ -2803,43 +2744,177 @@
                     
                     if (currentUser.role === 'admin') {
                         row.innerHTML = `
-                            <td>${item.patientName}</td>
-                            <td>${item.mrn}</td>
-                            <td><strong>${item.arCode}</strong></td>
-                            <td>${item.itemDescription}</td>
-                            <td>${item.hcpcs}</td>
-                            <td>${item.totalUnits}</td>
-                            <td>${formatCurrency(item.totalCost)}</td>
-                            <td>${formatMonthForDisplay(item.month)}</td>
-                            <td>${item.facilityName}</td>
-                            <td>${formatDate(item.updatedAt)}</td>
+                            <td style="font-weight: 500;">${item.patient_name}</td>
+                            <td>${item.mrn || 'N/A'}</td>
+                            <td style="max-width: 200px; word-wrap: break-word;">${item.wound_dx || 'N/A'}</td>
+                            <td><strong style="color: #667eea; font-weight: 700;">${item.ar_code}</strong></td>
+                            <td style="color: #4a5568;">${item.hcpcs || 'N/A'}</td>
+                            <td style="text-align: right; font-weight: 600; color: #2d3748;">${item.total_units}</td>
+                            <td style="text-align: right; font-weight: 600; color: #2d3748;">${formatCurrency(item.total_cost)}</td>
+                            <td style="color: #4a5568;">${formatMonthForDisplay(item.month)}</td>
+                            <td style="color: #4a5568;">${item.facility_name}</td>
+                            <td style="color: #718096; font-size: 13px;">${formatDate(item.last_updated)}</td>
                         `;
                     } else {
                         row.innerHTML = `
-                            <td>${item.patientName}</td>
-                            <td>${item.mrn}</td>
-                            <td><strong>${item.arCode}</strong></td>
-                            <td>${item.itemDescription}</td>
-                            <td>${item.hcpcs}</td>
-                            <td>${item.totalUnits}</td>
-                            <td>${formatMonthForDisplay(item.month)}</td>
-                            <td>${item.facilityName}</td>
-                            <td>${formatDate(item.updatedAt)}</td>
+                            <td style="font-weight: 500;">${item.patient_name}</td>
+                            <td>${item.mrn || 'N/A'}</td>
+                            <td><strong style="color: #667eea; font-weight: 700;">${item.ar_code}</strong></td>
+                            <td style="max-width: 250px; word-wrap: break-word; color: #4a5568;">${item.item_description}</td>
+                            <td style="color: #4a5568;">${item.hcpcs || 'N/A'}</td>
+                            <td style="text-align: right; font-weight: 600; color: #2d3748;">${item.total_units}</td>
+                            <td style="color: #4a5568;">${formatMonthForDisplay(item.month)}</td>
+                            <td style="color: #4a5568;">${item.facility_name}</td>
+                            <td style="color: #718096; font-size: 13px;">${formatDate(item.last_updated)}</td>
                         `;
                     }
                     
                     tbody.appendChild(row);
                 });
                 
-                showNotification('📊 Summary report updated');
+                // Calculate and display summary statistics
+                const totalRecords = itemizedData.length;
+                const totalUnits = itemizedData.reduce((sum, item) => sum + parseInt(item.total_units || 0), 0);
+                const totalCosts = itemizedData.reduce((sum, item) => sum + parseFloat(item.total_cost || 0), 0);
+                const uniquePatients = new Set(itemizedData.map(item => item.patient_name)).size;
+                const uniqueSupplies = new Set(itemizedData.map(item => item.ar_code)).size;
+                
+                console.log(`📊 Summary: ${totalRecords} records, ${uniquePatients} patients, ${uniqueSupplies} supplies, ${totalUnits} units, ${formatCurrency(totalCosts)} total cost`);
+                
+                let message = `📊 Loaded ${totalRecords} itemized records for ${uniquePatients} patients using ${uniqueSupplies} different supplies`;
+                if (currentUser.role === 'admin') {
+                    message += ` • Total: ${totalUnits.toLocaleString()} units, ${formatCurrency(totalCosts)}`;
+                }
+                
+                showNotification(message);
             } catch (error) {
                 console.error('Summary report error:', error);
                 showNotification('Failed to update summary report: ' + error.message, true);
+                
+                // Show error in table
+                const tbody = document.getElementById('summaryTableBody');
+                const colSpan = currentUser.role === 'admin' ? '10' : '9';
+                tbody.innerHTML = `<tr><td colspan="${colSpan}" style="text-align: center; padding: 40px; color: #e53e3e;">
+                    <div style="font-size: 48px; margin-bottom: 15px;">⚠️</div>
+                    <div style="font-weight: 600; margin-bottom: 10px;">Error loading report</div>
+                    <div style="font-size: 14px;">${error.message}</div>
+                </td></tr>`;
             } finally {
                 hideLoading();
             }
         }
 
+        async function downloadSummaryReport() {
+            if (!lastSummaryData || lastSummaryData.length === 0) {
+                showNotification('No data to export. Please refresh the report first.', true);
+                return;
+            }
+
+            try {
+                showLoading();
+                const wb = XLSX.utils.book_new();
+                
+                const exportData = lastSummaryData.map(item => {
+                    const baseData = {
+                        'Patient Name': item.patient_name,
+                        'MRN': item.mrn || 'N/A',
+                        'Wound Dx': item.wound_dx || 'N/A',
+                        'AR Code': item.ar_code,
+                        'Item Description': item.item_description,
+                        'HCPCS': item.hcpcs || 'N/A',
+                        'Total Units': item.total_units,
+                        'Month/Year': formatMonthForDisplay(item.month),
+                        'Facility': item.facility_name,
+                        'Last Updated': formatDate(item.last_updated)
+                    };
+                    
+                    // Add cost columns for admins
+                    if (currentUser.role === 'admin') {
+                        baseData['Unit Cost'] = parseFloat(item.unit_cost || 0).toFixed(2);
+                        baseData['Total Cost'] = parseFloat(item.total_cost || 0).toFixed(2);
+                    }
+                    
+                    return baseData;
+                });
+
+                const ws = XLSX.utils.json_to_sheet(exportData);
+                
+                // Set column widths for better readability
+                const colWidths = [
+                    {wch: 20}, // Patient Name
+                    {wch: 12}, // MRN
+                    {wch: 25}, // Wound Dx
+                    {wch: 10}, // AR Code
+                    {wch: 30}, // Item Description
+                    {wch: 10}, // HCPCS
+                    {wch: 12}, // Total Units
+                    {wch: 12}, // Month/Year
+                    {wch: 15}, // Facility
+                    {wch: 15}  // Last Updated
+                ];
+                
+                if (currentUser.role === 'admin') {
+                    colWidths.splice(7, 0, {wch: 12}); // Unit Cost
+                    colWidths.splice(8, 0, {wch: 12}); // Total Cost
+                }
+                
+                ws['!cols'] = colWidths;
+                
+                // Add summary information as a separate sheet
+                const summaryStats = [{
+                    'Metric': 'Total Records',
+                    'Value': lastSummaryData.length
+                }, {
+                    'Metric': 'Unique Patients', 
+                    'Value': new Set(lastSummaryData.map(item => item.patient_name)).size
+                }, {
+                    'Metric': 'Unique Supplies',
+                    'Value': new Set(lastSummaryData.map(item => item.ar_code)).size
+                }, {
+                    'Metric': 'Total Units',
+                    'Value': lastSummaryData.reduce((sum, item) => sum + parseInt(item.total_units || 0), 0)
+                }];
+                
+                if (currentUser.role === 'admin') {
+                    summaryStats.push({
+                        'Metric': 'Total Cost',
+                        'Value': lastSummaryData.reduce((sum, item) => sum + parseFloat(item.total_cost || 0), 0).toFixed(2)
+                    });
+                }
+                
+                const summaryWs = XLSX.utils.json_to_sheet(summaryStats);
+                summaryWs['!cols'] = [{wch: 20}, {wch: 15}];
+                
+                XLSX.utils.book_append_sheet(wb, ws, 'Itemized Report');
+                XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
+
+                const today = new Date().toISOString().split('T')[0];
+                const facilityFilter = document.getElementById('summaryFacilityFilter')?.value;
+                const monthFilter = document.getElementById('summaryMonthFilter')?.value;
+                
+                let filename = `Itemized_Summary_Report_${today}`;
+                if (facilityFilter) {
+                    const facility = facilities.find(f => f.id == facilityFilter);
+                    if (facility) filename += `_${facility.name.replace(/[^a-zA-Z0-9]/g, '_')}`;
+                }
+                if (monthFilter) {
+                    filename += `_${monthFilter.replace('-', '_')}`;
+                }
+                filename += '.xlsx';
+                
+                XLSX.writeFile(wb, filename);
+                
+                showNotification(`📥 Report exported: ${lastSummaryData.length} itemized records in ${filename}`);
+
+            } catch (error) {
+                console.error('Export error:', error);
+                showNotification('Failed to export report: ' + error.message, true);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // Enhanced debug function for the new data structure
         function debugSummaryData() {
             if (!lastSummaryData || lastSummaryData.length === 0) {
                 showNotification('No summary data available. Please refresh the report first.', true);
@@ -2849,46 +2924,81 @@
             const debugInfo = document.getElementById('debugInfo');
             const debugModal = document.getElementById('debugModal');
             
-            let debugText = `Debug Information - Itemized Summary Report
+            const totalUnits = lastSummaryData.reduce((sum, item) => sum + parseInt(item.total_units || 0), 0);
+            const totalCost = lastSummaryData.reduce((sum, item) => sum + parseFloat(item.total_cost || 0), 0);
+            const uniquePatients = new Set(lastSummaryData.map(item => item.patient_name));
+            const uniqueSupplies = new Set(lastSummaryData.map(item => item.ar_code));
+            const facilities = new Set(lastSummaryData.map(item => item.facility_name));
+            
+            let debugText = `Enhanced Itemized Summary Report Debug Information
 Generated: ${new Date().toLocaleString()}
 User: ${currentUser ? currentUser.name : 'Unknown'} (${currentUser ? currentUser.role : 'Unknown'})
-Records: ${lastSummaryData.length} itemized entries
 
-Data Structure:
-${JSON.stringify(lastSummaryData, null, 2)}
+=== SUMMARY STATISTICS ===
+Total Itemized Records: ${lastSummaryData.length}
+Unique Patients: ${uniquePatients.size}
+Unique Supply Codes: ${uniqueSupplies.size}
+Total Units (All Items): ${totalUnits.toLocaleString()}
+Total Cost (All Items): $${totalCost.toFixed(2)}
+Facilities: ${facilities.size}
 
-Summary Statistics:
-- Total Itemized Records: ${lastSummaryData.length}
-- Unique Patients: ${new Set(lastSummaryData.map(item => item.patientName)).size}
-- Unique AR Codes: ${new Set(lastSummaryData.map(item => item.arCode)).size}
-- Total Units (All Items): ${lastSummaryData.reduce((sum, item) => sum + (item.totalUnits || 0), 0)}
-- Total Cost (All Items): ${lastSummaryData.reduce((sum, item) => sum + (item.totalCost || 0), 0).toFixed(2)}
+=== BREAKDOWN BY PATIENT ===`;
 
-Facilities:
-${Array.from(new Set(lastSummaryData.map(item => item.facilityName))).join(', ')}
+            [...uniquePatients].sort().forEach(patientName => {
+                const patientRecords = lastSummaryData.filter(item => item.patient_name === patientName);
+                const patientUnits = patientRecords.reduce((sum, item) => sum + parseInt(item.total_units || 0), 0);
+                const patientCost = patientRecords.reduce((sum, item) => sum + parseFloat(item.total_cost || 0), 0);
+                
+                debugText += `\n${patientName}: ${patientRecords.length} supplies, ${patientUnits} units, $${patientCost.toFixed(2)}`;
+                patientRecords.forEach(record => {
+                    debugText += `\n  - AR ${record.ar_code}: ${record.total_units} units @ $${parseFloat(record.unit_cost || 0).toFixed(2)} = $${parseFloat(record.total_cost || 0).toFixed(2)}`;
+                });
+            });
 
-AR Codes in Use:
-${Array.from(new Set(lastSummaryData.map(item => item.arCode))).sort((a, b) => a - b).join(', ')}
+            debugText += `\n\n=== BREAKDOWN BY SUPPLY CODE ===`;
+            
+            [...uniqueSupplies].sort((a, b) => a - b).forEach(arCode => {
+                const supplyRecords = lastSummaryData.filter(item => item.ar_code === arCode);
+                const supplyUnits = supplyRecords.reduce((sum, item) => sum + parseInt(item.total_units || 0), 0);
+                const supplyCost = supplyRecords.reduce((sum, item) => sum + parseFloat(item.total_cost || 0), 0);
+                const supplyDescription = supplyRecords[0]?.item_description || 'Unknown';
+                
+                debugText += `\nAR ${arCode} (${supplyDescription}): ${supplyRecords.length} patients, ${supplyUnits} total units, $${supplyCost.toFixed(2)}`;
+            });
 
-Data Validation Issues:
-`;
+            debugText += `\n\n=== FACILITIES ===`;
+            [...facilities].sort().forEach(facilityName => {
+                const facilityRecords = lastSummaryData.filter(item => item.facility_name === facilityName);
+                const facilityPatients = new Set(facilityRecords.map(item => item.patient_name)).size;
+                const facilityUnits = facilityRecords.reduce((sum, item) => sum + parseInt(item.total_units || 0), 0);
+                const facilityCost = facilityRecords.reduce((sum, item) => sum + parseFloat(item.total_cost || 0), 0);
+                
+                debugText += `\n${facilityName}: ${facilityPatients} patients, ${facilityRecords.length} records, ${facilityUnits} units, $${facilityCost.toFixed(2)}`;
+            });
 
+            debugText += `\n\n=== DATA VALIDATION ===`;
+            let hasIssues = false;
+            
             lastSummaryData.forEach((item, index) => {
                 const issues = [];
-                if (!item.patientName) issues.push('Missing patient name');
-                if (!item.arCode) issues.push('Missing AR code');
-                if (!item.itemDescription) issues.push('Missing item description');
-                if (isNaN(parseFloat(item.totalCost))) issues.push('Invalid total cost');
-                if (isNaN(parseInt(item.totalUnits))) issues.push('Invalid total units');
-                if (!item.updatedAt) issues.push('Missing updated date');
+                if (!item.patient_name) issues.push('Missing patient name');
+                if (!item.ar_code) issues.push('Missing AR code');
+                if (!item.item_description) issues.push('Missing item description');
+                if (isNaN(parseFloat(item.total_cost))) issues.push('Invalid total cost');
+                if (isNaN(parseInt(item.total_units))) issues.push('Invalid total units');
+                if (!item.last_updated) issues.push('Missing updated date');
                 
                 if (issues.length > 0) {
-                    debugText += `\nRecord ${index + 1} (${item.patientName} - AR ${item.arCode}): ${issues.join(', ')}`;
+                    if (!hasIssues) {
+                        debugText += `\nDATA ISSUES FOUND:`;
+                        hasIssues = true;
+                    }
+                    debugText += `\nRecord ${index + 1} (${item.patient_name} - AR ${item.ar_code}): ${issues.join(', ')}`;
                 }
             });
 
-            if (debugText.indexOf('Record ') === -1) {
-                debugText += '\nNo data validation issues found.';
+            if (!hasIssues) {
+                debugText += `\nNo data validation issues found. All ${lastSummaryData.length} records are valid.`;
             }
 
             debugInfo.textContent = debugText;
@@ -2897,76 +3007,6 @@ Data Validation Issues:
 
         function closeDebugModal() {
             document.getElementById('debugModal').style.display = 'none';
-        }
-
-        async function runCleanup() {
-            if (!currentUser || currentUser.role !== 'admin') {
-                showNotification('Admin access required', true);
-                return;
-            }
-
-            if (confirm('Remove all tracking records with 0 quantities and reset remaining data to zeros?')) {
-                try {
-                    showLoading();
-                    const response = await apiCall('/tracking/cleanup', { method: 'DELETE' });
-                    showNotification(`✅ Cleanup complete! Deleted ${response.recordsDeleted} records, reset ${response.recordsReset} records`);
-                    updateSummaryReport();
-                    loadDashboard();
-                } catch (error) {
-                    showNotification('Cleanup failed: ' + error.message, true);
-                } finally {
-                    hideLoading();
-                }
-            }
-        }
-
-        async function downloadSummaryReport() {
-            if (!lastSummaryData) {
-                showNotification('No data to export. Please refresh the report first.', true);
-                return;
-            }
-
-            try {
-                const wb = XLSX.utils.book_new();
-                
-                const exportData = lastSummaryData.map(patient => {
-                    if (currentUser.role === 'admin') {
-                        return {
-                            'Patient Name': patient.name,
-                            'MRN': patient.mrn || 'N/A',
-                            'Wound Dx': patient.wound_diagnoses || 'N/A',
-                            'AR Code': patient.supply_codes || 'N/A',
-                            'HCPCS': patient.hcpcs_codes || 'N/A',
-                            'Month/Year': formatMonthForDisplay(patient.month),
-                            'Facility': patient.facility_name || 'Unknown',
-                            'Total Units': patient.total_units || 0,
-                            'Total Costs': patient.total_cost || 0,
-                            'Last Updated': formatDate(patient.updated_at)
-                        };
-                    } else {
-                        return {
-                            'Patient Name': patient.name,
-                            'MRN': patient.mrn || 'N/A',
-                            'Wound Dx': patient.wound_diagnoses || 'N/A',
-                            'Month/Year': formatMonthForDisplay(patient.month),
-                            'Facility': patient.facility_name || 'Unknown',
-                            'Total Units': patient.total_units || 0,
-                            'Last Updated': formatDate(patient.updated_at)
-                        };
-                    }
-                });
-
-                const ws = XLSX.utils.json_to_sheet(exportData);
-                XLSX.utils.book_append_sheet(wb, ws, 'Summary Report');
-
-                const filename = `Summary_Report_${new Date().toISOString().split('T')[0]}.xlsx`;
-                XLSX.writeFile(wb, filename);
-                showNotification('📥 Summary report downloaded successfully!');
-
-            } catch (error) {
-                console.error('Export error:', error);
-                showNotification('Failed to export report: ' + error.message, true);
-            }
         }
 
         // ===== USER MANAGEMENT =====
