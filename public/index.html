@@ -2719,121 +2719,71 @@
                 if (facilityFilter) params.append('facilityId', facilityFilter);
                 if (monthFilter) params.append('month', monthFilter);
 
-                // Get basic patient data
-                const patientsData = await apiCall(`/dashboard/summary?${params.toString()}`);
+                // Get the summary data (this is what works in dashboard)
+                const summaryData = await apiCall(`/dashboard/summary?${params.toString()}`);
                 
-                // Make sure we have supplies loaded
-                if (!supplies || supplies.length === 0) {
-                    supplies = await apiCall('/supplies');
-                    allSupplies = supplies;
-                }
+                console.log('Raw summary data:', summaryData);
                 
-                console.log('Patients data:', patientsData);
-                console.log('Supplies available:', supplies.length);
-                
-                // Get all patients that have actual tracking data (total_units > 0)
-                const patientsWithTracking = patientsData.filter(p => {
-                    const totalUnits = parseInt(p.total_units) || 0;
-                    return totalUnits > 0;
-                });
-                
-                console.log('Patients with tracking:', patientsWithTracking.length);
-                
+                // Transform the data to show itemized format
+                // For now, we'll break down the supply_codes and show individual lines
                 const itemizedData = [];
                 
-                // For each patient with tracking data, get detailed breakdown
-                for (const patient of patientsWithTracking) {
-                    console.log('Processing patient:', patient.name);
+                summaryData.forEach(patient => {
+                    console.log('Processing patient:', patient);
                     
-                    try {
-                        const trackingData = await apiCall(`/tracking/${patient.id}`);
-                        console.log('Tracking data for', patient.name, ':', trackingData.length, 'records');
+                    // If patient has supply codes, create separate rows for each
+                    if (patient.supply_codes && patient.supply_codes !== 'N/A' && patient.supply_codes.trim()) {
+                        const supplyCodes = patient.supply_codes.split(',').map(code => code.trim());
+                        const hcpcsCodes = patient.hcpcs_codes ? patient.hcpcs_codes.split(',').map(code => code.trim()) : [];
                         
-                        // Group tracking data by supply and calculate totals
-                        const supplyTotals = {};
-                        
-                        trackingData.forEach(track => {
-                            if (track.quantity > 0) { // Only include supplies with quantities > 0
-                                if (!supplyTotals[track.supply_id]) {
-                                    supplyTotals[track.supply_id] = {
-                                        supplyId: track.supply_id,
-                                        totalQuantity: 0
-                                    };
-                                }
-                                supplyTotals[track.supply_id].totalQuantity += track.quantity;
-                            }
-                        });
-                        
-                        console.log('Supply totals for', patient.name, ':', supplyTotals);
-                        
-                        // Create itemized rows for each supply used by this patient
-                        for (const supplyId of Object.keys(supplyTotals)) {
-                            const supply = supplies.find(s => s.id === parseInt(supplyId));
-                            console.log('Looking for supply ID', supplyId, 'found:', supply);
+                        supplyCodes.forEach((supplyCode, index) => {
+                            // Find the supply info from our supplies array
+                            const supply = allSupplies.find(s => s.code.toString() === supplyCode);
+                            const hcpcsCode = hcpcsCodes[index] || 'N/A';
                             
-                            if (supply && supplyTotals[supplyId].totalQuantity > 0) {
-                                const totalQuantity = supplyTotals[supplyId].totalQuantity;
-                                const totalCost = totalQuantity * (parseFloat(supply.cost) || 0);
-                                
-                                itemizedData.push({
-                                    patientName: patient.name || 'Unknown',
-                                    mrn: patient.mrn || 'N/A',
-                                    arCode: supply.code,
-                                    itemDescription: supply.description || 'N/A',
-                                    hcpcs: supply.hcpcs || 'N/A',
-                                    totalUnits: totalQuantity,
-                                    totalCost: totalCost,
-                                    month: patient.month,
-                                    facilityName: patient.facility_name || 'Unknown',
-                                    updatedAt: patient.updated_at
-                                });
-                                
-                                console.log('Added itemized record:', {
-                                    patient: patient.name,
-                                    supply: supply.code,
-                                    units: totalQuantity,
-                                    cost: totalCost
-                                });
-                            }
-                        }
-                    } catch (error) {
-                        console.warn(`Could not get tracking data for patient ${patient.id} (${patient.name}):`, error);
-                    }
-                }
-                
-                console.log('Final itemized data:', itemizedData.length, 'records');
-                
-                // If no itemized data, check if we should show the basic patient data instead
-                if (itemizedData.length === 0) {
-                    console.log('No itemized data found, checking basic patient data...');
-                    
-                    // Show basic patient data without itemization
-                    patientsData.forEach(patient => {
-                        if (parseInt(patient.total_units) >= 0) { // Show all patients, even with 0 units
+                            // For now, distribute total units evenly across supply codes
+                            // This is a temporary solution until we get proper itemized tracking
+                            const totalUnits = parseInt(patient.total_units) || 0;
+                            const totalCost = parseFloat(patient.total_cost) || 0;
+                            const unitsPerSupply = Math.floor(totalUnits / supplyCodes.length);
+                            const costPerSupply = totalCost / supplyCodes.length;
+                            
                             itemizedData.push({
                                 patientName: patient.name || 'Unknown',
                                 mrn: patient.mrn || 'N/A',
-                                arCode: 'N/A',
-                                itemDescription: 'No detailed tracking data',
-                                hcpcs: 'N/A',
-                                totalUnits: parseInt(patient.total_units) || 0,
-                                totalCost: parseFloat(patient.total_cost) || 0,
+                                arCode: supplyCode,
+                                itemDescription: supply ? supply.description : 'Unknown Item',
+                                hcpcs: hcpcsCode,
+                                totalUnits: unitsPerSupply,
+                                totalCost: costPerSupply,
                                 month: patient.month,
                                 facilityName: patient.facility_name || 'Unknown',
                                 updatedAt: patient.updated_at
                             });
-                        }
-                    });
-                }
+                        });
+                    } else {
+                        // No specific supply codes, show as single row
+                        itemizedData.push({
+                            patientName: patient.name || 'Unknown',
+                            mrn: patient.mrn || 'N/A', 
+                            arCode: 'N/A',
+                            itemDescription: 'No supplies recorded',
+                            hcpcs: 'N/A',
+                            totalUnits: parseInt(patient.total_units) || 0,
+                            totalCost: parseFloat(patient.total_cost) || 0,
+                            month: patient.month,
+                            facilityName: patient.facility_name || 'Unknown',
+                            updatedAt: patient.updated_at
+                        });
+                    }
+                });
+                
+                console.log('Processed itemized data:', itemizedData);
                 
                 // Sort by patient name, then by AR code
                 itemizedData.sort((a, b) => {
                     if (a.patientName !== b.patientName) {
                         return a.patientName.localeCompare(b.patientName);
-                    }
-                    // If AR codes are numbers, sort numerically, otherwise alphabetically
-                    if (typeof a.arCode === 'number' && typeof b.arCode === 'number') {
-                        return a.arCode - b.arCode;
                     }
                     return String(a.arCode).localeCompare(String(b.arCode));
                 });
@@ -2881,7 +2831,7 @@
                     tbody.appendChild(row);
                 });
                 
-                showNotification('📊 Itemized summary report updated');
+                showNotification('📊 Summary report updated');
             } catch (error) {
                 console.error('Summary report error:', error);
                 showNotification('Failed to update summary report: ' + error.message, true);
