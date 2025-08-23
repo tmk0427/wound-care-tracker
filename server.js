@@ -20,21 +20,13 @@ const pool = new Pool({
 // Trust proxy for Heroku
 app.set('trust proxy', 1);
 
-// Rate limiting - More generous for healthcare application
+// Rate limiting
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 500, // Increased from 100 to 500 requests per windowMs
+    max: 100, // limit each IP to 100 requests per windowMs
     trustProxy: true, // Trust X-Forwarded-For headers
     standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
     legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-    message: { error: 'Too many requests, please try again later.' }, // JSON response instead of HTML
-    skip: (req) => {
-        // Skip rate limiting for authenticated users making tracking updates
-        if (req.path.includes('/api/tracking') && req.headers.authorization) {
-            return true;
-        }
-        return false;
-    }
 });
 
 // Middleware
@@ -317,14 +309,14 @@ app.get('/api/dashboard/summary', authenticateToken, async (req, res) => {
                 f.name as facility_name,
                 p.created_at,
                 p.updated_at,
-                COALESCE(SUM(CASE WHEN t.quantity > 0 THEN t.quantity ELSE 0 END), 0) as total_units,
-                COALESCE(SUM(CASE WHEN t.quantity > 0 THEN t.quantity * s.cost ELSE 0 END), 0) as total_cost,
-                STRING_AGG(DISTINCT t.wound_dx, '; ') FILTER (WHERE t.wound_dx IS NOT NULL AND t.wound_dx != '' AND t.quantity > 0) as wound_diagnoses,
+                COALESCE(SUM(t.quantity), 0) as total_units,
+                COALESCE(SUM(t.quantity * s.cost), 0) as total_cost,
+                STRING_AGG(DISTINCT t.wound_dx, '; ') FILTER (WHERE t.wound_dx IS NOT NULL AND t.wound_dx != '') as wound_diagnoses,
                 STRING_AGG(DISTINCT s.code::text, ', ') FILTER (WHERE t.quantity > 0) as supply_codes,
                 STRING_AGG(DISTINCT s.hcpcs, ', ') FILTER (WHERE s.hcpcs IS NOT NULL AND t.quantity > 0) as hcpcs_codes
             FROM patients p
             LEFT JOIN facilities f ON p.facility_id = f.id
-            LEFT JOIN tracking t ON p.id = t.patient_id AND t.quantity > 0
+            LEFT JOIN tracking t ON p.id = t.patient_id
             LEFT JOIN supplies s ON t.supply_id = s.id
             ${whereClause}
             GROUP BY p.id, p.name, p.mrn, p.month, p.facility_id, f.name, p.created_at, p.updated_at
@@ -627,16 +619,6 @@ app.post('/api/tracking', authenticateToken, async (req, res) => {
     try {
         const { patientId, supplyId, dayOfMonth, quantity, woundDx } = req.body;
 
-        // Validate required fields
-        if (!patientId || !supplyId || dayOfMonth === undefined) {
-            return res.status(400).json({ error: 'Patient ID, Supply ID, and day of month are required' });
-        }
-
-        // Validate day of month
-        if (dayOfMonth < 1 || dayOfMonth > 31) {
-            return res.status(400).json({ error: 'Day of month must be between 1 and 31' });
-        }
-
         // Verify patient access
         let patientQuery = 'SELECT * FROM patients WHERE id = $1';
         let patientParams = [patientId];
@@ -650,9 +632,6 @@ app.post('/api/tracking', authenticateToken, async (req, res) => {
         if (patientResult.rows.length === 0) {
             return res.status(404).json({ error: 'Patient not found or access denied' });
         }
-
-        // Update patient's updated_at timestamp
-        await pool.query('UPDATE patients SET updated_at = CURRENT_TIMESTAMP WHERE id = $1', [patientId]);
 
         // For wound diagnosis updates, we need to handle them specially
         if (woundDx !== undefined && woundDx !== null) {
@@ -680,54 +659,74 @@ app.post('/api/tracking', authenticateToken, async (req, res) => {
         }
 
         // Regular quantity update
-        const cleanQuantity = parseInt(quantity) || 0;
-        
-        if (cleanQuantity === 0) {
-            // Delete the record if quantity is 0
-            await pool.query(
-                'DELETE FROM tracking WHERE patient_id = $1 AND supply_id = $2 AND day_of_month = $3',
-                [patientId, supplyId, dayOfMonth]
-            );
-            
-            return res.json({ message: 'Tracking record cleared successfully' });
-        } else {
-            // Insert or update with non-zero quantity
-            const result = await pool.query(`
-                INSERT INTO tracking (patient_id, supply_id, day_of_month, quantity)
-                VALUES ($1, $2, $3, $4)
-                ON CONFLICT (patient_id, supply_id, day_of_month)
-                DO UPDATE SET quantity = $4, updated_at = CURRENT_TIMESTAMP
-                RETURNING *
-            `, [patientId, supplyId, dayOfMonth, cleanQuantity]);
+        const result = await pool.query(`
+            INSERT INTO tracking (patient_id, supply_id, day_of_month, quantity)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (patient_id, supply_id, day_of_month)
+            DO UPDATE SET quantity = $4, updated_at = CURRENT_TIMESTAMP
+            RETURNING *
+        `, [patientId, supplyId, dayOfMonth, quantity || 0]);
 
-            return res.json(result.rows[0]);
-        }
+        res.json(result.rows[0]);
     } catch (error) {
         console.error('Error updating tracking data:', error);
-        res.status(500).json({ error: 'Internal server error while updating tracking data' });
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
-// Clean up zero quantity tracking records (admin only)
+// ===== NEW CLEANUP ROUTE =====
+
+// Cleanup tracking data (admin only)
 app.delete('/api/tracking/cleanup', authenticateToken, async (req, res) => {
     try {
         if (req.user.role !== 'admin') {
             return res.status(403).json({ error: 'Admin access required' });
         }
 
-        // Delete records with zero quantities
-        const zeroResult = await pool.query('DELETE FROM tracking WHERE quantity = 0 OR quantity IS NULL');
+        const client = await pool.connect();
         
-        // Update all patient timestamps to current time
-        const patientsResult = await pool.query('UPDATE patients SET updated_at = CURRENT_TIMESTAMP');
-        
-        res.json({ 
-            message: 'Cleanup completed successfully', 
-            recordsDeleted: zeroResult.rowCount,
-            patientsUpdated: patientsResult.rowCount
-        });
+        try {
+            await client.query('BEGIN');
+
+            // Option 1: Delete all tracking records with quantity = 0
+            const deleteZeroResult = await client.query('DELETE FROM tracking WHERE quantity = 0');
+            console.log(`Deleted ${deleteZeroResult.rowCount} tracking records with zero quantity`);
+
+            // Option 2: Reset all remaining tracking records to quantity = 0
+            // This will make all totals show as 0 in the summary report
+            const resetResult = await client.query(`
+                UPDATE tracking 
+                SET quantity = 0, updated_at = CURRENT_TIMESTAMP 
+                WHERE quantity > 0
+            `);
+            console.log(`Reset ${resetResult.rowCount} tracking records to zero quantity`);
+
+            // Update all patient records to current timestamp
+            await client.query(`
+                UPDATE patients 
+                SET updated_at = CURRENT_TIMESTAMP
+            `);
+
+            await client.query('COMMIT');
+
+            const totalRecordsAffected = deleteZeroResult.rowCount + resetResult.rowCount;
+
+            res.json({ 
+                message: 'Cleanup completed successfully',
+                recordsDeleted: deleteZeroResult.rowCount,
+                recordsReset: resetResult.rowCount,
+                totalRecordsAffected: totalRecordsAffected
+            });
+
+        } catch (error) {
+            await client.query('ROLLBACK');
+            throw error;
+        } finally {
+            client.release();
+        }
+
     } catch (error) {
-        console.error('Error cleaning up tracking data:', error);
+        console.error('Error during cleanup:', error);
         res.status(500).json({ error: 'Internal server error during cleanup' });
     }
 });
