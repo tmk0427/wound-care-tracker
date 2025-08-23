@@ -2708,101 +2708,102 @@
             });
         }
 
-        // ===== UPDATED SUMMARY REPORT FUNCTIONS =====
-        async function updateSummaryReport() {
-            try {
-                showLoading();
-                
-                const facilityFilter = document.getElementById('summaryFacilityFilter')?.value;
-                const monthFilter = document.getElementById('summaryMonthFilter')?.value;
+// Replace the updateSummaryReport function in your HTML file with this corrected version:
 
-                const params = new URLSearchParams();
-                if (facilityFilter) params.append('facilityId', facilityFilter);
-                if (monthFilter) params.append('month', monthFilter);
+async function updateSummaryReport() {
+    try {
+        showLoading();
+        
+        const facilityFilter = document.getElementById('summaryFacilityFilter')?.value;
+        const monthFilter = document.getElementById('summaryMonthFilter')?.value;
 
-                // Use the new itemized summary endpoint
-                const itemizedData = await apiCall(`/api/reports/itemized-summary?${params.toString()}`);
-                
-                console.log('Itemized summary data:', itemizedData);
-                
-                lastSummaryData = itemizedData;
-                const tbody = document.getElementById('summaryTableBody');
-                tbody.innerHTML = '';
+        const params = new URLSearchParams();
+        if (facilityFilter) params.append('facilityId', facilityFilter);
+        if (monthFilter) params.append('month', monthFilter);
 
-                if (itemizedData.length === 0) {
-                    const colSpan = currentUser.role === 'admin' ? '10' : '9';
-                    tbody.innerHTML = `<tr><td colspan="${colSpan}" style="text-align: center; padding: 40px; color: #718096; font-style: italic;">
-                        <div style="font-size: 48px; margin-bottom: 15px;">📊</div>
-                        <div>No tracking data found for the selected filters</div>
-                        <div style="font-size: 14px; margin-top: 10px; color: #a0aec0;">Try adjusting your facility or month filters</div>
-                    </td></tr>`;
-                    return;
-                }
+        // FIXED: Remove the extra /api prefix since apiCall already adds it
+        const itemizedData = await apiCall(`/reports/itemized-summary?${params.toString()}`);
+        
+        console.log('Itemized summary data:', itemizedData);
+        
+        lastSummaryData = itemizedData;
+        const tbody = document.getElementById('summaryTableBody');
+        tbody.innerHTML = '';
 
-                itemizedData.forEach(item => {
-                    const row = document.createElement('tr');
-                    
-                    if (currentUser.role === 'admin') {
-                        row.innerHTML = `
-                            <td style="font-weight: 500;">${item.patient_name}</td>
-                            <td>${item.mrn || 'N/A'}</td>
-                            <td style="max-width: 200px; word-wrap: break-word;">${item.wound_dx || 'N/A'}</td>
-                            <td><strong style="color: #667eea; font-weight: 700;">${item.ar_code}</strong></td>
-                            <td style="color: #4a5568;">${item.hcpcs || 'N/A'}</td>
-                            <td style="text-align: right; font-weight: 600; color: #2d3748;">${item.total_units}</td>
-                            <td style="text-align: right; font-weight: 600; color: #2d3748;">${formatCurrency(item.total_cost)}</td>
-                            <td style="color: #4a5568;">${formatMonthForDisplay(item.month)}</td>
-                            <td style="color: #4a5568;">${item.facility_name}</td>
-                            <td style="color: #718096; font-size: 13px;">${formatDate(item.last_updated)}</td>
-                        `;
-                    } else {
-                        row.innerHTML = `
-                            <td style="font-weight: 500;">${item.patient_name}</td>
-                            <td>${item.mrn || 'N/A'}</td>
-                            <td><strong style="color: #667eea; font-weight: 700;">${item.ar_code}</strong></td>
-                            <td style="max-width: 250px; word-wrap: break-word; color: #4a5568;">${item.item_description}</td>
-                            <td style="color: #4a5568;">${item.hcpcs || 'N/A'}</td>
-                            <td style="text-align: right; font-weight: 600; color: #2d3748;">${item.total_units}</td>
-                            <td style="color: #4a5568;">${formatMonthForDisplay(item.month)}</td>
-                            <td style="color: #4a5568;">${item.facility_name}</td>
-                            <td style="color: #718096; font-size: 13px;">${formatDate(item.last_updated)}</td>
-                        `;
-                    }
-                    
-                    tbody.appendChild(row);
-                });
-                
-                // Calculate and display summary statistics
-                const totalRecords = itemizedData.length;
-                const totalUnits = itemizedData.reduce((sum, item) => sum + parseInt(item.total_units || 0), 0);
-                const totalCosts = itemizedData.reduce((sum, item) => sum + parseFloat(item.total_cost || 0), 0);
-                const uniquePatients = new Set(itemizedData.map(item => item.patient_name)).size;
-                const uniqueSupplies = new Set(itemizedData.map(item => item.ar_code)).size;
-                
-                console.log(`📊 Summary: ${totalRecords} records, ${uniquePatients} patients, ${uniqueSupplies} supplies, ${totalUnits} units, ${formatCurrency(totalCosts)} total cost`);
-                
-                let message = `📊 Loaded ${totalRecords} itemized records for ${uniquePatients} patients using ${uniqueSupplies} different supplies`;
-                if (currentUser.role === 'admin') {
-                    message += ` • Total: ${totalUnits.toLocaleString()} units, ${formatCurrency(totalCosts)}`;
-                }
-                
-                showNotification(message);
-            } catch (error) {
-                console.error('Summary report error:', error);
-                showNotification('Failed to update summary report: ' + error.message, true);
-                
-                // Show error in table
-                const tbody = document.getElementById('summaryTableBody');
-                const colSpan = currentUser.role === 'admin' ? '10' : '9';
-                tbody.innerHTML = `<tr><td colspan="${colSpan}" style="text-align: center; padding: 40px; color: #e53e3e;">
-                    <div style="font-size: 48px; margin-bottom: 15px;">⚠️</div>
-                    <div style="font-weight: 600; margin-bottom: 10px;">Error loading report</div>
-                    <div style="font-size: 14px;">${error.message}</div>
-                </td></tr>`;
-            } finally {
-                hideLoading();
-            }
+        if (itemizedData.length === 0) {
+            const colSpan = currentUser.role === 'admin' ? '10' : '9';
+            tbody.innerHTML = `<tr><td colspan="${colSpan}" style="text-align: center; padding: 40px; color: #718096; font-style: italic;">
+                <div style="font-size: 48px; margin-bottom: 15px;">📊</div>
+                <div>No tracking data found for the selected filters</div>
+                <div style="font-size: 14px; margin-top: 10px; color: #a0aec0;">Try adjusting your facility or month filters</div>
+            </td></tr>`;
+            return;
         }
+
+        itemizedData.forEach(item => {
+            const row = document.createElement('tr');
+            
+            if (currentUser.role === 'admin') {
+                row.innerHTML = `
+                    <td style="font-weight: 500;">${item.patient_name}</td>
+                    <td>${item.mrn || 'N/A'}</td>
+                    <td style="max-width: 200px; word-wrap: break-word;">${item.wound_dx || 'N/A'}</td>
+                    <td><strong style="color: #667eea; font-weight: 700;">${item.ar_code}</strong></td>
+                    <td style="color: #4a5568;">${item.hcpcs || 'N/A'}</td>
+                    <td style="text-align: right; font-weight: 600; color: #2d3748;">${item.total_units}</td>
+                    <td style="text-align: right; font-weight: 600; color: #2d3748;">${formatCurrency(item.total_cost)}</td>
+                    <td style="color: #4a5568;">${formatMonthForDisplay(item.month)}</td>
+                    <td style="color: #4a5568;">${item.facility_name}</td>
+                    <td style="color: #718096; font-size: 13px;">${formatDate(item.last_updated)}</td>
+                `;
+            } else {
+                row.innerHTML = `
+                    <td style="font-weight: 500;">${item.patient_name}</td>
+                    <td>${item.mrn || 'N/A'}</td>
+                    <td><strong style="color: #667eea; font-weight: 700;">${item.ar_code}</strong></td>
+                    <td style="max-width: 250px; word-wrap: break-word; color: #4a5568;">${item.item_description}</td>
+                    <td style="color: #4a5568;">${item.hcpcs || 'N/A'}</td>
+                    <td style="text-align: right; font-weight: 600; color: #2d3748;">${item.total_units}</td>
+                    <td style="color: #4a5568;">${formatMonthForDisplay(item.month)}</td>
+                    <td style="color: #4a5568;">${item.facility_name}</td>
+                    <td style="color: #718096; font-size: 13px;">${formatDate(item.last_updated)}</td>
+                `;
+            }
+            
+            tbody.appendChild(row);
+        });
+        
+        // Calculate and display summary statistics
+        const totalRecords = itemizedData.length;
+        const totalUnits = itemizedData.reduce((sum, item) => sum + parseInt(item.total_units || 0), 0);
+        const totalCosts = itemizedData.reduce((sum, item) => sum + parseFloat(item.total_cost || 0), 0);
+        const uniquePatients = new Set(itemizedData.map(item => item.patient_name)).size;
+        const uniqueSupplies = new Set(itemizedData.map(item => item.ar_code)).size;
+        
+        console.log(`📊 Summary: ${totalRecords} records, ${uniquePatients} patients, ${uniqueSupplies} supplies, ${totalUnits} units, ${formatCurrency(totalCosts)} total cost`);
+        
+        let message = `📊 Loaded ${totalRecords} itemized records for ${uniquePatients} patients using ${uniqueSupplies} different supplies`;
+        if (currentUser.role === 'admin') {
+            message += ` • Total: ${totalUnits.toLocaleString()} units, ${formatCurrency(totalCosts)}`;
+        }
+        
+        showNotification(message);
+    } catch (error) {
+        console.error('Summary report error:', error);
+        showNotification('Failed to update summary report: ' + error.message, true);
+        
+        // Show error in table
+        const tbody = document.getElementById('summaryTableBody');
+        const colSpan = currentUser.role === 'admin' ? '10' : '9';
+        tbody.innerHTML = `<tr><td colspan="${colSpan}" style="text-align: center; padding: 40px; color: #e53e3e;">
+            <div style="font-size: 48px; margin-bottom: 15px;">⚠️</div>
+            <div style="font-weight: 600; margin-bottom: 10px;">Error loading report</div>
+            <div style="font-size: 14px;">${error.message}</div>
+        </td></tr>`;
+    } finally {
+        hideLoading();
+    }
+}
 
         async function downloadSummaryReport() {
             if (!lastSummaryData || lastSummaryData.length === 0) {
