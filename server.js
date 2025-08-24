@@ -445,6 +445,151 @@ app.post('/api/facilities', authenticateToken, async (req, res) => {
         }
     }
 });
+// ===== FACILITY ROUTES =====
+
+// Get all facilities (public for registration)
+app.get('/api/facilities/public', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT id, name FROM facilities ORDER BY name');
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Error fetching facilities:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Get facilities (authenticated)
+app.get('/api/facilities', authenticateToken, async (req, res) => {
+    try {
+        let query = 'SELECT * FROM facilities ORDER BY name';
+        let params = [];
+
+        // Non-admin users can only see their facility
+        if (req.user.role !== 'admin' && req.user.facilityId) {
+            query = 'SELECT * FROM facilities WHERE id = $1 ORDER BY name';
+            params = [req.user.facilityId];
+        }
+
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Error fetching facilities:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Add facility (admin only)
+app.post('/api/facilities', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Admin access required' });
+        }
+
+        const { name } = req.body;
+        if (!name) {
+            return res.status(400).json({ error: 'Facility name is required' });
+        }
+
+        const result = await pool.query(
+            'INSERT INTO facilities (name) VALUES ($1) RETURNING *',
+            [name]
+        );
+
+        res.status(201).json(result.rows[0]);
+    } catch (error) {
+        console.error('Error adding facility:', error);
+        if (error.code === '23505') { // Unique violation
+            res.status(400).json({ error: 'Facility name already exists' });
+        } else {
+            res.status(500).json({ error: 'Internal server error' });
+        }
+    }
+});
+
+// 🆕 ADD THE NEW ROUTES HERE - RIGHT AFTER THE POST ROUTE ABOVE 👆
+
+// Update facility (admin only)
+app.put('/api/facilities/:id', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Admin access required' });
+        }
+
+        const { id } = req.params;
+        const { name } = req.body;
+        
+        if (!name || !name.trim()) {
+            return res.status(400).json({ error: 'Facility name is required' });
+        }
+
+        const result = await pool.query(
+            'UPDATE facilities SET name = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
+            [name.trim(), id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Facility not found' });
+        }
+
+        res.json(result.rows[0]);
+    } catch (error) {
+        console.error('Error updating facility:', error);
+        if (error.code === '23505') { // Unique violation
+            res.status(400).json({ error: 'Facility name already exists' });
+        } else {
+            res.status(500).json({ error: 'Internal server error' });
+        }
+    }
+});
+
+// Delete facility (admin only)
+app.delete('/api/facilities/:id', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Admin access required' });
+        }
+
+        const { id } = req.params;
+
+        // Check if facility has patients
+        const patientCheck = await pool.query('SELECT COUNT(*) FROM patients WHERE facility_id = $1', [id]);
+        const patientCount = parseInt(patientCheck.rows[0].count);
+        
+        if (patientCount > 0) {
+            return res.status(400).json({ 
+                error: `Cannot delete facility. It has ${patientCount} patients assigned. Please reassign or delete patients first.` 
+            });
+        }
+
+        // Check if facility has users
+        const userCheck = await pool.query('SELECT COUNT(*) FROM users WHERE facility_id = $1', [id]);
+        const userCount = parseInt(userCheck.rows[0].count);
+        
+        if (userCount > 0) {
+            return res.status(400).json({ 
+                error: `Cannot delete facility. It has ${userCount} users assigned. Please reassign users first.` 
+            });
+        }
+
+        const result = await pool.query('DELETE FROM facilities WHERE id = $1 RETURNING name', [id]);
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Facility not found' });
+        }
+
+        res.json({ 
+            message: `Facility "${result.rows[0].name}" deleted successfully` 
+        });
+    } catch (error) {
+        console.error('Error deleting facility:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// 🆕 END OF NEW ROUTES - CONTINUE WITH EXISTING CODE BELOW 👇
+
+// ===== SUPPLY ROUTES =====
+// ... rest of your existing server.js code continues here ...
 
 // ===== SUPPLY ROUTES =====
 
@@ -879,3 +1024,4 @@ process.on('SIGINT', async () => {
     await pool.end();
     process.exit(0);
 });
+
