@@ -487,7 +487,7 @@ app.post('/api/supplies', authenticateToken, async (req, res) => {
     }
 });
 
-// Update supply (admin only)
+// Update supply (admin only) - UPDATED: Allow editing ALL supplies for admin users
 app.put('/api/supplies/:id', authenticateToken, async (req, res) => {
     try {
         if (req.user.role !== 'admin') {
@@ -501,13 +501,14 @@ app.put('/api/supplies/:id', authenticateToken, async (req, res) => {
             return res.status(400).json({ error: 'Code and description are required' });
         }
 
+        // CHANGED: Removed is_custom restriction - admin can edit ALL supplies
         const result = await pool.query(
-            'UPDATE supplies SET code = $1, description = $2, hcpcs = $3, cost = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5 AND is_custom = true RETURNING *',
+            'UPDATE supplies SET code = $1, description = $2, hcpcs = $3, cost = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5 RETURNING *',
             [code, description, hcpcs || null, cost || 0, id]
         );
 
         if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Supply not found or not editable' });
+            return res.status(404).json({ error: 'Supply not found' });
         }
 
         res.json(result.rows[0]);
@@ -521,7 +522,7 @@ app.put('/api/supplies/:id', authenticateToken, async (req, res) => {
     }
 });
 
-// Delete supply (admin only)
+// Delete supply (admin only) - UPDATED: Allow deleting ALL supplies for admin users
 app.delete('/api/supplies/:id', authenticateToken, async (req, res) => {
     try {
         if (req.user.role !== 'admin') {
@@ -530,22 +531,26 @@ app.delete('/api/supplies/:id', authenticateToken, async (req, res) => {
 
         const { id } = req.params;
 
-        // Check if supply is custom before deleting
-        const supplyCheck = await pool.query('SELECT is_custom FROM supplies WHERE id = $1', [id]);
+        // Check if supply exists
+        const supplyCheck = await pool.query('SELECT code, description FROM supplies WHERE id = $1', [id]);
         if (supplyCheck.rows.length === 0) {
             return res.status(404).json({ error: 'Supply not found' });
         }
 
-        if (!supplyCheck.rows[0].is_custom) {
-            return res.status(400).json({ error: 'Cannot delete system supplies' });
-        }
-
+        // CHANGED: Removed is_custom restriction - admin can delete ALL supplies
         await pool.query('DELETE FROM supplies WHERE id = $1', [id]);
 
-        res.json({ message: 'Supply deleted successfully' });
+        res.json({ 
+            message: 'Supply deleted successfully',
+            deletedSupply: supplyCheck.rows[0]
+        });
     } catch (error) {
         console.error('Error deleting supply:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        if (error.code === '23503') { // Foreign key violation
+            res.status(400).json({ error: 'Cannot delete supply - it is being used in tracking data' });
+        } else {
+            res.status(500).json({ error: 'Internal server error' });
+        }
     }
 });
 
@@ -724,7 +729,7 @@ app.post('/api/tracking', authenticateToken, async (req, res) => {
 
         // For wound diagnosis updates, we need to handle them specially
         if (woundDx !== undefined && woundDx !== null) {
-            console.log('📝 Processing wound diagnosis update:', woundDx);
+            console.log('🔍 Processing wound diagnosis update:', woundDx);
             
             // Check if there's existing tracking data for this patient and supply
             const existingTracking = await pool.query(
