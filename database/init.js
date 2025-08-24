@@ -103,45 +103,22 @@ async function initializeDatabase() {
         if (parseInt(suppliesCount.rows[0].count) === 0) {
             console.log('🔄 Adding default supplies...');
             
-            // UPDATED: Include ALL supply ranges except 700-714
             const defaultSupplies = [
-                // Medical/Surgical
-                { code: 272, description: 'Med-Surgical Supplies', hcpcs: 'B4149', cost: 0.00 },
-                
-                // Respiratory/Tracheostomy supplies (400-414)
-                { code: 400, description: 'HME filter holder for trach or vent', hcpcs: 'A7507', cost: 3.49 },
-                { code: 401, description: 'HME housing & adhesive', hcpcs: 'A7509', cost: 1.97 },
-                { code: 402, description: 'HMES-trach valve adhesive disk', hcpcs: 'A7506', cost: 0.45 },
-                { code: 403, description: 'HMES filter holder or cap for tracheostoma', hcpcs: 'A7503', cost: 15.85 },
-                { code: 404, description: 'HMES filter', hcpcs: 'A7504', cost: 0.95 },
-                { code: 405, description: 'HMES-trach valve housing', hcpcs: 'A7505', cost: 6.55 },
-                { code: 406, description: 'HME housing w-adhesive filter', hcpcs: 'A7508', cost: 4.01 },
-                { code: 407, description: 'Lubricant per oz to insert trach', hcpcs: 'A4402', cost: 1.90 },
-                { code: 408, description: 'Piston irrigation syringe irrigation trach ostomy uro', hcpcs: 'A4322', cost: 4.16 },
-                { code: 409, description: 'Sterile saline 10ml and 15ml bullets', hcpcs: 'A4216', cost: 0.62 },
-                { code: 410, description: 'Sterile saline 100ml 1000ml 120ml 250ml and 500ml', hcpcs: 'A4217', cost: 4.38 },
-                { code: 411, description: 'Closed suction catheter for trach', hcpcs: 'A4605', cost: 22.92 },
-                { code: 412, description: 'Open suction catheter for trach', hcpcs: 'A4624', cost: 3.69 },
-                { code: 413, description: 'Tracheal suction catheter closed system (yankauers-ballards)', hcpcs: 'A4605', cost: 22.92 },
-                { code: 414, description: 'Trach tube', hcpcs: 'A7520', cost: 12.50 },
-                
-                // Wound Care supplies (600-692) - include all from live app
-                { code: 600, description: 'Sterile Gauze sponge 2x2 up to 4x4, EACH 2 in package', hcpcs: 'A6251', cost: 2.78 },
-                { code: 601, description: 'Sterile gauze sponge greater than 4x4, each', hcpcs: 'A6252', cost: 4.55 },
-                { code: 602, description: 'ABD dressing non bordered 16 sq inches', hcpcs: 'A6251', cost: 2.78 },
-                { code: 603, description: 'ABD dressing non bordered greater than 48 sq inches', hcpcs: 'A6253', cost: 8.85 },
-                { code: 604, description: 'ABD dressing non bordered 48 sq inches', hcpcs: 'A6252', cost: 4.55 },
-                { code: 605, description: 'ABD dressing bordered up to 16 sq inches', hcpcs: 'A6254', cost: 1.67 },
-                { code: 606, description: 'ABD dressing bordered 18 sq inches or greater', hcpcs: 'A6255', cost: 4.25 },
-                { code: 607, description: 'Adhesive remover wipes', hcpcs: 'A4456', cost: 0.34 },
-                { code: 608, description: 'Alginate/Fiber gelling sterile 4x4 each', hcpcs: 'A6196', cost: 10.28 },
-                { code: 609, description: 'Alginate fiber gelling sterile dressing up to 6x6 each', hcpcs: 'A6197', cost: 22.98 },
-                { code: 610, description: 'AMB antimicrobial drain sponges', hcpcs: 'A6222', cost: 2.98 },
-                { code: 611, description: 'Any tape each 18" (framed 4x4) or steri strips', hcpcs: 'A4452', cost: 0.53 },
-                { code: 612, description: 'Irrigation tubing set for continuous bladder irrigation tubing used with 3 way indwelling foley cath', hcpcs: 'A4355', cost: 12.46 },
-                // ... (continuing with all the other 600-692 codes - abbreviated for space)
-                // Note: The full list would include all 93 entries from 600-692 from your document
-                { code: 692, description: 'Optiview transparent dressing', hcpcs: 'A6259', cost: 15.28 }
+                { code: 700, description: 'Alginate Dressing 2"x2"', hcpcs: 'A6196', cost: 2.50 },
+                { code: 701, description: 'Alginate Dressing 4"x4"', hcpcs: 'A6197', cost: 5.00 },
+                { code: 702, description: 'Alginate Dressing 4"x8"', hcpcs: 'A6198', cost: 8.00 },
+                { code: 703, description: 'Foam Dressing 2"x2"', hcpcs: 'A6209', cost: 3.00 },
+                { code: 704, description: 'Foam Dressing 4"x4"', hcpcs: 'A6210', cost: 6.00 },
+                { code: 705, description: 'Foam Dressing 6"x6"', hcpcs: 'A6211', cost: 10.00 },
+                { code: 706, description: 'Hydrocolloid Dressing 2"x2"', hcpcs: 'A6234', cost: 4.00 },
+                { code: 707, description: 'Hydrocolloid Dressing 4"x4"', hcpcs: 'A6235', cost: 8.00 },
+                { code: 708, description: 'Hydrocolloid Dressing 6"x6"', hcpcs: 'A6236', cost: 12.00 },
+                { code: 709, description: 'Transparent Film 2"x2"', hcpcs: 'A6257', cost: 1.50 },
+                { code: 710, description: 'Transparent Film 4"x4"', hcpcs: 'A6258', cost: 3.00 },
+                { code: 711, description: 'Gauze Pad 2"x2"', hcpcs: 'A6402', cost: 0.50 },
+                { code: 712, description: 'Gauze Pad 4"x4"', hcpcs: 'A6403', cost: 1.00 },
+                { code: 713, description: 'Medical Tape 1"', hcpcs: 'A4452', cost: 2.00 },
+                { code: 714, description: 'Wound Cleanser 8oz', hcpcs: 'A6260', cost: 15.00 }
             ];
 
             for (const supply of defaultSupplies) {
@@ -151,8 +128,6 @@ async function initializeDatabase() {
                 );
             }
             console.log('✅ Default supplies added: ' + defaultSupplies.length + ' items');
-            console.log('📋 Supplies included: 272, 400-414 (respiratory), 600-692 (wound care)');
-            console.log('📋 AR codes 700-714 have been EXCLUDED as requested');
         } else {
             console.log('ℹ️ Supplies already exist, skipping...');
         }
@@ -177,8 +152,6 @@ async function initializeDatabase() {
         console.log('🎉 Database initialization completed successfully!');
         console.log('📊 You can now use your Wound Care RT Supply Tracker');
         console.log('👤 Login with: admin@system.com / admin123');
-        console.log('📋 System supplies include: 272, 400-414 (respiratory), 600-692 (wound care)');
-        console.log('📋 EXCLUDED: AR codes 700-714 (removed as requested)');
 
     } catch (error) {
         console.error('❌ Database initialization failed:', error);
