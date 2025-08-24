@@ -148,42 +148,142 @@ async function runMigration() {
       ON CONFLICT (name) DO NOTHING
     `);
 
-    // Insert comprehensive supplies list
-    await pool.query(`
-      INSERT INTO supplies (code, description, hcpcs, cost, is_custom) VALUES 
-        (700, 'Foam Dressing 4x4', 'A6209', 5.50, false),
-        (701, 'Hydrocolloid Dressing 6x6', 'A6234', 8.75, false),
-        (702, 'Alginate Dressing 2x2', 'A6196', 12.25, false),
-        (703, 'Transparent Film 4x4.75', 'A6257', 3.20, false),
-        (704, 'Antimicrobial Dressing 4x5', 'A6251', 15.80, false),
-        (705, 'Collagen Dressing 4x4', 'A6021', 22.50, false),
-        (706, 'Silicone Foam Border 6x6', 'A6212', 18.90, false),
-        (707, 'Gauze Pad Sterile 4x4', 'A6402', 0.85, false),
-        (708, 'Calcium Alginate 4x4', 'A6196', 14.20, false),
-        (709, 'Hydrogel Sheet 4x4', 'A6242', 9.80, false),
-        (710, 'Composite Dressing 4x4', 'A6203', 7.45, false),
-        (711, 'Zinc Paste Bandage 3x10', 'A6456', 6.30, false),
-        (712, 'Foam Dressing with Border 6x6', 'A6212', 11.95, false),
-        (713, 'Transparent Film 6x7', 'A6258', 4.75, false),
-        (714, 'Alginate Rope 12 inch', 'A6199', 18.50, false),
-        (272, 'Med-Surgical Supplies', 'B4149', 0.00, false),
-        (400, 'HME filter holder for trach or vent', 'A7507', 3.49, false),
-        (401, 'HME housing & adhesive', 'A7509', 1.97, false),
-        (402, 'HMES-trach valve adhesive disk', 'A7506', 0.45, false),
-        (403, 'HMES filter holder or cap for tracheostoma', 'A7503', 15.85, false),
-        (404, 'HMES filter', 'A7504', 0.95, false),
-        (405, 'HMES-trach valve housing', 'A7505', 6.55, false),
-        (406, 'HME housing w-adhesive filter', 'A7508', 4.01, false),
-        (407, 'Lubricant per oz to insert trach', 'A4402', 1.90, false),
-        (408, 'Piston irrigation syringe irrigation trach ostomy uro', 'A4322', 4.16, false),
-        (409, 'Sterile saline 10ml and 15ml bullets', 'A4216', 0.62, false),
-        (410, 'Sterile saline 100ml 1000ml 120ml 250ml and 500ml', 'A4217', 4.38, false),
-        (411, 'Closed suction catheter for trach', 'A4605', 22.92, false),
-        (412, 'Open suction catheter for trach', 'A4624', 3.69, false),
-        (413, 'Tracheal suction catheter closed system (yankauers-ballards)', 'A4605', 22.92, false),
-        (414, 'Trach tube', 'A7520', 12.50, false)
-      ON CONFLICT (code) DO NOTHING
-    `);
+    // Insert ALL supplies: 272, 400-414, and 600-692 (NO 700-714)
+    console.log('🔧 Inserting all supply codes (272, 400-414, 600-692)...');
+    
+    const allSupplies = [
+      // Medical/Surgical
+      { code: 272, description: 'Med-Surgical Supplies', hcpcs: 'B4149', cost: 0.00, is_custom: false },
+      
+      // Respiratory/Tracheostomy supplies (400-414)
+      { code: 400, description: 'HME filter holder for trach or vent', hcpcs: 'A7507', cost: 3.49, is_custom: false },
+      { code: 401, description: 'HME housing & adhesive', hcpcs: 'A7509', cost: 1.97, is_custom: false },
+      { code: 402, description: 'HMES-trach valve adhesive disk', hcpcs: 'A7506', cost: 0.45, is_custom: false },
+      { code: 403, description: 'HMES filter holder or cap for tracheostoma', hcpcs: 'A7503', cost: 15.85, is_custom: false },
+      { code: 404, description: 'HMES filter', hcpcs: 'A7504', cost: 0.95, is_custom: false },
+      { code: 405, description: 'HMES-trach valve housing', hcpcs: 'A7505', cost: 6.55, is_custom: false },
+      { code: 406, description: 'HME housing w-adhesive filter', hcpcs: 'A7508', cost: 4.01, is_custom: false },
+      { code: 407, description: 'Lubricant per oz to insert trach', hcpcs: 'A4402', cost: 1.90, is_custom: false },
+      { code: 408, description: 'Piston irrigation syringe irrigation trach ostomy uro', hcpcs: 'A4322', cost: 4.16, is_custom: false },
+      { code: 409, description: 'Sterile saline 10ml and 15ml bullets', hcpcs: 'A4216', cost: 0.62, is_custom: false },
+      { code: 410, description: 'Sterile saline 100ml 1000ml 120ml 250ml and 500ml', hcpcs: 'A4217', cost: 4.38, is_custom: false },
+      { code: 411, description: 'Closed suction catheter for trach', hcpcs: 'A4605', cost: 22.92, is_custom: false },
+      { code: 412, description: 'Open suction catheter for trach', hcpcs: 'A4624', cost: 3.69, is_custom: false },
+      { code: 413, description: 'Tracheal suction catheter closed system (yankauers-ballards)', hcpcs: 'A4605', cost: 22.92, is_custom: false },
+      { code: 414, description: 'Trach tube', hcpcs: 'A7520', cost: 12.50, is_custom: false },
+      
+      // Wound Care supplies (600-692) - marked as custom since they're from your live app
+      { code: 600, description: 'Sterile Gauze sponge 2x2 up to 4x4, EACH 2 in package', hcpcs: 'A6251', cost: 2.78, is_custom: true },
+      { code: 601, description: 'Sterile gauze sponge greater than 4x4, each', hcpcs: 'A6252', cost: 4.55, is_custom: true },
+      { code: 602, description: 'ABD dressing non bordered 16 sq inches', hcpcs: 'A6251', cost: 2.78, is_custom: true },
+      { code: 603, description: 'ABD dressing non bordered greater than 48 sq inches', hcpcs: 'A6253', cost: 8.85, is_custom: true },
+      { code: 604, description: 'ABD dressing non bordered 48 sq inches', hcpcs: 'A6252', cost: 4.55, is_custom: true },
+      { code: 605, description: 'ABD dressing bordered up to 16 sq inches', hcpcs: 'A6254', cost: 1.67, is_custom: true },
+      { code: 606, description: 'ABD dressing bordered 18 sq inches or greater', hcpcs: 'A6255', cost: 4.25, is_custom: true },
+      { code: 607, description: 'Adhesive remover wipes', hcpcs: 'A4456', cost: 0.34, is_custom: true },
+      { code: 608, description: 'Alginate/Fiber gelling sterile 4x4 each', hcpcs: 'A6196', cost: 10.28, is_custom: true },
+      { code: 609, description: 'Alginate fiber gelling sterile dressing up to 6x6 each', hcpcs: 'A6197', cost: 22.98, is_custom: true },
+      { code: 610, description: 'AMB antimicrobial drain sponges', hcpcs: 'A6222', cost: 2.98, is_custom: true },
+      { code: 611, description: 'Any tape each 18" (framed 4x4) or steri strips', hcpcs: 'A4452', cost: 0.53, is_custom: true },
+      { code: 612, description: 'Irrigation tubing set for continuous bladder irrigation tubing used with 3 way indwelling foley cath', hcpcs: 'A4355', cost: 12.46, is_custom: true },
+      { code: 613, description: 'Border gauze island dressing medium 6x6 incision & 4x10 each', hcpcs: 'A6220', cost: 3.62, is_custom: true },
+      { code: 614, description: 'Border gauze island dressing small 2x2, 3x3, 4x4 each', hcpcs: 'A6219', cost: 1.33, is_custom: true },
+      { code: 615, description: 'calcium alginate rope per 6"', hcpcs: 'A6199', cost: 7.37, is_custom: true },
+      { code: 616, description: 'cath foley 2 way all', hcpcs: 'A4344', cost: 19.01, is_custom: true },
+      { code: 617, description: 'Cah foley 3 way cont irrigation', hcpcs: 'A4346', cost: 23.26, is_custom: true },
+      { code: 618, description: 'Intermittent urinary cath with insertion supplies', hcpcs: 'A4353', cost: 9.77, is_custom: true },
+      { code: 619, description: 'Cath insert tray w/drain bag', hcpcs: 'A4354', cost: 16.50, is_custom: true },
+      { code: 620, description: 'Cath insert tray without drain bag', hcpcs: 'A4310', cost: 10.79, is_custom: true },
+      { code: 621, description: 'Coflex compression bandage second layer per yard', hcpcs: 'A6452', cost: 8.24, is_custom: true },
+      { code: 622, description: 'Coflex zinc impregnated bandage per yard', hcpcs: 'A6456', cost: 1.75, is_custom: true },
+      { code: 623, description: 'Collagen dressing 16 inches', hcpcs: 'A6021', cost: 29.38, is_custom: true },
+      { code: 624, description: 'Collagen dressing more than 48 inches', hcpcs: 'A6023', cost: 265.90, is_custom: true },
+      { code: 625, description: 'Collagen gel or paste per gm', hcpcs: 'A6011', cost: 3.19, is_custom: true },
+      { code: 626, description: 'Collagen powder per 1 gm', hcpcs: 'A6010', cost: 43.27, is_custom: true },
+      { code: 627, description: 'Colostomy bag closed no barrier', hcpcs: 'A5052', cost: 2.08, is_custom: true },
+      { code: 628, description: 'Composite bordered 16 sq inches or less (2x2, 4x4) each', hcpcs: 'A6203', cost: 4.71, is_custom: true },
+      { code: 629, description: 'Composite dressing greater than 16 sq inches (6x6)', hcpcs: 'A6204', cost: 8.69, is_custom: true },
+      { code: 630, description: 'Compression bandage 3" width per yard', hcpcs: 'A6448', cost: 1.61, is_custom: true },
+      { code: 631, description: 'Condom catheter', hcpcs: 'A4326', cost: 15.07, is_custom: true },
+      { code: 632, description: 'Drain bag', hcpcs: 'A4358', cost: 9.07, is_custom: true },
+      { code: 633, description: 'Drain bag bedside', hcpcs: 'A4357', cost: 11.53, is_custom: true },
+      { code: 634, description: 'Foam non bordered dressing medium 6x6, each Mepilex, Allevyn, xeroform', hcpcs: 'A6210', cost: 27.84, is_custom: true },
+      { code: 635, description: 'Foam non bordered large dressing more than 48 sq inches large Mepilex, Allevyn, Xeroform, Optifoam', hcpcs: 'A6211', cost: 41.04, is_custom: true },
+      { code: 636, description: 'Gauze stretch per yard>3"<5" Kerlix', hcpcs: 'A6449', cost: 2.45, is_custom: true },
+      { code: 637, description: 'Gradient wrap (Circaid/Sigvaris) each', hcpcs: 'A6545', cost: 119.03, is_custom: true },
+      { code: 638, description: 'High compression bandage per yard', hcpcs: 'A6452', cost: 8.24, is_custom: true },
+      { code: 639, description: 'Honey gel per oz', hcpcs: 'A6248', cost: 22.70, is_custom: true },
+      { code: 640, description: 'Hydrocolloid dressing pad 16 sq inches non bordered', hcpcs: 'A6234', cost: 9.15, is_custom: true },
+      { code: 641, description: 'Hydrocolloid dressing large 6x6 non bordered', hcpcs: 'A6235', cost: 23.50, is_custom: true },
+      { code: 642, description: 'Hydrocolloid bordered dressing 6x6 each', hcpcs: 'A6238', cost: 31.86, is_custom: true },
+      { code: 643, description: 'Hydrocolloid bordered dressing 4x4 each', hcpcs: 'A6237', cost: 11.05, is_custom: true },
+      { code: 644, description: 'Hydrogel dressing pad 4x4 each', hcpcs: 'A6242', cost: 8.46, is_custom: true },
+      { code: 645, description: 'Hydrofiber rope per 6"', hcpcs: 'A6199', cost: 7.37, is_custom: true },
+      { code: 646, description: 'Hydrogel per oz', hcpcs: 'A6248', cost: 22.70, is_custom: true },
+      { code: 647, description: 'Hydrogel dressing greater than 4x4', hcpcs: 'A6243', cost: 17.22, is_custom: true },
+      { code: 648, description: 'Saline impregnated gauze sponge >16 sq inches', hcpcs: 'A6252', cost: 4.55, is_custom: true },
+      { code: 649, description: 'Iodoform packing strip per yard', hcpcs: 'A6266', cost: 2.67, is_custom: true },
+      { code: 650, description: 'Iodosorb gel (antimicrobial) per oz', hcpcs: 'A6248', cost: 22.70, is_custom: true },
+      { code: 651, description: 'Irrigation syringe/bulb/piston', hcpcs: 'A4322', cost: 4.16, is_custom: true },
+      { code: 652, description: 'Irrigation tray any purpose', hcpcs: 'A4320', cost: 6.59, is_custom: true },
+      { code: 653, description: 'Kerlex roll gauze 3" to 5" per yard 4.1 yrd roll = 4 units', hcpcs: 'A6449', cost: 2.45, is_custom: true },
+      { code: 654, description: 'Light compression elastic, woven bandage 3 to 5" w(ACE) per yard', hcpcs: 'A6449', cost: 2.45, is_custom: true },
+      { code: 655, description: 'Male cath any type', hcpcs: 'A4326', cost: 15.07, is_custom: true },
+      { code: 656, description: 'Manuka honey 4x4 each', hcpcs: 'A6242', cost: 8.46, is_custom: true },
+      { code: 657, description: 'Negative pressure wound therapy dressing set', hcpcs: 'A6550', cost: 30.52, is_custom: true },
+      { code: 658, description: 'Ostomy adhesive per oz', hcpcs: 'A4364', cost: 3.49, is_custom: true },
+      { code: 659, description: 'Ostomy belt', hcpcs: null, cost: 9.41, is_custom: true },
+      { code: 660, description: 'Ostomy face plate', hcpcs: 'A4361', cost: 22.55, is_custom: true },
+      { code: 661, description: 'Ostomy pouch w/faceplate', hcpcs: 'A4375', cost: 23.99, is_custom: true },
+      { code: 662, description: 'Ostomy skin barrier powder per oz', hcpcs: 'A4371', cost: 5.10, is_custom: true },
+      { code: 663, description: 'Ostomy skin barrier solid', hcpcs: 'A4362', cost: 4.12, is_custom: true },
+      { code: 664, description: 'Ostomy skin barrier w/flange', hcpcs: 'A4373', cost: 8.76, is_custom: true },
+      { code: 665, description: 'Padding bandage per yard use with coflex', hcpcs: 'A6441', cost: 0.95, is_custom: true },
+      { code: 666, description: 'Perianal fecal collection pouch', hcpcs: 'A4330', cost: 10.01, is_custom: true },
+      { code: 667, description: 'Petrolatum dressing 5x9 xeroform', hcpcs: 'A6223', cost: 3.39, is_custom: true },
+      { code: 668, description: 'Petro impregnated gauze sponge 4x4', hcpcs: 'A6222', cost: 2.98, is_custom: true },
+      { code: 669, description: 'Piston irrigation syringe', hcpcs: 'A4322', cost: 4.16, is_custom: true },
+      { code: 670, description: 'Plain 4x4 alginate gelling dressing each', hcpcs: 'A6196', cost: 10.28, is_custom: true },
+      { code: 671, description: 'Puracol dressing 4x4', hcpcs: 'A6203', cost: 4.71, is_custom: true },
+      { code: 672, description: 'Sterile saline 10ml and 15ml bullets', hcpcs: null, cost: 0.62, is_custom: true },
+      { code: 673, description: 'Sterile saline 100ml, 120ml, 250ml, 500ml and 1000ml', hcpcs: 'A4217', cost: 4.38, is_custom: true },
+      { code: 674, description: 'Silver 4x4 alginate gelling dressing each', hcpcs: 'A6196', cost: 10.28, is_custom: true },
+      { code: 675, description: 'Skin prep wipe each', hcpcs: 'A5120', cost: 0.34, is_custom: true },
+      { code: 676, description: 'Split gauze each 2 per package', hcpcs: 'A6251', cost: 2.78, is_custom: true },
+      { code: 677, description: 'Steri strips per 18 inches', hcpcs: 'A4452', cost: 0.53, is_custom: true },
+      { code: 678, description: 'Super absorbent sterile dressing', hcpcs: 'A6251', cost: 2.78, is_custom: true },
+      { code: 679, description: 'Transparent film Tegaderm/opsite 16" or less', hcpcs: 'A6257', cost: 2.14, is_custom: true },
+      { code: 680, description: 'Tegaderm opsite composite film 48"', hcpcs: 'A6204', cost: 8.69, is_custom: true },
+      { code: 681, description: 'Tubular dressing non elastic any width per yard', hcpcs: 'A6457', cost: 1.59, is_custom: true },
+      { code: 682, description: 'Wound drain collector pouch', hcpcs: 'A6154', cost: 20.09, is_custom: true },
+      { code: 683, description: 'Xero/Optifoam/Mepilex 48"', hcpcs: 'A6211', cost: 41.04, is_custom: true },
+      { code: 684, description: 'Mesalt cleansing dressing with 20% sodium chloride 1.1 yr', hcpcs: 'A6266', cost: 2.67, is_custom: true },
+      { code: 685, description: 'Plurogel burn and wound dressing per oz', hcpcs: 'A4649', cost: 22.70, is_custom: true },
+      { code: 686, description: 'Sorbex wound dressing 6x9 more than 48 sq in non adherent pansement', hcpcs: 'A6253', cost: 8.85, is_custom: true },
+      { code: 687, description: 'Coban 3" wide per yard', hcpcs: 'A6452', cost: 8.24, is_custom: true },
+      { code: 688, description: 'Black granufoam more than 48 sq inches', hcpcs: 'A6211', cost: 41.04, is_custom: true },
+      { code: 689, description: 'Hydrofera Blue 4x4 or less', hcpcs: 'A6209', cost: 10.20, is_custom: true },
+      { code: 690, description: 'Hydrofera Blue greater than 48 sq inches 6x6 8x8', hcpcs: 'A6211', cost: 41.04, is_custom: true },
+      { code: 691, description: 'oil emulsion impregnated gauze', hcpcs: 'A6222', cost: 2.98, is_custom: true },
+      { code: 692, description: 'Optiview transparent dressing', hcpcs: 'A6259', cost: 15.28, is_custom: true }
+    ];
+
+    // Insert supplies in batches to avoid query length limits
+    console.log(`🔄 Inserting ${allSupplies.length} supply records...`);
+    for (const supply of allSupplies) {
+      await pool.query(
+        'INSERT INTO supplies (code, description, hcpcs, cost, is_custom) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (code) DO NOTHING',
+        [supply.code, supply.description, supply.hcpcs || null, supply.cost, supply.is_custom]
+      );
+    }
+
+    console.log('✅ All supplies inserted successfully');
+    console.log('📋 Supply ranges included:');
+    console.log('   - 272: Med-Surgical');
+    console.log('   - 400-414: Respiratory/Tracheostomy (15 items)');
+    console.log('   - 600-692: Wound Care (93 items)');
+    console.log('   - EXCLUDED: 700-714 (removed as requested)');
+    console.log(`   - Total supplies: ${allSupplies.length}`);
 
     // Insert admin user (password: admin123)
     await pool.query(`
@@ -209,16 +309,13 @@ async function runMigration() {
       ON CONFLICT (name, month, facility_id) DO NOTHING
     `);
 
-    // Insert sample tracking data with wound dx
+    // Sample tracking data using respiratory and wound care supplies
     await pool.query(`
       INSERT INTO tracking (patient_id, supply_id, day_of_month, quantity, wound_dx) VALUES 
-        (1, 1, 1, 2, 'Pressure ulcer stage 2'),
-        (1, 1, 3, 1, 'Pressure ulcer stage 2'),
-        (1, 2, 2, 1, 'Diabetic foot ulcer'),
-        (1, 3, 5, 1, 'Surgical wound'),
-        (2, 1, 1, 1, 'Venous stasis ulcer'),
-        (2, 4, 2, 2, 'Skin tear'),
-        (2, 5, 4, 1, 'Infected wound')
+        (1, (SELECT id FROM supplies WHERE code = 400 LIMIT 1), 1, 2, 'Tracheostomy care'),
+        (1, (SELECT id FROM supplies WHERE code = 600 LIMIT 1), 3, 1, 'Wound care'),
+        (2, (SELECT id FROM supplies WHERE code = 401 LIMIT 1), 2, 1, 'Respiratory therapy'),
+        (2, (SELECT id FROM supplies WHERE code = 601 LIMIT 1), 4, 2, 'Surgical wound')
       ON CONFLICT (patient_id, supply_id, day_of_month) DO NOTHING
     `);
 
@@ -229,6 +326,8 @@ async function runMigration() {
       SELECT 
         (SELECT COUNT(*) FROM facilities) as facilities,
         (SELECT COUNT(*) FROM supplies) as supplies,
+        (SELECT COUNT(*) FROM supplies WHERE code >= 600 AND code <= 692) as wound_care_supplies,
+        (SELECT COUNT(*) FROM supplies WHERE code >= 400 AND code <= 414) as respiratory_supplies,
         (SELECT COUNT(*) FROM users) as users,
         (SELECT COUNT(*) FROM patients) as patients,
         (SELECT COUNT(*) FROM tracking) as tracking_records
@@ -236,16 +335,19 @@ async function runMigration() {
 
     console.log('📊 Database setup complete:');
     console.log(`   - Facilities: ${counts.rows[0].facilities}`);
-    console.log(`   - Supplies: ${counts.rows[0].supplies}`);
+    console.log(`   - Total Supplies: ${counts.rows[0].supplies}`);
+    console.log(`   - Wound Care (600-692): ${counts.rows[0].wound_care_supplies}`);
+    console.log(`   - Respiratory (400-414): ${counts.rows[0].respiratory_supplies}`);
     console.log(`   - Users: ${counts.rows[0].users}`);
     console.log(`   - Patients: ${counts.rows[0].patients}`);
     console.log(`   - Tracking Records: ${counts.rows[0].tracking_records}`);
 
-    console.log('\n🔑 Default Login Credentials:');
+    console.log('\n🔐 Default Login Credentials:');
     console.log('   Admin: admin@system.com / admin123');
     console.log('   User:  user@demo.com / user123');
 
-    console.log('\n🚀 Migration completed successfully!');
+    console.log('\n✅ All supplies are now editable by admin users');
+    console.log('🚀 Migration completed successfully!');
 
   } catch (error) {
     console.error('❌ Migration failed:', error);
