@@ -1092,7 +1092,7 @@
 
             <!-- Excel Import Section -->
             <div class="import-section">
-                <h3>📁 Bulk Import Patients from Excel</h3>
+                <h3>📄 Bulk Import Patients from Excel</h3>
                 <p>Import multiple patients at once using an Excel file (.xlsx or .xls)</p>
                 
                 <div class="import-actions">
@@ -1104,9 +1104,9 @@
                     <h4>Required Excel Columns:</h4>
                     <ul>
                         <li><strong>Name</strong> - Patient full name (e.g., "Smith, John")</li>
-                        <li><strong>MRN</strong> - Medical Record Number (optional)</li>
-                        <li><strong>Month</strong> - Format: YYYY-MM (e.g., "2025-01")</li>
-                        <li><strong>Facility</strong> - Facility name</li>
+                        <li><strong>MRN</strong> - Medical Record Number (required)</li>
+                        <li><strong>Month</strong> - Format: MM-YYYY (e.g., "01-2025")</li>
+                        <li><strong>Facility</strong> - Facility name (required)</li>
                     </ul>
                 </div>
             </div>
@@ -1121,7 +1121,9 @@
                     </div>
                     <div class="form-group">
                         <label for="patientMonthFilter">Filter by Month</label>
-                        <input type="month" id="patientMonthFilter" onchange="loadPatients()">
+                        <select id="patientMonthFilter" onchange="loadPatients()">
+                            <option value="">All Months</option>
+                        </select>
                     </div>
                 </div>
                 <div class="filter-actions">
@@ -1132,7 +1134,7 @@
             <div class="table-container">
                 <table class="data-table" id="patientsTable">
                     <thead>
-                        <tr>
+                        <tr id="patientsTableHeader">
                             <th>Patient Name</th>
                             <th>MRN</th>
                             <th>Month/Year</th>
@@ -1270,7 +1272,7 @@
 
             <!-- Import Section -->
             <div class="import-section">
-                <h3>📁 Bulk Import Supplies from Excel</h3>
+                <h3>📄 Bulk Import Supplies from Excel</h3>
                 <p>Import multiple supply items at once using an Excel file (.xlsx or .xls)</p>
                 
                 <div class="import-actions">
@@ -1489,7 +1491,7 @@
             <h2>📤 Import Patients from Excel</h2>
             
             <div class="file-drop-zone" onclick="document.getElementById('excelFileInput').click()">
-                <div class="file-icon">📁</div>
+                <div class="file-icon">📄</div>
                 <h3 style="color: #4299e1; margin-bottom: 10px;">Drag & Drop Excel File Here</h3>
                 <p style="color: #718096; margin-bottom: 20px;">or click to browse for file</p>
                 <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display: none;" onchange="handleExcelFile(this.files[0])">
@@ -1615,7 +1617,7 @@
         function populateMonthDropdowns() {
             const monthOptions = generateMonthOptions();
             const monthSelects = [
-                'dashboardMonthFilter', 'trackingMonthFilter', 'summaryMonthFilter'
+                'dashboardMonthFilter', 'trackingMonthFilter', 'summaryMonthFilter', 'patientMonthFilter'
             ];
             
             monthSelects.forEach(selectId => {
@@ -1949,7 +1951,7 @@
             
             document.getElementById('currentUserInfo').innerHTML = 
                 `<div style="font-weight: 600;">${currentUser.name || currentUser.email}</div>` +
-                `<div>${currentUser.role === 'admin' ? '🔑 System Administrator' : '👤 User'} • ${facilityName}</div>`;
+                `<div>${currentUser.role === 'admin' ? '🔐 System Administrator' : '👤 User'} • ${facilityName}</div>`;
 
             const suppliesTabButton = document.getElementById('suppliesTabButton');
             const usersTabButton = document.getElementById('usersTabButton');
@@ -1972,6 +1974,16 @@
                     '<th>Total Units</th>' +
                     '<th>Total Costs</th>' +
                     '<th>Last Updated</th>';
+
+                // Update patient table header for admin
+                document.getElementById('patientsTableHeader').innerHTML = 
+                    '<th>Patient Name</th>' +
+                    '<th>MRN</th>' +
+                    '<th>Month/Year</th>' +
+                    '<th>Facility</th>' +
+                    '<th>Total Units</th>' +
+                    '<th>Total Cost</th>' +
+                    '<th>Actions</th>';
             } else {
                 suppliesTabButton.style.display = 'none';
                 usersTabButton.style.display = 'none';
@@ -1985,6 +1997,15 @@
                     '<th>Month/Year</th>' +
                     '<th>Facility</th>' +
                     '<th>Total Units</th>';
+
+                // Update patient table header for regular users (hide cost column)
+                document.getElementById('patientsTableHeader').innerHTML = 
+                    '<th>Patient Name</th>' +
+                    '<th>MRN</th>' +
+                    '<th>Month/Year</th>' +
+                    '<th>Facility</th>' +
+                    '<th>Total Units</th>' +
+                    '<th>Actions</th>';
 
                 // Update summary table headers for regular users (hide cost column)
                 document.getElementById('summaryTableHeader').innerHTML = 
@@ -2171,30 +2192,54 @@
                 tbody.innerHTML = '';
 
                 if (summaryData.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7">No patients found</td></tr>';
+                    const colSpan = currentUser.role === 'admin' ? '7' : '6';
+                    tbody.innerHTML = `<tr><td colspan="${colSpan}" style="text-align: center; padding: 40px; color: #718096;">No patients found for the selected filters</td></tr>`;
                     return;
                 }
 
                 summaryData.forEach(patient => {
                     const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>${patient.name}</td>
-                        <td>${patient.mrn || '-'}</td>
-                        <td>${formatMonthForDisplay(patient.month)}</td>
-                        <td>${patient.facility_name}</td>
-                        <td>${parseInt(patient.total_units) || 0}</td>
-                        <td>$${parseFloat(patient.total_cost || 0).toFixed(2)}</td>
-                        <td class="actions">
-                            <button class="btn btn-sm btn-primary" onclick="viewPatientDetails(${patient.id})">View</button>
-                            <button class="btn btn-sm btn-danger" onclick="deletePatient(${patient.id})">Delete</button>
-                        </td>
-                    `;
+                    const totalCost = parseFloat(patient.total_cost || 0);
+                    
+                    if (currentUser.role === 'admin') {
+                        row.innerHTML = `
+                            <td>${patient.name}</td>
+                            <td>${patient.mrn || '-'}</td>
+                            <td>${formatMonthForDisplay(patient.month)}</td>
+                            <td>${patient.facility_name}</td>
+                            <td>${parseInt(patient.total_units) || 0}</td>
+                            <td>${formatCurrency(totalCost)}</td>
+                            <td class="actions">
+                                <button class="btn btn-sm btn-primary" onclick="viewPatientDetails(${patient.id})">View</button>
+                                <button class="btn btn-sm btn-danger" onclick="deletePatient(${patient.id})">Delete</button>
+                            </td>
+                        `;
+                    } else {
+                        row.innerHTML = `
+                            <td>${patient.name}</td>
+                            <td>${patient.mrn || '-'}</td>
+                            <td>${formatMonthForDisplay(patient.month)}</td>
+                            <td>${patient.facility_name}</td>
+                            <td>${parseInt(patient.total_units) || 0}</td>
+                            <td class="actions">
+                                <button class="btn btn-sm btn-primary" onclick="viewPatientDetails(${patient.id})">View</button>
+                                <button class="btn btn-sm btn-danger" onclick="deletePatient(${patient.id})">Delete</button>
+                            </td>
+                        `;
+                    }
+                    
                     tbody.appendChild(row);
                 });
+
+                console.log(`✅ Loaded ${summaryData.length} patients with filters:`, { facilityFilter, monthFilter });
 
             } catch (error) {
                 console.error('Error loading patients:', error);
                 showNotification('Failed to load patients: ' + error.message, true);
+                
+                const tbody = document.getElementById('patientsTableBody');
+                const colSpan = currentUser.role === 'admin' ? '7' : '6';
+                tbody.innerHTML = `<tr><td colspan="${colSpan}" style="text-align: center; padding: 40px; color: #e53e3e;">Error loading patients</td></tr>`;
             }
         }
 
@@ -2457,7 +2502,7 @@
             tbody.appendChild(totalsRow);
         }
 
-          async function updateTracking(patientId, supplyId, day, value) {
+        async function updateTracking(patientId, supplyId, day, value) {
             const quantity = parseInt(value) || 0;
             
             try {
@@ -2708,102 +2753,100 @@
             });
         }
 
-// Replace the updateSummaryReport function in your HTML file with this corrected version:
+        // ===== SUMMARY REPORT =====
+        async function updateSummaryReport() {
+            try {
+                showLoading();
+                
+                const facilityFilter = document.getElementById('summaryFacilityFilter')?.value;
+                const monthFilter = document.getElementById('summaryMonthFilter')?.value;
 
-async function updateSummaryReport() {
-    try {
-        showLoading();
-        
-        const facilityFilter = document.getElementById('summaryFacilityFilter')?.value;
-        const monthFilter = document.getElementById('summaryMonthFilter')?.value;
+                const params = new URLSearchParams();
+                if (facilityFilter) params.append('facilityId', facilityFilter);
+                if (monthFilter) params.append('month', monthFilter);
 
-        const params = new URLSearchParams();
-        if (facilityFilter) params.append('facilityId', facilityFilter);
-        if (monthFilter) params.append('month', monthFilter);
+                const itemizedData = await apiCall(`/reports/itemized-summary?${params.toString()}`);
+                
+                console.log('Itemized summary data:', itemizedData);
+                
+                lastSummaryData = itemizedData;
+                const tbody = document.getElementById('summaryTableBody');
+                tbody.innerHTML = '';
 
-        // FIXED: Remove the extra /api prefix since apiCall already adds it
-        const itemizedData = await apiCall(`/reports/itemized-summary?${params.toString()}`);
-        
-        console.log('Itemized summary data:', itemizedData);
-        
-        lastSummaryData = itemizedData;
-        const tbody = document.getElementById('summaryTableBody');
-        tbody.innerHTML = '';
+                if (itemizedData.length === 0) {
+                    const colSpan = currentUser.role === 'admin' ? '10' : '9';
+                    tbody.innerHTML = `<tr><td colspan="${colSpan}" style="text-align: center; padding: 40px; color: #718096; font-style: italic;">
+                        <div style="font-size: 48px; margin-bottom: 15px;">📊</div>
+                        <div>No tracking data found for the selected filters</div>
+                        <div style="font-size: 14px; margin-top: 10px; color: #a0aec0;">Try adjusting your facility or month filters</div>
+                    </td></tr>`;
+                    return;
+                }
 
-        if (itemizedData.length === 0) {
-            const colSpan = currentUser.role === 'admin' ? '10' : '9';
-            tbody.innerHTML = `<tr><td colspan="${colSpan}" style="text-align: center; padding: 40px; color: #718096; font-style: italic;">
-                <div style="font-size: 48px; margin-bottom: 15px;">📊</div>
-                <div>No tracking data found for the selected filters</div>
-                <div style="font-size: 14px; margin-top: 10px; color: #a0aec0;">Try adjusting your facility or month filters</div>
-            </td></tr>`;
-            return;
-        }
-
-        itemizedData.forEach(item => {
-            const row = document.createElement('tr');
-            
-            if (currentUser.role === 'admin') {
-                row.innerHTML = `
-                    <td style="font-weight: 500;">${item.patient_name}</td>
-                    <td>${item.mrn || 'N/A'}</td>
-                    <td style="max-width: 200px; word-wrap: break-word;">${item.wound_dx || 'N/A'}</td>
-                    <td><strong style="color: #667eea; font-weight: 700;">${item.ar_code}</strong></td>
-                    <td style="color: #4a5568;">${item.hcpcs || 'N/A'}</td>
-                    <td style="text-align: right; font-weight: 600; color: #2d3748;">${item.total_units}</td>
-                    <td style="text-align: right; font-weight: 600; color: #2d3748;">${formatCurrency(item.total_cost)}</td>
-                    <td style="color: #4a5568;">${formatMonthForDisplay(item.month)}</td>
-                    <td style="color: #4a5568;">${item.facility_name}</td>
-                    <td style="color: #718096; font-size: 13px;">${formatDate(item.last_updated)}</td>
-                `;
-            } else {
-                row.innerHTML = `
-                    <td style="font-weight: 500;">${item.patient_name}</td>
-                    <td>${item.mrn || 'N/A'}</td>
-                    <td><strong style="color: #667eea; font-weight: 700;">${item.ar_code}</strong></td>
-                    <td style="max-width: 250px; word-wrap: break-word; color: #4a5568;">${item.item_description}</td>
-                    <td style="color: #4a5568;">${item.hcpcs || 'N/A'}</td>
-                    <td style="text-align: right; font-weight: 600; color: #2d3748;">${item.total_units}</td>
-                    <td style="color: #4a5568;">${formatMonthForDisplay(item.month)}</td>
-                    <td style="color: #4a5568;">${item.facility_name}</td>
-                    <td style="color: #718096; font-size: 13px;">${formatDate(item.last_updated)}</td>
-                `;
+                itemizedData.forEach(item => {
+                    const row = document.createElement('tr');
+                    
+                    if (currentUser.role === 'admin') {
+                        row.innerHTML = `
+                            <td style="font-weight: 500;">${item.patient_name}</td>
+                            <td>${item.mrn || 'N/A'}</td>
+                            <td><strong style="color: #667eea; font-weight: 700;">${item.ar_code}</strong></td>
+                            <td style="max-width: 250px; word-wrap: break-word; color: #4a5568;">${item.item_description}</td>
+                            <td style="color: #4a5568;">${item.hcpcs || 'N/A'}</td>
+                            <td style="text-align: right; font-weight: 600; color: #2d3748;">${item.total_units}</td>
+                            <td style="text-align: right; font-weight: 600; color: #2d3748;">${formatCurrency(item.total_cost)}</td>
+                            <td style="color: #4a5568;">${formatMonthForDisplay(item.month)}</td>
+                            <td style="color: #4a5568;">${item.facility_name}</td>
+                            <td style="color: #718096; font-size: 13px;">${formatDate(item.last_updated)}</td>
+                        `;
+                    } else {
+                        row.innerHTML = `
+                            <td style="font-weight: 500;">${item.patient_name}</td>
+                            <td>${item.mrn || 'N/A'}</td>
+                            <td><strong style="color: #667eea; font-weight: 700;">${item.ar_code}</strong></td>
+                            <td style="max-width: 250px; word-wrap: break-word; color: #4a5568;">${item.item_description}</td>
+                            <td style="color: #4a5568;">${item.hcpcs || 'N/A'}</td>
+                            <td style="text-align: right; font-weight: 600; color: #2d3748;">${item.total_units}</td>
+                            <td style="color: #4a5568;">${formatMonthForDisplay(item.month)}</td>
+                            <td style="color: #4a5568;">${item.facility_name}</td>
+                            <td style="color: #718096; font-size: 13px;">${formatDate(item.last_updated)}</td>
+                        `;
+                    }
+                    
+                    tbody.appendChild(row);
+                });
+                
+                // Calculate and display summary statistics
+                const totalRecords = itemizedData.length;
+                const totalUnits = itemizedData.reduce((sum, item) => sum + parseInt(item.total_units || 0), 0);
+                const totalCosts = itemizedData.reduce((sum, item) => sum + parseFloat(item.total_cost || 0), 0);
+                const uniquePatients = new Set(itemizedData.map(item => item.patient_name)).size;
+                const uniqueSupplies = new Set(itemizedData.map(item => item.ar_code)).size;
+                
+                console.log(`📊 Summary: ${totalRecords} records, ${uniquePatients} patients, ${uniqueSupplies} supplies, ${totalUnits} units, ${formatCurrency(totalCosts)} total cost`);
+                
+                let message = `📊 Loaded ${totalRecords} itemized records for ${uniquePatients} patients using ${uniqueSupplies} different supplies`;
+                if (currentUser.role === 'admin') {
+                    message += ` • Total: ${totalUnits.toLocaleString()} units, ${formatCurrency(totalCosts)}`;
+                }
+                
+                showNotification(message);
+            } catch (error) {
+                console.error('Summary report error:', error);
+                showNotification('Failed to update summary report: ' + error.message, true);
+                
+                // Show error in table
+                const tbody = document.getElementById('summaryTableBody');
+                const colSpan = currentUser.role === 'admin' ? '10' : '9';
+                tbody.innerHTML = `<tr><td colspan="${colSpan}" style="text-align: center; padding: 40px; color: #e53e3e;">
+                    <div style="font-size: 48px; margin-bottom: 15px;">⚠️</div>
+                    <div style="font-weight: 600; margin-bottom: 10px;">Error loading report</div>
+                    <div style="font-size: 14px;">${error.message}</div>
+                </td></tr>`;
+            } finally {
+                hideLoading();
             }
-            
-            tbody.appendChild(row);
-        });
-        
-        // Calculate and display summary statistics
-        const totalRecords = itemizedData.length;
-        const totalUnits = itemizedData.reduce((sum, item) => sum + parseInt(item.total_units || 0), 0);
-        const totalCosts = itemizedData.reduce((sum, item) => sum + parseFloat(item.total_cost || 0), 0);
-        const uniquePatients = new Set(itemizedData.map(item => item.patient_name)).size;
-        const uniqueSupplies = new Set(itemizedData.map(item => item.ar_code)).size;
-        
-        console.log(`📊 Summary: ${totalRecords} records, ${uniquePatients} patients, ${uniqueSupplies} supplies, ${totalUnits} units, ${formatCurrency(totalCosts)} total cost`);
-        
-        let message = `📊 Loaded ${totalRecords} itemized records for ${uniquePatients} patients using ${uniqueSupplies} different supplies`;
-        if (currentUser.role === 'admin') {
-            message += ` • Total: ${totalUnits.toLocaleString()} units, ${formatCurrency(totalCosts)}`;
         }
-        
-        showNotification(message);
-    } catch (error) {
-        console.error('Summary report error:', error);
-        showNotification('Failed to update summary report: ' + error.message, true);
-        
-        // Show error in table
-        const tbody = document.getElementById('summaryTableBody');
-        const colSpan = currentUser.role === 'admin' ? '10' : '9';
-        tbody.innerHTML = `<tr><td colspan="${colSpan}" style="text-align: center; padding: 40px; color: #e53e3e;">
-            <div style="font-size: 48px; margin-bottom: 15px;">⚠️</div>
-            <div style="font-weight: 600; margin-bottom: 10px;">Error loading report</div>
-            <div style="font-size: 14px;">${error.message}</div>
-        </td></tr>`;
-    } finally {
-        hideLoading();
-    }
-}
 
         async function downloadSummaryReport() {
             if (!lastSummaryData || lastSummaryData.length === 0) {
@@ -2819,7 +2862,6 @@ async function updateSummaryReport() {
                     const baseData = {
                         'Patient Name': item.patient_name,
                         'MRN': item.mrn || 'N/A',
-                        'Wound Dx': item.wound_dx || 'N/A',
                         'AR Code': item.ar_code,
                         'Item Description': item.item_description,
                         'HCPCS': item.hcpcs || 'N/A',
@@ -2844,7 +2886,6 @@ async function updateSummaryReport() {
                 const colWidths = [
                     {wch: 20}, // Patient Name
                     {wch: 12}, // MRN
-                    {wch: 25}, // Wound Dx
                     {wch: 10}, // AR Code
                     {wch: 30}, // Item Description
                     {wch: 10}, // HCPCS
@@ -2855,8 +2896,8 @@ async function updateSummaryReport() {
                 ];
                 
                 if (currentUser.role === 'admin') {
-                    colWidths.splice(7, 0, {wch: 12}); // Unit Cost
-                    colWidths.splice(8, 0, {wch: 12}); // Total Cost
+                    colWidths.splice(6, 0, {wch: 12}); // Unit Cost
+                    colWidths.splice(7, 0, {wch: 12}); // Total Cost
                 }
                 
                 ws['!cols'] = colWidths;
@@ -3105,13 +3146,13 @@ Facilities: ${facilities.size}
                 {
                     'Name': 'Smith, John',
                     'MRN': 'MRN12345',
-                    'Month': '2025-01',
+                    'Month': '01-2025',
                     'Facility': 'Main Hospital'
                 },
                 {
                     'Name': 'Johnson, Mary',
                     'MRN': 'MRN67890',
-                    'Month': '2025-01',
+                    'Month': '01-2025',
                     'Facility': 'Clinic North'
                 }
             ];
@@ -3154,7 +3195,10 @@ Facilities: ${facilities.size}
         function closeExcelImportModal() {
             document.getElementById('excelImportModal').style.display = 'none';
             document.getElementById('importResults').style.display = 'none';
+            document.getElementById('importResults').innerHTML = '';
             document.getElementById('processImportBtn').disabled = true;
+            document.getElementById('processImportBtn').textContent = 'Import Data';
+            document.getElementById('excelFileInput').value = '';
             excelData = null;
         }
 
@@ -3184,19 +3228,126 @@ Facilities: ${facilities.size}
             resultsDiv.innerHTML = `
                 <h4>Import Preview (${data.length} records)</h4>
                 <div style="max-height: 150px; overflow-y: auto; background: #f7fafc; padding: 10px; border-radius: 4px;">
-                    ${data.slice(0, 5).map(row => `
+                    ${data.slice(0, 5).map((row, index) => `
                         <div style="margin-bottom: 5px; padding: 5px; background: white; border-radius: 3px;">
-                            <strong>${row.Name || 'N/A'}</strong> - ${row.MRN || 'No MRN'} - ${row.Month || 'N/A'} - ${row.Facility || 'N/A'}
+                            <strong>${row.Name || 'N/A'}</strong> - MRN: ${row.MRN || 'N/A'} - Month: ${row.Month || 'N/A'} - Facility: ${row.Facility || 'N/A'}
                         </div>
                     `).join('')}
                     ${data.length > 5 ? `<div style="text-align: center; color: #718096; font-style: italic;">... and ${data.length - 5} more records</div>` : ''}
+                </div>
+                <div style="margin-top: 10px; font-size: 12px; color: #718096;">
+                    <strong>Note:</strong> Ensure Month is in MM-YYYY format and Facility names match exactly.
                 </div>
             `;
             resultsDiv.style.display = 'block';
         }
 
         async function processExcelImport() {
-            showNotification('Excel import feature is ready for backend implementation');
+            if (!excelData || excelData.length === 0) {
+                showNotification('No data to import', true);
+                return;
+            }
+
+            showLoading();
+            let successCount = 0;
+            let errorCount = 0;
+            const errors = [];
+
+            try {
+                for (let i = 0; i < excelData.length; i++) {
+                    const row = excelData[i];
+                    
+                    try {
+                        // Validate required fields
+                        if (!row.Name || !row.MRN || !row.Month || !row.Facility) {
+                            throw new Error(`Row ${i + 1}: Missing required fields (Name, MRN, Month, Facility)`);
+                        }
+
+                        // Convert MM-YYYY to YYYY-MM format
+                        let month = row.Month.toString().trim();
+                        if (month.includes('-')) {
+                            const [mm, yyyy] = month.split('-');
+                            if (mm.length === 2 && yyyy.length === 4) {
+                                month = `${yyyy}-${mm}`;
+                            } else {
+                                throw new Error(`Row ${i + 1}: Invalid month format. Use MM-YYYY (e.g., 01-2025)`);
+                            }
+                        } else {
+                            throw new Error(`Row ${i + 1}: Invalid month format. Use MM-YYYY (e.g., 01-2025)`);
+                        }
+
+                        // Find facility ID by name
+                        const facility = facilities.find(f => 
+                            f.name.toLowerCase() === row.Facility.toString().toLowerCase().trim()
+                        );
+                        
+                        if (!facility) {
+                            throw new Error(`Row ${i + 1}: Facility "${row.Facility}" not found`);
+                        }
+
+                        // Create patient
+                        await apiCall('/patients', {
+                            method: 'POST',
+                            body: {
+                                name: row.Name.toString().trim(),
+                                mrn: row.MRN.toString().trim(),
+                                month: month,
+                                facilityId: facility.id
+                            }
+                        });
+
+                        successCount++;
+                    } catch (error) {
+                        errorCount++;
+                        errors.push(`Row ${i + 1}: ${error.message}`);
+                        console.error(`Import error for row ${i + 1}:`, error);
+                    }
+                }
+
+                // Show results
+                let message = `✅ Import completed: ${successCount} patients imported`;
+                if (errorCount > 0) {
+                    message += `, ${errorCount} errors`;
+                }
+
+                showNotification(message, errorCount > 0);
+
+                // Update import results display
+                const resultsDiv = document.getElementById('importResults');
+                resultsDiv.innerHTML = `
+                    <h4>Import Results</h4>
+                    <div style="background: #f7fafc; padding: 15px; border-radius: 8px;">
+                        <div style="color: #38a169; font-weight: bold; margin-bottom: 10px;">
+                            ✅ Successfully imported: ${successCount} patients
+                        </div>
+                        ${errorCount > 0 ? `
+                            <div style="color: #e53e3e; font-weight: bold; margin-bottom: 10px;">
+                                ❌ Errors: ${errorCount}
+                            </div>
+                            <div style="max-height: 150px; overflow-y: auto; background: #fed7d7; padding: 10px; border-radius: 4px;">
+                                ${errors.map(error => `<div style="margin-bottom: 5px; font-size: 12px;">${error}</div>`).join('')}
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+
+                // Refresh patient list if any were imported successfully
+                if (successCount > 0) {
+                    await loadPatients();
+                    await loadDashboard();
+                    await refreshPatientSelect();
+                }
+
+                // Keep modal open to show results
+                document.getElementById('processImportBtn').disabled = true;
+                document.getElementById('processImportBtn').textContent = 'Import Complete';
+
+            } catch (error) {
+                console.error('Import process error:', error);
+                showNotification('Import failed: ' + error.message, true);
+            } finally {
+                hideLoading();
+            }
         }
 
         function showSupplyImportModal() {
@@ -3277,7 +3428,7 @@ Facilities: ${facilities.size}
 
         // ===== AUTO-LOGIN CHECK =====
         if (authToken) {
-            console.log('🔐 Checking stored auth token...');
+            console.log('🔍 Checking stored auth token...');
             
             apiCall('/auth/verify').then(response => {
                 currentUser = response.user;
@@ -3296,7 +3447,7 @@ Facilities: ${facilities.size}
                 currentUser = null;
             });
         } else {
-            console.log('📝 No stored token, showing login screen');
+            console.log('🔍 No stored token, showing login screen');
         }
 
         // ===== EVENT LISTENERS =====
