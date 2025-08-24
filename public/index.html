@@ -998,12 +998,13 @@
             </div>
         </div>
 
-        <div class="tabs">
+                    <div class="tabs">
             <div class="tab active" onclick="showTab('dashboard', this)">🏠 Dashboard</div>
             <div class="tab" onclick="showTab('patients', this)">👥 Patient Management</div>
             <div class="tab" onclick="showTab('tracking', this)">📊 Supply Tracking</div>
             <div class="tab" onclick="showTab('summary', this)">📋 Summary Report</div>
             <div class="tab" id="suppliesTabButton" onclick="showTab('supplies', this)">🛠️ Supply Management</div>
+            <div class="tab" id="facilitiesTabButton" onclick="showTab('facilities', this)">🏢 Facility Management</div>
             <div class="tab" id="usersTabButton" onclick="showTab('users', this)">👤 User Management</div>
         </div>
 
@@ -1098,6 +1099,7 @@
                 <div class="import-actions">
                     <button class="btn btn-secondary" onclick="downloadExcelTemplate()">📥 Download Template</button>
                     <button class="btn btn-primary" onclick="showExcelImportModal()">📤 Import Excel File</button>
+                    <button class="btn btn-warning" onclick="showExcelFormatHelp()" style="margin-left: 10px;">❓ Excel Format Help</button>
                 </div>
 
                 <div class="import-info">
@@ -1105,9 +1107,13 @@
                     <ul>
                         <li><strong>Name</strong> - Patient full name (e.g., "Smith, John")</li>
                         <li><strong>MRN</strong> - Medical Record Number (required)</li>
-                        <li><strong>Month</strong> - Format: MM-YYYY (e.g., "01-2025")</li>
-                        <li><strong>Facility</strong> - Facility name (required)</li>
+                        <li><strong>Month</strong> - Format: MM-YYYY (e.g., "01-2025", "08-2024")</li>
+                        <li><strong>Facility</strong> - Facility name (required, must match existing)</li>
                     </ul>
+                    <div style="background: #fff3cd; padding: 10px; border-radius: 4px; margin-top: 10px; border-left: 4px solid #ffc107;">
+                        <strong>📝 Important:</strong> Keep Month column as TEXT format in Excel to prevent auto-conversion. 
+                        If Excel changes "08-2024" to "8/1/2024", right-click the column → Format Cells → Text → OK.
+                    </div>
                 </div>
             </div>
 
@@ -1357,6 +1363,57 @@
             </div>
         </div>
 
+        <!-- Facility Management Tab (Admin Only) -->
+        <div id="facilitiesTab" class="tab-content hidden">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+                <h2>🏢 Facility Management</h2>
+                <button class="btn btn-primary" onclick="openAddFacilityModal()">+ Add Facility</button>
+            </div>
+
+            <!-- Add New Facility Form -->
+            <div class="supply-form">
+                <div class="form-group">
+                    <label for="facilityName">Facility Name</label>
+                    <input type="text" id="facilityName" placeholder="e.g., Main Hospital">
+                </div>
+                <div class="form-group">
+                    <label>&nbsp;</label>
+                    <div class="supply-actions">
+                        <button class="btn btn-primary" onclick="addFacility()" id="addFacilityBtn" style="width: 100%;">➕ Add Facility</button>
+                        <button class="btn btn-secondary" onclick="clearFacilityForm()" id="clearFacilityBtn" style="width: 100%; margin-top: 10px;">🗑️ Clear Form</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="filter-section">
+                <div class="filter-grid">
+                    <div class="form-group">
+                        <label for="facilitySearch">Search Facilities</label>
+                        <input type="text" id="facilitySearch" placeholder="Search facilities..." onkeyup="filterFacilitiesTable()">
+                    </div>
+                </div>
+                <div class="filter-actions">
+                    <button class="btn btn-secondary" onclick="loadFacilities()">🔄 Refresh</button>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table class="data-table" id="facilitiesTable">
+                    <thead>
+                        <tr>
+                            <th>Facility Name</th>
+                            <th>Patients</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="facilitiesTableBody">
+                        <tr><td colspan="4">Loading facilities...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
         <!-- User Management Tab (Admin Only) -->
         <div id="usersTab" class="tab-content hidden">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
@@ -1485,6 +1542,63 @@
         </div>
     </div>
 
+    <!-- Add/Edit Facility Modal -->
+    <div id="addFacilityModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="facilityModalTitle">Add New Facility</h3>
+                <span class="close" onclick="closeModal('addFacilityModal')">&times;</span>
+            </div>
+            <form id="addFacilityForm">
+                <div class="form-group">
+                    <label for="modalFacilityName">Facility Name *</label>
+                    <input type="text" id="modalFacilityName" required placeholder="e.g., Main Hospital">
+                </div>
+                <div style="text-align: right;">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('addFacilityModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="facilitySubmitBtn">Add Facility</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Excel Format Help Modal -->
+    <div id="excelFormatHelpModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>📝 Excel Format Help</h3>
+                <span class="close" onclick="closeModal('excelFormatHelpModal')">&times;</span>
+            </div>
+            <div style="line-height: 1.6;">
+                <h4 style="color: #4a5568; margin-bottom: 15px;">Problem: Excel Auto-Converts Month Format</h4>
+                <p style="margin-bottom: 15px;">When you type "08-2024" in Excel, it often auto-converts to "8/1/2024". Here's how to prevent this:</p>
+                
+                <h4 style="color: #4a5568; margin-bottom: 10px;">✅ Solution 1: Format Column as Text (Recommended)</h4>
+                <ol style="margin-bottom: 20px; margin-left: 20px;">
+                    <li>Select the Month column (Column C)</li>
+                    <li>Right-click → Format Cells</li>
+                    <li>Choose "Text" from the list</li>
+                    <li>Click OK</li>
+                    <li>Now type "08-2024" - it will stay as text</li>
+                </ol>
+                
+                <h4 style="color: #4a5568; margin-bottom: 10px;">✅ Solution 2: Use Apostrophe Prefix</h4>
+                <p style="margin-bottom: 20px;">Type an apostrophe before the date: <code>'08-2024</code><br>
+                Excel will treat it as text and hide the apostrophe.</p>
+                
+                <h4 style="color: #4a5568; margin-bottom: 10px;">✅ Solution 3: Import Will Handle It</h4>
+                <p style="margin-bottom: 20px;">Our import system can process Excel auto-converted dates like "8/1/2024" and convert them back to "08-2024" format automatically.</p>
+                
+                <div style="background: #e6f3ff; padding: 15px; border-radius: 8px; border-left: 4px solid #4299e1;">
+                    <strong>💡 Pro Tip:</strong> Use our template file - it's pre-formatted to prevent Excel auto-conversion!
+                </div>
+            </div>
+            <div style="text-align: right; margin-top: 20px;">
+                <button class="btn btn-primary" onclick="closeModal('excelFormatHelpModal')">Got It!</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Excel Import Modals -->
     <div id="excelImportModal" class="modal">
         <div class="modal-content">
@@ -1563,6 +1677,7 @@
         let allSupplies = [];
         let filteredSupplies = [];
         let editingSupplyId = null;
+        let editingFacilityId = null;
         let facilities = [];
         let supplies = [];
         let patients = [];
@@ -1932,6 +2047,9 @@
                 await loadDashboard();
                 await loadPatients();
                 await loadSupplies();
+                if (currentUser.role === 'admin') {
+                    await loadFacilities();
+                }
                 
                 console.log('✅ Enhanced wound care system fully loaded!');
                 showNotification('🎯 All enhanced features are now active and ready to use!');
@@ -1954,11 +2072,13 @@
                 `<div>${currentUser.role === 'admin' ? '🔐 System Administrator' : '👤 User'} • ${facilityName}</div>`;
 
             const suppliesTabButton = document.getElementById('suppliesTabButton');
+            const facilitiesTabButton = document.getElementById('facilitiesTabButton');
             const usersTabButton = document.getElementById('usersTabButton');
             const dashboardCostCard = document.getElementById('dashboardCostCard');
 
             if (currentUser.role === 'admin') {
                 suppliesTabButton.style.display = 'block';
+                facilitiesTabButton.style.display = 'block';
                 usersTabButton.style.display = 'block';
                 if (dashboardCostCard) dashboardCostCard.style.display = 'block';
                 
@@ -1986,6 +2106,7 @@
                     '<th>Actions</th>';
             } else {
                 suppliesTabButton.style.display = 'none';
+                facilitiesTabButton.style.display = 'none';
                 usersTabButton.style.display = 'none';
                 if (dashboardCostCard) dashboardCostCard.style.display = 'none';
                 
@@ -2084,6 +2205,11 @@
                     break;
                 case 'supplies':
                     loadSupplies();
+                    break;
+                case 'facilities':
+                    if (currentUser.role === 'admin') {
+                        loadFacilities();
+                    }
                     break;
                 case 'summary':
                     updateSummaryReport();
@@ -2753,6 +2879,157 @@
             });
         }
 
+        // ===== FACILITY MANAGEMENT =====
+        async function loadFacilities() {
+            try {
+                const facilitiesData = await apiCall('/facilities');
+                facilities = facilitiesData;
+                
+                const tbody = document.getElementById('facilitiesTableBody');
+                tbody.innerHTML = '';
+
+                // Get patient counts for each facility
+                const dashboardData = await apiCall('/dashboard/summary');
+                const facilityPatientCounts = {};
+                
+                dashboardData.forEach(patient => {
+                    const facilityId = patient.facility_id;
+                    if (!facilityPatientCounts[facilityId]) {
+                        facilityPatientCounts[facilityId] = 0;
+                    }
+                    facilityPatientCounts[facilityId]++;
+                });
+
+                facilitiesData.sort((a, b) => a.name.localeCompare(b.name)).forEach(facility => {
+                    const row = document.createElement('tr');
+                    const patientCount = facilityPatientCounts[facility.id] || 0;
+                    
+                    row.innerHTML = `
+                        <td><strong>${facility.name}</strong></td>
+                        <td>${patientCount} patients</td>
+                        <td>${formatDate(facility.created_at)}</td>
+                        <td>
+                            <button class="btn btn-sm btn-warning" onclick="editFacility(${facility.id}, '${facility.name.replace(/'/g, "\\'")}')" style="margin-right: 5px;">Edit</button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteFacility(${facility.id}, '${facility.name.replace(/'/g, "\\'")}', ${patientCount})">Delete</button>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+
+            } catch (error) {
+                console.error('Error loading facilities:', error);
+                showNotification('Failed to load facilities: ' + error.message, true);
+            }
+        }
+
+        function openAddFacilityModal() {
+            editingFacilityId = null;
+            document.getElementById('facilityModalTitle').textContent = 'Add New Facility';
+            document.getElementById('facilitySubmitBtn').textContent = 'Add Facility';
+            document.getElementById('modalFacilityName').value = '';
+            document.getElementById('addFacilityModal').style.display = 'flex';
+        }
+
+        async function addFacility() {
+            if (currentUser.role !== 'admin') {
+                showNotification('Admin access required', true);
+                return;
+            }
+
+            const name = document.getElementById('facilityName').value.trim() || 
+                        document.getElementById('modalFacilityName').value.trim();
+
+            if (!name) {
+                showNotification('Please enter a facility name', true);
+                return;
+            }
+
+            try {
+                if (editingFacilityId) {
+                    // Update existing facility
+                    await apiCall(`/facilities/${editingFacilityId}`, {
+                        method: 'PUT',
+                        body: { name: name }
+                    });
+                    showNotification('✅ Facility updated successfully!');
+                    editingFacilityId = null;
+                    document.getElementById('addFacilityBtn').textContent = '➕ Add Facility';
+                    closeModal('addFacilityModal');
+                } else {
+                    // Add new facility
+                    await apiCall('/facilities', {
+                        method: 'POST',
+                        body: { name: name }
+                    });
+                    showNotification('✅ Facility added successfully!');
+                    if (document.getElementById('addFacilityModal').style.display === 'flex') {
+                        closeModal('addFacilityModal');
+                    }
+                }
+
+                clearFacilityForm();
+                await loadFacilities();
+                
+                // Refresh facility dropdowns throughout the app
+                const updatedFacilities = await apiCall('/facilities');
+                facilities = updatedFacilities;
+                populateFacilityDropdowns(facilities);
+                
+            } catch (error) {
+                showNotification(error.message, true);
+            }
+        }
+
+        function editFacility(facilityId, facilityName) {
+            // Using modal for consistency
+            editingFacilityId = facilityId;
+            document.getElementById('facilityModalTitle').textContent = 'Edit Facility';
+            document.getElementById('facilitySubmitBtn').textContent = 'Update Facility';
+            document.getElementById('modalFacilityName').value = facilityName;
+            document.getElementById('addFacilityModal').style.display = 'flex';
+        }
+
+        function clearFacilityForm() {
+            editingFacilityId = null;
+            document.getElementById('facilityName').value = '';
+            document.getElementById('addFacilityBtn').textContent = '➕ Add Facility';
+        }
+
+        async function deleteFacility(facilityId, facilityName, patientCount) {
+            if (patientCount > 0) {
+                showNotification(`Cannot delete "${facilityName}" - it has ${patientCount} patients assigned. Please reassign or delete patients first.`, true);
+                return;
+            }
+
+            if (confirm(`Are you sure you want to delete "${facilityName}"? This action cannot be undone.`)) {
+                try {
+                    await apiCall(`/facilities/${facilityId}`, { method: 'DELETE' });
+                    showNotification('✅ Facility deleted successfully!');
+                    
+                    await loadFacilities();
+                    
+                    // Refresh facility dropdowns throughout the app
+                    const updatedFacilities = await apiCall('/facilities');
+                    facilities = updatedFacilities;
+                    populateFacilityDropdowns(facilities);
+                    
+                } catch (error) {
+                    showNotification('Failed to delete facility: ' + error.message, true);
+                }
+            }
+        }
+
+        function filterFacilitiesTable() {
+            const searchTerm = document.getElementById('facilitySearch').value.toLowerCase();
+            const rows = document.querySelectorAll('#facilitiesTable tbody tr');
+
+            rows.forEach(row => {
+                const facilityName = row.cells[0]?.textContent.toLowerCase() || '';
+                const matchesSearch = facilityName.includes(searchTerm);
+                row.style.display = matchesSearch ? '' : 'none';
+            });
+        }
+
         // ===== SUMMARY REPORT =====
         async function updateSummaryReport() {
             try {
@@ -3152,13 +3429,52 @@ Facilities: ${facilities.size}
                 {
                     'Name': 'Johnson, Mary',
                     'MRN': 'MRN67890',
-                    'Month': '01-2025',
+                    'Month': '02-2025',
                     'Facility': 'Clinic North'
+                },
+                {
+                    'Name': 'Brown, Robert',
+                    'MRN': 'MRN11111',
+                    'Month': '08-2024',
+                    'Facility': 'Main Hospital'
                 }
             ];
 
-            downloadExcel(templateData, 'Patient_Import_Template');
-            showNotification('✅ Patient import template downloaded!');
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.json_to_sheet(templateData);
+            
+            // Set column widths for better readability
+            ws['!cols'] = [
+                {wch: 20}, // Name
+                {wch: 15}, // MRN  
+                {wch: 12}, // Month
+                {wch: 20}  // Facility
+            ];
+
+            // Force Month column to be treated as text to prevent Excel auto-conversion
+            // Get the range of data
+            const range = XLSX.utils.decode_range(ws['!ref']);
+            
+            // Set Month column (column C) to text format
+            for (let row = range.s.r; row <= range.e.r; row++) {
+                const cellAddress = XLSX.utils.encode_cell({r: row, c: 2}); // Column C (Month)
+                if (ws[cellAddress]) {
+                    // Set cell type to string and add text formatting
+                    ws[cellAddress].t = 's'; // String type
+                    ws[cellAddress].z = '@'; // Text format code
+                }
+            }
+
+            // Add formatting to prevent Excel auto-conversion
+            if (!ws['!cols']) ws['!cols'] = [];
+            ws['!cols'][2] = {wch: 12, style: {numFmt: '@'}}; // Column C as text
+
+            XLSX.utils.book_append_sheet(wb, ws, 'Patient Template');
+            
+            const filename = `Patient_Import_Template_${new Date().toISOString().split('T')[0]}.xlsx`;
+            XLSX.writeFile(wb, filename);
+            
+            showNotification('📥 Patient template downloaded! Month column is formatted as TEXT to preserve MM-YYYY format.');
         }
 
         function downloadSupplyTemplate() {
@@ -3190,6 +3506,10 @@ Facilities: ${facilities.size}
 
         function showExcelImportModal() {
             document.getElementById('excelImportModal').style.display = 'flex';
+        }
+
+        function showExcelFormatHelp() {
+            document.getElementById('excelFormatHelpModal').style.display = 'flex';
         }
 
         function closeExcelImportModal() {
@@ -3225,19 +3545,43 @@ Facilities: ${facilities.size}
 
         function displayImportPreview(data) {
             const resultsDiv = document.getElementById('importResults');
+            
+            // Process the data to show what format will be used
+            const processedPreview = data.slice(0, 5).map((row, index) => {
+                let monthDisplay = row.Month ? row.Month.toString().trim() : 'N/A';
+                let monthWarning = '';
+                
+                // Check if month looks like it was auto-converted by Excel
+                if (monthDisplay.includes('/')) {
+                    monthWarning = ' ⚠️ (Excel auto-converted - will be processed)';
+                }
+                
+                return {
+                    ...row,
+                    monthDisplay,
+                    monthWarning
+                };
+            });
+            
             resultsDiv.innerHTML = `
                 <h4>Import Preview (${data.length} records)</h4>
                 <div style="max-height: 150px; overflow-y: auto; background: #f7fafc; padding: 10px; border-radius: 4px;">
-                    ${data.slice(0, 5).map((row, index) => `
+                    ${processedPreview.map((row, index) => `
                         <div style="margin-bottom: 5px; padding: 5px; background: white; border-radius: 3px;">
-                            <strong>${row.Name || 'N/A'}</strong> - MRN: ${row.MRN || 'N/A'} - Month: ${row.Month || 'N/A'} - Facility: ${row.Facility || 'N/A'}
+                            <strong>${row.Name || 'N/A'}</strong> - MRN: ${row.MRN || 'N/A'} - Month: ${row.monthDisplay}${row.monthWarning} - Facility: ${row.Facility || 'N/A'}
                         </div>
                     `).join('')}
                     ${data.length > 5 ? `<div style="text-align: center; color: #718096; font-style: italic;">... and ${data.length - 5} more records</div>` : ''}
                 </div>
                 <div style="margin-top: 10px; font-size: 12px; color: #718096;">
-                    <strong>Note:</strong> Ensure Month is in MM-YYYY format and Facility names match exactly.
+                    <strong>Note:</strong> System will auto-convert Excel date formats to MM-YYYY. Ensure facility names match exactly.
                 </div>
+                ${processedPreview.some(row => row.monthWarning) ? `
+                    <div style="margin-top: 10px; padding: 10px; background: #fff3cd; border-radius: 4px; border-left: 4px solid #ffc107;">
+                        <strong>⚠️ Excel Auto-Conversion Detected:</strong> Some dates appear to be auto-converted by Excel (8/1/2024 instead of 08-2024). 
+                        The import will handle this, but for future uploads, format the Month column as TEXT in Excel.
+                    </div>
+                ` : ''}
             `;
             resultsDiv.style.display = 'block';
         }
@@ -3263,17 +3607,36 @@ Facilities: ${facilities.size}
                             throw new Error(`Row ${i + 1}: Missing required fields (Name, MRN, Month, Facility)`);
                         }
 
-                        // Convert MM-YYYY to YYYY-MM format
+                        // Convert MM-YYYY to YYYY-MM format, handling various Excel formats
                         let month = row.Month.toString().trim();
+                        
+                        // Handle Excel date auto-conversion (like "8/1/2024" or date objects)
+                        if (month.includes('/')) {
+                            // Handle formats like "8/1/2024" (Excel auto-converted)
+                            const dateParts = month.split('/');
+                            if (dateParts.length >= 3) {
+                                const mm = dateParts[0].padStart(2, '0');
+                                const yyyy = dateParts[2];
+                                month = `${mm}-${yyyy}`;
+                            } else if (dateParts.length === 2) {
+                                // Handle "8/2024" format
+                                const mm = dateParts[0].padStart(2, '0');
+                                const yyyy = dateParts[1];
+                                month = `${mm}-${yyyy}`;
+                            }
+                        }
+                        
+                        // Handle MM-YYYY format (preferred)
                         if (month.includes('-')) {
                             const [mm, yyyy] = month.split('-');
-                            if (mm.length === 2 && yyyy.length === 4) {
-                                month = `${yyyy}-${mm}`;
+                            if (mm.length <= 2 && yyyy.length === 4) {
+                                const paddedMM = mm.padStart(2, '0');
+                                month = `${yyyy}-${paddedMM}`;
                             } else {
-                                throw new Error(`Row ${i + 1}: Invalid month format. Use MM-YYYY (e.g., 01-2025)`);
+                                throw new Error(`Row ${i + 1}: Invalid month format. Use MM-YYYY (e.g., 01-2025, 08-2024)`);
                             }
                         } else {
-                            throw new Error(`Row ${i + 1}: Invalid month format. Use MM-YYYY (e.g., 01-2025)`);
+                            throw new Error(`Row ${i + 1}: Invalid month format. Use MM-YYYY (e.g., 01-2025, 08-2024)`);
                         }
 
                         // Find facility ID by name
@@ -3424,6 +3787,11 @@ Facilities: ${facilities.size}
             } finally {
                 hideLoading();
             }
+        });
+
+        document.getElementById('addFacilityForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await addFacility();
         });
 
         // ===== AUTO-LOGIN CHECK =====
