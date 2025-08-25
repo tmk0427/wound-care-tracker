@@ -12,7 +12,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-t
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
-app.use(express.static(path.join(__dirname)));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Database initialization
 const db = new sqlite3.Database('./wound_care.db', (err) => {
@@ -104,69 +104,84 @@ function initializeDatabase() {
   }, 1000);
 }
 
-// Insert default facilities, admin user, and supplies
+// Insert default data only if database is empty
 function insertDefaultData() {
-  // Default facilities
-  const facilities = [
-    'General Hospital',
-    'City Medical Center', 
-    'Regional Health Center',
-    'Community Hospital',
-    'University Medical Center'
-  ];
-
-  facilities.forEach(facility => {
-    db.run('INSERT OR IGNORE INTO facilities (name) VALUES (?)', [facility], (err) => {
-      if (err && !err.message.includes('UNIQUE constraint failed')) {
-        console.error('Error inserting facility:', err);
-      }
-    });
-  });
-
-  // Create default admin user
-  bcrypt.hash('admin123', 10, (err, hash) => {
+  // Check if we already have data - if so, skip inserting defaults
+  db.get('SELECT COUNT(*) as count FROM users', [], (err, result) => {
     if (err) {
-      console.error('Error hashing password:', err);
+      console.error('Error checking existing data:', err);
       return;
     }
     
-    db.run(
-      'INSERT OR IGNORE INTO users (name, email, password, role, is_approved) VALUES (?, ?, ?, ?, ?)',
-      ['Admin User', 'admin@woundcare.com', hash, 'admin', 1],
-      (err) => {
-        if (err && !err.message.includes('UNIQUE constraint failed')) {
-          console.error('Error creating admin user:', err);
-        } else if (!err) {
-          console.log('Default admin user created - Email: admin@woundcare.com, Password: admin123');
-        }
-      }
-    );
-  });
+    if (result.count > 0) {
+      console.log('Database already contains data - skipping default data insertion');
+      return;
+    }
+    
+    console.log('Database is empty - inserting default data...');
+    
+    // Default facilities
+    const facilities = [
+      'General Hospital',
+      'City Medical Center', 
+      'Regional Health Center',
+      'Community Hospital',
+      'University Medical Center'
+    ];
 
-  // Default supplies
-  const supplies = [
-    { code: 1001, description: 'Hydrocolloid Dressing 4x4', hcpcs: 'A6234', cost: 15.50 },
-    { code: 1002, description: 'Alginate Dressing 2x2', hcpcs: 'A6196', cost: 8.75 },
-    { code: 1003, description: 'Foam Dressing 6x6', hcpcs: 'A6209', cost: 22.30 },
-    { code: 1004, description: 'Silver Antimicrobial Dressing', hcpcs: 'A6212', cost: 35.00 },
-    { code: 1005, description: 'Transparent Film Dressing', hcpcs: 'A6257', cost: 5.25 },
-    { code: 1006, description: 'Wound Cleanser 8oz', hcpcs: 'A6260', cost: 12.00 },
-    { code: 1007, description: 'Medical Tape 1 inch', hcpcs: '', cost: 3.50 },
-    { code: 1008, description: 'Gauze Pads 4x4 Sterile', hcpcs: 'A6402', cost: 0.75 },
-    { code: 1009, description: 'Compression Bandage 3 inch', hcpcs: 'A6448', cost: 4.25 },
-    { code: 1010, description: 'Wound Gel 1oz', hcpcs: 'A6248', cost: 18.90 }
-  ];
-
-  supplies.forEach(supply => {
-    db.run(
-      'INSERT OR IGNORE INTO supplies (code, description, hcpcs, cost, is_custom) VALUES (?, ?, ?, ?, ?)',
-      [supply.code, supply.description, supply.hcpcs, supply.cost, 0],
-      (err) => {
+    facilities.forEach(facility => {
+      db.run('INSERT OR IGNORE INTO facilities (name) VALUES (?)', [facility], (err) => {
         if (err && !err.message.includes('UNIQUE constraint failed')) {
-          console.error('Error inserting supply:', err);
+          console.error('Error inserting facility:', err);
         }
+      });
+    });
+
+    // Create default admin user
+    bcrypt.hash('admin123', 10, (err, hash) => {
+      if (err) {
+        console.error('Error hashing password:', err);
+        return;
       }
-    );
+      
+      db.run(
+        'INSERT OR IGNORE INTO users (name, email, password, role, is_approved) VALUES (?, ?, ?, ?, ?)',
+        ['Admin User', 'admin@system.com', hash, 'admin', 1],
+        (err) => {
+          if (err && !err.message.includes('UNIQUE constraint failed')) {
+            console.error('Error creating admin user:', err);
+          } else if (!err) {
+            console.log('Default admin user created - Email: admin@system.com, Password: admin123');
+          }
+        }
+      );
+    });
+
+    // Default supplies
+    const supplies = [
+      { code: 1001, description: 'Hydrocolloid Dressing 4x4', hcpcs: 'A6234', cost: 15.50 },
+      { code: 1002, description: 'Alginate Dressing 2x2', hcpcs: 'A6196', cost: 8.75 },
+      { code: 1003, description: 'Foam Dressing 6x6', hcpcs: 'A6209', cost: 22.30 },
+      { code: 1004, description: 'Silver Antimicrobial Dressing', hcpcs: 'A6212', cost: 35.00 },
+      { code: 1005, description: 'Transparent Film Dressing', hcpcs: 'A6257', cost: 5.25 },
+      { code: 1006, description: 'Wound Cleanser 8oz', hcpcs: 'A6260', cost: 12.00 },
+      { code: 1007, description: 'Medical Tape 1 inch', hcpcs: '', cost: 3.50 },
+      { code: 1008, description: 'Gauze Pads 4x4 Sterile', hcpcs: 'A6402', cost: 0.75 },
+      { code: 1009, description: 'Compression Bandage 3 inch', hcpcs: 'A6448', cost: 4.25 },
+      { code: 1010, description: 'Wound Gel 1oz', hcpcs: 'A6248', cost: 18.90 }
+    ];
+
+    supplies.forEach(supply => {
+      db.run(
+        'INSERT OR IGNORE INTO supplies (code, description, hcpcs, cost, is_custom) VALUES (?, ?, ?, ?, ?)',
+        [supply.code, supply.description, supply.hcpcs, supply.cost, 0],
+        (err) => {
+          if (err && !err.message.includes('UNIQUE constraint failed')) {
+            console.error('Error inserting supply:', err);
+          }
+        }
+      );
+    });
   });
 }
 
@@ -834,7 +849,7 @@ app.delete('/api/users/:id', authenticateToken, requireAdmin, (req, res) => {
 
 // Serve the main HTML file
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // Error handling middleware
@@ -864,7 +879,7 @@ process.on('SIGINT', () => {
 app.listen(PORT, () => {
   console.log(`🏥 Wound Care RT Supply Tracker running on port ${PORT}`);
   console.log(`🌐 Server URL: http://localhost:${PORT}`);
-  console.log(`👤 Default admin: admin@woundcare.com / admin123`);
+  console.log(`👤 Default admin: admin@system.com / admin123`);
 });
 
 module.exports = app;
