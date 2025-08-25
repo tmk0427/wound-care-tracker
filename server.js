@@ -232,6 +232,77 @@ app.post('/api/facilities', authenticateToken, async (req, res) => {
     }
 });
 
+// Update facility (admin only)
+app.put('/api/facilities/:id', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Admin access required' });
+        }
+
+        const facilityId = parseInt(req.params.id);
+        const { name } = req.body;
+
+        if (!name) {
+            return res.status(400).json({ error: 'Facility name is required' });
+        }
+
+        const result = await pool.query(
+            'UPDATE facilities SET name = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
+            [name, facilityId]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Facility not found' });
+        }
+
+        res.json(result.rows[0]);
+    } catch (error) {
+        console.error('Error updating facility:', error);
+        if (error.code === '23505') {
+            res.status(400).json({ error: 'Facility name already exists' });
+        } else {
+            res.status(500).json({ error: 'Internal server error' });
+        }
+    }
+});
+
+// Delete facility (admin only)
+app.delete('/api/facilities/:id', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Admin access required' });
+        }
+
+        const facilityId = parseInt(req.params.id);
+
+        // Check if facility has patients
+        const patientCheck = await pool.query(
+            'SELECT COUNT(*) FROM patients WHERE facility_id = $1',
+            [facilityId]
+        );
+
+        if (parseInt(patientCheck.rows[0].count) > 0) {
+            return res.status(400).json({ 
+                error: 'Cannot delete facility - it has patients assigned' 
+            });
+        }
+
+        const result = await pool.query(
+            'DELETE FROM facilities WHERE id = $1 RETURNING *',
+            [facilityId]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Facility not found' });
+        }
+
+        res.json({ message: 'Facility deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting facility:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 // ===== SUPPLY ROUTES =====
 
 // Get supplies
@@ -270,6 +341,77 @@ app.post('/api/supplies', authenticateToken, async (req, res) => {
         } else {
             res.status(500).json({ error: 'Internal server error' });
         }
+    }
+});
+
+// Update supply (admin only)
+app.put('/api/supplies/:id', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Admin access required' });
+        }
+
+        const supplyId = parseInt(req.params.id);
+        const { code, description, hcpcs, cost } = req.body;
+
+        if (!code || !description) {
+            return res.status(400).json({ error: 'Code and description are required' });
+        }
+
+        const result = await pool.query(
+            'UPDATE supplies SET code = $1, description = $2, hcpcs = $3, cost = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5 RETURNING *',
+            [parseInt(code), description, hcpcs || null, parseFloat(cost) || 0, supplyId]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Supply not found' });
+        }
+
+        res.json(result.rows[0]);
+    } catch (error) {
+        console.error('Error updating supply:', error);
+        if (error.code === '23505') {
+            res.status(400).json({ error: 'Supply code already exists' });
+        } else {
+            res.status(500).json({ error: 'Internal server error' });
+        }
+    }
+});
+
+// Delete supply (admin only)
+app.delete('/api/supplies/:id', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Admin access required' });
+        }
+
+        const supplyId = parseInt(req.params.id);
+
+        // Check if supply is being used in tracking
+        const trackingCheck = await pool.query(
+            'SELECT COUNT(*) FROM tracking WHERE supply_id = $1',
+            [supplyId]
+        );
+
+        if (parseInt(trackingCheck.rows[0].count) > 0) {
+            return res.status(400).json({ 
+                error: 'Cannot delete supply - it is being used in patient tracking records' 
+            });
+        }
+
+        const result = await pool.query(
+            'DELETE FROM supplies WHERE id = $1 RETURNING *',
+            [supplyId]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Supply not found' });
+        }
+
+        res.json({ message: 'Supply deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting supply:', error);
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
@@ -328,6 +470,123 @@ app.post('/api/patients', authenticateToken, async (req, res) => {
         } else {
             res.status(500).json({ error: 'Internal server error' });
         }
+    }
+});
+
+// Delete patient
+app.delete('/api/patients/:id', authenticateToken, async (req, res) => {
+    try {
+        const patientId = parseInt(req.params.id);
+
+        // Verify patient access
+        let patientQuery = 'SELECT * FROM patients WHERE id = $1';
+        let patientParams = [patientId];
+
+        if (req.user.role !== 'admin' && req.user.facilityId) {
+            patientQuery += ' AND facility_id = $2';
+            patientParams.push(req.user.facilityId);
+        }
+
+        const patientResult = await pool.query(patientQuery, patientParams);
+        if (patientResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Patient not found or access denied' });
+        }
+
+        // Delete patient (cascade will delete tracking data)
+        const result = await pool.query(
+            'DELETE FROM patients WHERE id = $1 RETURNING *',
+            [patientId]
+        );
+
+        res.json({ message: 'Patient deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting patient:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// ===== USER MANAGEMENT ROUTES =====
+
+// Get users (admin only)
+app.get('/api/users', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Admin access required' });
+        }
+
+        const result = await pool.query(`
+            SELECT u.*, f.name as facility_name 
+            FROM users u 
+            LEFT JOIN facilities f ON u.facility_id = f.id 
+            ORDER BY u.created_at DESC
+        `);
+
+        // Remove passwords from response
+        const users = result.rows.map(user => {
+            delete user.password;
+            return user;
+        });
+
+        res.json(users);
+    } catch (error) {
+        console.error('Error fetching users:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Update user approval (admin only)
+app.put('/api/users/:id/approval', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Admin access required' });
+        }
+
+        const userId = parseInt(req.params.id);
+        const { isApproved } = req.body;
+
+        const result = await pool.query(
+            'UPDATE users SET is_approved = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING id, name, email, is_approved',
+            [isApproved, userId]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        res.json(result.rows[0]);
+    } catch (error) {
+        console.error('Error updating user approval:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Delete user (admin only)
+app.delete('/api/users/:id', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Admin access required' });
+        }
+
+        const userId = parseInt(req.params.id);
+
+        // Prevent deletion of self
+        if (userId === req.user.userId) {
+            return res.status(400).json({ error: 'Cannot delete your own account' });
+        }
+
+        const result = await pool.query(
+            'DELETE FROM users WHERE id = $1 AND role != $2 RETURNING *',
+            [userId, 'admin']
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'User not found or cannot delete admin user' });
+        }
+
+        res.json({ message: 'User deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
