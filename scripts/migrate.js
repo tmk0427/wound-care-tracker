@@ -11,7 +11,7 @@ async function runMigration() {
   const client = await pool.connect();
   
   try {
-    console.log('📄 Starting database migration...');
+    console.log('🔄 Starting database migration...');
     
     // Test connection
     await client.query('SELECT NOW()');
