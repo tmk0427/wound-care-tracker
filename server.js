@@ -1,5 +1,5 @@
 const express = require('express');
-const sqlite3 = require('sqlite3').verbose();
+const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
@@ -14,872 +14,729 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Database initialization
-const db = new sqlite3.Database('./wound_care.db', (err) => {
-  if (err) {
-    console.error('Error opening database:', err);
-  } else {
-    console.log('Connected to SQLite database');
-    initializeDatabase();
-  }
+// Database connection
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
-// Initialize database tables
-function initializeDatabase() {
-  const tables = [
-    // Facilities table
-    `CREATE TABLE IF NOT EXISTS facilities (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL UNIQUE,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`,
-    
-    // Users table
-    `CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      email TEXT NOT NULL UNIQUE,
-      password TEXT NOT NULL,
-      role TEXT DEFAULT 'user' CHECK(role IN ('user', 'admin')),
-      facility_id INTEGER,
-      is_approved BOOLEAN DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (facility_id) REFERENCES facilities (id)
-    )`,
-    
-    // Supplies table
-    `CREATE TABLE IF NOT EXISTS supplies (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      code INTEGER NOT NULL UNIQUE,
-      description TEXT NOT NULL,
-      hcpcs TEXT,
-      cost DECIMAL(10,2) DEFAULT 0,
-      is_custom BOOLEAN DEFAULT 1,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`,
-    
-    // Patients table
-    `CREATE TABLE IF NOT EXISTS patients (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      mrn TEXT,
-      month TEXT NOT NULL,
-      facility_id INTEGER,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (facility_id) REFERENCES facilities (id),
-      UNIQUE(name, month, facility_id)
-    )`,
-    
-    // Supply tracking table
-    `CREATE TABLE IF NOT EXISTS supply_tracking (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      patient_id INTEGER NOT NULL,
-      supply_id INTEGER NOT NULL,
-      day_of_month INTEGER NOT NULL CHECK(day_of_month >= 1 AND day_of_month <= 31),
-      quantity INTEGER DEFAULT 0,
-      wound_dx TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (patient_id) REFERENCES patients (id) ON DELETE CASCADE,
-      FOREIGN KEY (supply_id) REFERENCES supplies (id),
-      UNIQUE(patient_id, supply_id, day_of_month)
-    )`
-  ];
-
-  tables.forEach((table, index) => {
-    db.run(table, (err) => {
-      if (err) {
-        console.error(`Error creating table ${index + 1}:`, err);
-      }
-    });
-  });
-
-  // Insert default data
-  setTimeout(() => {
-    insertDefaultData();
-  }, 1000);
-}
-
-// Insert default data only if database is empty
-function insertDefaultData() {
-  // Check if we already have data - if so, skip inserting defaults
-  db.get('SELECT COUNT(*) as count FROM users', [], (err, result) => {
+// Test database connection
+pool.connect((err, client, release) => {
     if (err) {
-      console.error('Error checking existing data:', err);
-      return;
+        console.error('Error connecting to database:', err);
+    } else {
+        console.log('✅ Connected to PostgreSQL database');
+        release();
     }
-    
-    if (result.count > 0) {
-      console.log('Database already contains data - skipping default data insertion');
-      return;
-    }
-    
-    console.log('Database is empty - inserting default data...');
-    
-    // Default facilities
-    const facilities = [
-      'General Hospital',
-      'City Medical Center', 
-      'Regional Health Center',
-      'Community Hospital',
-      'University Medical Center'
-    ];
-
-    facilities.forEach(facility => {
-      db.run('INSERT OR IGNORE INTO facilities (name) VALUES (?)', [facility], (err) => {
-        if (err && !err.message.includes('UNIQUE constraint failed')) {
-          console.error('Error inserting facility:', err);
-        }
-      });
-    });
-
-    // Create default admin user
-    bcrypt.hash('admin123', 10, (err, hash) => {
-      if (err) {
-        console.error('Error hashing password:', err);
-        return;
-      }
-      
-      db.run(
-        'INSERT OR IGNORE INTO users (name, email, password, role, is_approved) VALUES (?, ?, ?, ?, ?)',
-        ['Admin User', 'admin@system.com', hash, 'admin', 1],
-        (err) => {
-          if (err && !err.message.includes('UNIQUE constraint failed')) {
-            console.error('Error creating admin user:', err);
-          } else if (!err) {
-            console.log('Default admin user created - Email: admin@system.com, Password: admin123');
-          }
-        }
-      );
-    });
-
-    // Default supplies
-    const supplies = [
-      { code: 1001, description: 'Hydrocolloid Dressing 4x4', hcpcs: 'A6234', cost: 15.50 },
-      { code: 1002, description: 'Alginate Dressing 2x2', hcpcs: 'A6196', cost: 8.75 },
-      { code: 1003, description: 'Foam Dressing 6x6', hcpcs: 'A6209', cost: 22.30 },
-      { code: 1004, description: 'Silver Antimicrobial Dressing', hcpcs: 'A6212', cost: 35.00 },
-      { code: 1005, description: 'Transparent Film Dressing', hcpcs: 'A6257', cost: 5.25 },
-      { code: 1006, description: 'Wound Cleanser 8oz', hcpcs: 'A6260', cost: 12.00 },
-      { code: 1007, description: 'Medical Tape 1 inch', hcpcs: '', cost: 3.50 },
-      { code: 1008, description: 'Gauze Pads 4x4 Sterile', hcpcs: 'A6402', cost: 0.75 },
-      { code: 1009, description: 'Compression Bandage 3 inch', hcpcs: 'A6448', cost: 4.25 },
-      { code: 1010, description: 'Wound Gel 1oz', hcpcs: 'A6248', cost: 18.90 }
-    ];
-
-    supplies.forEach(supply => {
-      db.run(
-        'INSERT OR IGNORE INTO supplies (code, description, hcpcs, cost, is_custom) VALUES (?, ?, ?, ?, ?)',
-        [supply.code, supply.description, supply.hcpcs, supply.cost, 0],
-        (err) => {
-          if (err && !err.message.includes('UNIQUE constraint failed')) {
-            console.error('Error inserting supply:', err);
-          }
-        }
-      );
-    });
-  });
-}
+});
 
 // Authentication middleware
 const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
 
-  if (!token) {
-    return res.status(401).json({ error: 'Access denied. No token provided.' });
-  }
-
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) {
-      return res.status(403).json({ error: 'Invalid token.' });
+    if (!token) {
+        return res.status(401).json({ error: 'Access denied. No token provided.' });
     }
-    req.user = user;
-    next();
-  });
+
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+        if (err) {
+            return res.status(403).json({ error: 'Invalid token.' });
+        }
+        req.user = user;
+        next();
+    });
 };
 
 // Admin middleware
 const requireAdmin = (req, res, next) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'Admin access required.' });
-  }
-  next();
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ error: 'Admin access required.' });
+    }
+    next();
 };
 
 // Routes
 
 // Auth routes
 app.post('/api/auth/register', async (req, res) => {
-  try {
-    const { name, email, password, facilityId } = req.body;
+    try {
+        const { name, email, password, facilityId } = req.body;
 
-    if (!name || !email || !password || !facilityId) {
-      return res.status(400).json({ error: 'All fields are required' });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    db.run(
-      'INSERT INTO users (name, email, password, facility_id, is_approved) VALUES (?, ?, ?, ?, ?)',
-      [name, email, hashedPassword, facilityId, 0],
-      function(err) {
-        if (err) {
-          if (err.message.includes('UNIQUE constraint failed')) {
-            return res.status(400).json({ error: 'Email already exists' });
-          }
-          return res.status(500).json({ error: 'Registration failed' });
+        if (!name || !email || !password || !facilityId) {
+            return res.status(400).json({ error: 'All fields are required' });
         }
-        res.json({ message: 'Registration successful. Please wait for admin approval.' });
-      }
-    );
-  } catch (error) {
-    console.error('Registration error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+        
+        const result = await pool.query(
+            'INSERT INTO users (name, email, password, facility_id, is_approved) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+            [name, email, hashedPassword, facilityId, false]
+        );
+
+        res.json({ 
+            message: 'Registration successful. Please wait for admin approval.',
+            userId: result.rows[0].id 
+        });
+    } catch (error) {
+        console.error('Registration error:', error);
+        if (error.code === '23505') { // Unique constraint violation
+            return res.status(400).json({ error: 'Email already exists' });
+        }
+        res.status(500).json({ error: 'Registration failed' });
+    }
 });
 
 app.post('/api/auth/login', async (req, res) => {
-  try {
-    const { email, password } = req.body;
+    try {
+        const { email, password } = req.body;
 
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
-    }
-
-    db.get(
-      `SELECT u.*, f.name as facility_name 
-       FROM users u 
-       LEFT JOIN facilities f ON u.facility_id = f.id 
-       WHERE u.email = ?`,
-      [email],
-      async (err, user) => {
-        if (err) {
-          return res.status(500).json({ error: 'Database error' });
+        if (!email || !password) {
+            return res.status(400).json({ error: 'Email and password are required' });
         }
 
-        if (!user || !(await bcrypt.compare(password, user.password))) {
-          return res.status(401).json({ error: 'Invalid email or password' });
+        const result = await pool.query(
+            `SELECT u.*, f.name as facility_name 
+             FROM users u 
+             LEFT JOIN facilities f ON u.facility_id = f.id 
+             WHERE u.email = $1`,
+            [email]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(401).json({ error: 'Invalid email or password' });
+        }
+
+        const user = result.rows[0];
+
+        if (!(await bcrypt.compare(password, user.password))) {
+            return res.status(401).json({ error: 'Invalid email or password' });
         }
 
         if (!user.is_approved) {
-          return res.status(401).json({ error: 'Account not approved. Please contact an administrator.' });
+            return res.status(401).json({ error: 'Account not approved. Please contact an administrator.' });
         }
 
         const token = jwt.sign(
-          { 
-            id: user.id, 
-            email: user.email, 
-            role: user.role, 
-            facilityId: user.facility_id 
-          },
-          JWT_SECRET,
-          { expiresIn: '24h' }
+            { 
+                id: user.id, 
+                email: user.email, 
+                role: user.role, 
+                facilityId: user.facility_id 
+            },
+            JWT_SECRET,
+            { expiresIn: '24h' }
         );
 
         const userResponse = {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          facilityId: user.facility_id,
-          facilityName: user.facility_name
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            facilityId: user.facility_id,
+            facilityName: user.facility_name
         };
 
         res.json({ token, user: userResponse });
-      }
-    );
-  } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
+    } catch (error) {
+        console.error('Login error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 });
 
-app.get('/api/auth/verify', authenticateToken, (req, res) => {
-  db.get(
-    `SELECT u.*, f.name as facility_name 
-     FROM users u 
-     LEFT JOIN facilities f ON u.facility_id = f.id 
-     WHERE u.id = ?`,
-    [req.user.id],
-    (err, user) => {
-      if (err || !user) {
-        return res.status(401).json({ error: 'Invalid token' });
-      }
+app.get('/api/auth/verify', authenticateToken, async (req, res) => {
+    try {
+        const result = await pool.query(
+            `SELECT u.*, f.name as facility_name 
+             FROM users u 
+             LEFT JOIN facilities f ON u.facility_id = f.id 
+             WHERE u.id = $1`,
+            [req.user.id]
+        );
 
-      const userResponse = {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        facilityId: user.facility_id,
-        facilityName: user.facility_name
-      };
+        if (result.rows.length === 0) {
+            return res.status(401).json({ error: 'Invalid token' });
+        }
 
-      res.json({ user: userResponse });
+        const user = result.rows[0];
+        const userResponse = {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            facilityId: user.facility_id,
+            facilityName: user.facility_name
+        };
+
+        res.json({ user: userResponse });
+    } catch (error) {
+        console.error('Auth verify error:', error);
+        res.status(500).json({ error: 'Internal server error' });
     }
-  );
 });
 
 // Facilities routes
-app.get('/api/facilities/public', (req, res) => {
-  db.all('SELECT id, name FROM facilities ORDER BY name', [], (err, rows) => {
-    if (err) {
-      return res.status(500).json({ error: 'Database error' });
+app.get('/api/facilities/public', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT id, name FROM facilities ORDER BY name');
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Error fetching public facilities:', error);
+        res.status(500).json({ error: 'Database error' });
     }
-    res.json(rows);
-  });
 });
 
-app.get('/api/facilities', authenticateToken, (req, res) => {
-  db.all('SELECT * FROM facilities ORDER BY name', [], (err, rows) => {
-    if (err) {
-      return res.status(500).json({ error: 'Database error' });
+app.get('/api/facilities', authenticateToken, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM facilities ORDER BY name');
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Error fetching facilities:', error);
+        res.status(500).json({ error: 'Database error' });
     }
-    res.json(rows);
-  });
 });
 
-app.post('/api/facilities', authenticateToken, requireAdmin, (req, res) => {
-  const { name } = req.body;
-  
-  if (!name) {
-    return res.status(400).json({ error: 'Facility name is required' });
-  }
-
-  db.run('INSERT INTO facilities (name) VALUES (?)', [name], function(err) {
-    if (err) {
-      if (err.message.includes('UNIQUE constraint failed')) {
-        return res.status(400).json({ error: 'Facility name already exists' });
-      }
-      return res.status(500).json({ error: 'Database error' });
-    }
-    res.json({ id: this.lastID, name, created_at: new Date().toISOString() });
-  });
-});
-
-app.put('/api/facilities/:id', authenticateToken, requireAdmin, (req, res) => {
-  const { name } = req.body;
-  const facilityId = req.params.id;
-
-  if (!name) {
-    return res.status(400).json({ error: 'Facility name is required' });
-  }
-
-  db.run(
-    'UPDATE facilities SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-    [name, facilityId],
-    function(err) {
-      if (err) {
-        if (err.message.includes('UNIQUE constraint failed')) {
-          return res.status(400).json({ error: 'Facility name already exists' });
+app.post('/api/facilities', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { name } = req.body;
+        
+        if (!name) {
+            return res.status(400).json({ error: 'Facility name is required' });
         }
-        return res.status(500).json({ error: 'Database error' });
-      }
-      if (this.changes === 0) {
-        return res.status(404).json({ error: 'Facility not found' });
-      }
-      res.json({ message: 'Facility updated successfully' });
+
+        const result = await pool.query(
+            'INSERT INTO facilities (name) VALUES ($1) RETURNING *',
+            [name]
+        );
+
+        res.json(result.rows[0]);
+    } catch (error) {
+        console.error('Error creating facility:', error);
+        if (error.code === '23505') {
+            return res.status(400).json({ error: 'Facility name already exists' });
+        }
+        res.status(500).json({ error: 'Database error' });
     }
-  );
 });
 
-app.delete('/api/facilities/:id', authenticateToken, requireAdmin, (req, res) => {
-  const facilityId = req.params.id;
+app.put('/api/facilities/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { name } = req.body;
+        const facilityId = req.params.id;
 
-  db.run('DELETE FROM facilities WHERE id = ?', [facilityId], function(err) {
-    if (err) {
-      return res.status(500).json({ error: 'Database error' });
+        if (!name) {
+            return res.status(400).json({ error: 'Facility name is required' });
+        }
+
+        const result = await pool.query(
+            'UPDATE facilities SET name = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
+            [name, facilityId]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Facility not found' });
+        }
+
+        res.json({ message: 'Facility updated successfully' });
+    } catch (error) {
+        console.error('Error updating facility:', error);
+        if (error.code === '23505') {
+            return res.status(400).json({ error: 'Facility name already exists' });
+        }
+        res.status(500).json({ error: 'Database error' });
     }
-    if (this.changes === 0) {
-      return res.status(404).json({ error: 'Facility not found' });
+});
+
+app.delete('/api/facilities/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const facilityId = req.params.id;
+
+        const result = await pool.query('DELETE FROM facilities WHERE id = $1', [facilityId]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'Facility not found' });
+        }
+
+        res.json({ message: 'Facility deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting facility:', error);
+        res.status(500).json({ error: 'Database error' });
     }
-    res.json({ message: 'Facility deleted successfully' });
-  });
 });
 
 // Supplies routes
-app.get('/api/supplies', authenticateToken, (req, res) => {
-  db.all('SELECT * FROM supplies ORDER BY code', [], (err, rows) => {
-    if (err) {
-      return res.status(500).json({ error: 'Database error' });
+app.get('/api/supplies', authenticateToken, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM supplies ORDER BY code');
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Error fetching supplies:', error);
+        res.status(500).json({ error: 'Database error' });
     }
-    res.json(rows);
-  });
 });
 
-app.post('/api/supplies', authenticateToken, requireAdmin, (req, res) => {
-  const { code, description, hcpcs, cost } = req.body;
-  
-  if (!code || !description) {
-    return res.status(400).json({ error: 'Code and description are required' });
-  }
-
-  db.run(
-    'INSERT INTO supplies (code, description, hcpcs, cost) VALUES (?, ?, ?, ?)',
-    [code, description, hcpcs || null, cost || 0],
-    function(err) {
-      if (err) {
-        if (err.message.includes('UNIQUE constraint failed')) {
-          return res.status(400).json({ error: 'Supply code already exists' });
+app.post('/api/supplies', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { code, description, hcpcs, cost } = req.body;
+        
+        if (!code || !description) {
+            return res.status(400).json({ error: 'Code and description are required' });
         }
-        return res.status(500).json({ error: 'Database error' });
-      }
-      res.json({ 
-        id: this.lastID, 
-        code, 
-        description, 
-        hcpcs, 
-        cost: cost || 0,
-        created_at: new Date().toISOString() 
-      });
-    }
-  );
-});
 
-app.put('/api/supplies/:id', authenticateToken, requireAdmin, (req, res) => {
-  const { code, description, hcpcs, cost } = req.body;
-  const supplyId = req.params.id;
+        const result = await pool.query(
+            'INSERT INTO supplies (code, description, hcpcs, cost, is_custom) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+            [code, description, hcpcs || null, cost || 0, true]
+        );
 
-  if (!code || !description) {
-    return res.status(400).json({ error: 'Code and description are required' });
-  }
-
-  db.run(
-    'UPDATE supplies SET code = ?, description = ?, hcpcs = ?, cost = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-    [code, description, hcpcs || null, cost || 0, supplyId],
-    function(err) {
-      if (err) {
-        if (err.message.includes('UNIQUE constraint failed')) {
-          return res.status(400).json({ error: 'Supply code already exists' });
+        res.json(result.rows[0]);
+    } catch (error) {
+        console.error('Error creating supply:', error);
+        if (error.code === '23505') {
+            return res.status(400).json({ error: 'Supply code already exists' });
         }
-        return res.status(500).json({ error: 'Database error' });
-      }
-      if (this.changes === 0) {
-        return res.status(404).json({ error: 'Supply not found' });
-      }
-      res.json({ message: 'Supply updated successfully' });
+        res.status(500).json({ error: 'Database error' });
     }
-  );
 });
 
-app.delete('/api/supplies/:id', authenticateToken, requireAdmin, (req, res) => {
-  const supplyId = req.params.id;
+app.put('/api/supplies/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { code, description, hcpcs, cost } = req.body;
+        const supplyId = req.params.id;
 
-  db.run('DELETE FROM supplies WHERE id = ?', [supplyId], function(err) {
-    if (err) {
-      return res.status(500).json({ error: 'Database error' });
+        if (!code || !description) {
+            return res.status(400).json({ error: 'Code and description are required' });
+        }
+
+        const result = await pool.query(
+            'UPDATE supplies SET code = $1, description = $2, hcpcs = $3, cost = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5 RETURNING *',
+            [code, description, hcpcs || null, cost || 0, supplyId]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Supply not found' });
+        }
+
+        res.json({ message: 'Supply updated successfully' });
+    } catch (error) {
+        console.error('Error updating supply:', error);
+        if (error.code === '23505') {
+            return res.status(400).json({ error: 'Supply code already exists' });
+        }
+        res.status(500).json({ error: 'Database error' });
     }
-    if (this.changes === 0) {
-      return res.status(404).json({ error: 'Supply not found' });
+});
+
+app.delete('/api/supplies/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const supplyId = req.params.id;
+
+        const result = await pool.query('DELETE FROM supplies WHERE id = $1', [supplyId]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'Supply not found' });
+        }
+
+        res.json({ message: 'Supply deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting supply:', error);
+        res.status(500).json({ error: 'Database error' });
     }
-    res.json({ message: 'Supply deleted successfully' });
-  });
 });
 
 // Patients routes
-app.get('/api/patients', authenticateToken, (req, res) => {
-  let query = `
-    SELECT p.*, f.name as facility_name 
-    FROM patients p 
-    LEFT JOIN facilities f ON p.facility_id = f.id
-  `;
-  let params = [];
+app.get('/api/patients', authenticateToken, async (req, res) => {
+    try {
+        let query = `
+            SELECT p.*, f.name as facility_name 
+            FROM patients p 
+            LEFT JOIN facilities f ON p.facility_id = f.id
+        `;
+        let params = [];
 
-  // Filter by facility if user is not admin
-  if (req.user.role !== 'admin' && req.user.facilityId) {
-    query += ' WHERE p.facility_id = ?';
-    params.push(req.user.facilityId);
-  }
+        // Filter by facility if user is not admin
+        if (req.user.role !== 'admin' && req.user.facilityId) {
+            query += ' WHERE p.facility_id = $1';
+            params.push(req.user.facilityId);
+        }
 
-  query += ' ORDER BY p.created_at DESC';
+        query += ' ORDER BY p.created_at DESC';
 
-  db.all(query, params, (err, rows) => {
-    if (err) {
-      return res.status(500).json({ error: 'Database error' });
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Error fetching patients:', error);
+        res.status(500).json({ error: 'Database error' });
     }
-    res.json(rows);
-  });
 });
 
-app.post('/api/patients', authenticateToken, (req, res) => {
-  const { name, mrn, month, facilityId } = req.body;
-  
-  if (!name || !month || !facilityId) {
-    return res.status(400).json({ error: 'Name, month, and facility are required' });
-  }
-
-  // Check if user has permission to add to this facility
-  if (req.user.role !== 'admin' && req.user.facilityId !== facilityId) {
-    return res.status(403).json({ error: 'Access denied for this facility' });
-  }
-
-  db.run(
-    'INSERT INTO patients (name, mrn, month, facility_id) VALUES (?, ?, ?, ?)',
-    [name, mrn || null, month, facilityId],
-    function(err) {
-      if (err) {
-        if (err.message.includes('UNIQUE constraint failed')) {
-          return res.status(400).json({ error: 'Patient already exists for this month and facility' });
+app.post('/api/patients', authenticateToken, async (req, res) => {
+    try {
+        const { name, mrn, month, facilityId } = req.body;
+        
+        if (!name || !month || !facilityId) {
+            return res.status(400).json({ error: 'Name, month, and facility are required' });
         }
-        return res.status(500).json({ error: 'Database error' });
-      }
-      res.json({ 
-        id: this.lastID, 
-        name, 
-        mrn, 
-        month, 
-        facility_id: facilityId,
-        created_at: new Date().toISOString() 
-      });
+
+        // Check if user has permission to add to this facility
+        if (req.user.role !== 'admin' && req.user.facilityId !== facilityId) {
+            return res.status(403).json({ error: 'Access denied for this facility' });
+        }
+
+        const result = await pool.query(
+            'INSERT INTO patients (name, mrn, month, facility_id) VALUES ($1, $2, $3, $4) RETURNING *',
+            [name, mrn || null, month, facilityId]
+        );
+
+        res.json(result.rows[0]);
+    } catch (error) {
+        console.error('Error creating patient:', error);
+        if (error.code === '23505') {
+            return res.status(400).json({ error: 'Patient already exists for this month and facility' });
+        }
+        res.status(500).json({ error: 'Database error' });
     }
-  );
 });
 
-app.put('/api/patients/:id', authenticateToken, (req, res) => {
-  const { name, mrn } = req.body;
-  const patientId = req.params.id;
+app.put('/api/patients/:id', authenticateToken, async (req, res) => {
+    try {
+        const { name, mrn } = req.body;
+        const patientId = req.params.id;
 
-  if (!name) {
-    return res.status(400).json({ error: 'Name is required' });
-  }
-
-  // First check if patient exists and user has permission
-  db.get(
-    'SELECT * FROM patients WHERE id = ?',
-    [patientId],
-    (err, patient) => {
-      if (err) {
-        return res.status(500).json({ error: 'Database error' });
-      }
-      if (!patient) {
-        return res.status(404).json({ error: 'Patient not found' });
-      }
-
-      // Check permission
-      if (req.user.role !== 'admin' && req.user.facilityId !== patient.facility_id) {
-        return res.status(403).json({ error: 'Access denied' });
-      }
-
-      // Update patient
-      db.run(
-        'UPDATE patients SET name = ?, mrn = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-        [name, mrn || null, patientId],
-        function(err) {
-          if (err) {
-            return res.status(500).json({ error: 'Database error' });
-          }
-          res.json({ message: 'Patient updated successfully' });
+        if (!name) {
+            return res.status(400).json({ error: 'Name is required' });
         }
-      );
+
+        // First check if patient exists and user has permission
+        const patientCheck = await pool.query('SELECT * FROM patients WHERE id = $1', [patientId]);
+        
+        if (patientCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Patient not found' });
+        }
+
+        const patient = patientCheck.rows[0];
+
+        // Check permission
+        if (req.user.role !== 'admin' && req.user.facilityId !== patient.facility_id) {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+
+        // Update patient
+        await pool.query(
+            'UPDATE patients SET name = $1, mrn = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
+            [name, mrn || null, patientId]
+        );
+
+        res.json({ message: 'Patient updated successfully' });
+    } catch (error) {
+        console.error('Error updating patient:', error);
+        res.status(500).json({ error: 'Database error' });
     }
-  );
 });
 
-app.delete('/api/patients/:id', authenticateToken, (req, res) => {
-  const patientId = req.params.id;
+app.delete('/api/patients/:id', authenticateToken, async (req, res) => {
+    try {
+        const patientId = req.params.id;
 
-  // First check if patient exists and user has permission
-  db.get(
-    'SELECT * FROM patients WHERE id = ?',
-    [patientId],
-    (err, patient) => {
-      if (err) {
-        return res.status(500).json({ error: 'Database error' });
-      }
-      if (!patient) {
-        return res.status(404).json({ error: 'Patient not found' });
-      }
-
-      // Check permission
-      if (req.user.role !== 'admin' && req.user.facilityId !== patient.facility_id) {
-        return res.status(403).json({ error: 'Access denied' });
-      }
-
-      // Delete patient (cascade will handle tracking data)
-      db.run('DELETE FROM patients WHERE id = ?', [patientId], function(err) {
-        if (err) {
-          return res.status(500).json({ error: 'Database error' });
+        // First check if patient exists and user has permission
+        const patientCheck = await pool.query('SELECT * FROM patients WHERE id = $1', [patientId]);
+        
+        if (patientCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Patient not found' });
         }
+
+        const patient = patientCheck.rows[0];
+
+        // Check permission
+        if (req.user.role !== 'admin' && req.user.facilityId !== patient.facility_id) {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+
+        // Delete patient (cascade will handle tracking data)
+        await pool.query('DELETE FROM patients WHERE id = $1', [patientId]);
         res.json({ message: 'Patient deleted successfully' });
-      });
+    } catch (error) {
+        console.error('Error deleting patient:', error);
+        res.status(500).json({ error: 'Database error' });
     }
-  );
 });
 
 // Supply tracking routes
-app.get('/api/tracking/:patientId', authenticateToken, (req, res) => {
-  const patientId = req.params.patientId;
+app.get('/api/tracking/:patientId', authenticateToken, async (req, res) => {
+    try {
+        const patientId = req.params.patientId;
 
-  // First check if user has permission to view this patient
-  db.get(
-    'SELECT * FROM patients WHERE id = ?',
-    [patientId],
-    (err, patient) => {
-      if (err) {
-        return res.status(500).json({ error: 'Database error' });
-      }
-      if (!patient) {
-        return res.status(404).json({ error: 'Patient not found' });
-      }
-
-      // Check permission
-      if (req.user.role !== 'admin' && req.user.facilityId !== patient.facility_id) {
-        return res.status(403).json({ error: 'Access denied' });
-      }
-
-      // Get tracking data
-      db.all(
-        'SELECT * FROM supply_tracking WHERE patient_id = ? ORDER BY supply_id, day_of_month',
-        [patientId],
-        (err, rows) => {
-          if (err) {
-            return res.status(500).json({ error: 'Database error' });
-          }
-          res.json(rows);
+        // First check if user has permission to view this patient
+        const patientCheck = await pool.query('SELECT * FROM patients WHERE id = $1', [patientId]);
+        
+        if (patientCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Patient not found' });
         }
-      );
+
+        const patient = patientCheck.rows[0];
+
+        // Check permission
+        if (req.user.role !== 'admin' && req.user.facilityId !== patient.facility_id) {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+
+        // Get tracking data including wound_dx
+        const result = await pool.query(
+            'SELECT * FROM tracking WHERE patient_id = $1 ORDER BY supply_id, day_of_month',
+            [patientId]
+        );
+
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Error fetching tracking data:', error);
+        res.status(500).json({ error: 'Database error' });
     }
-  );
 });
 
-app.post('/api/tracking', authenticateToken, (req, res) => {
-  const { patientId, supplyId, dayOfMonth, quantity, woundDx } = req.body;
+app.post('/api/tracking', authenticateToken, async (req, res) => {
+    try {
+        const { patientId, supplyId, dayOfMonth, quantity, woundDx } = req.body;
 
-  if (!patientId || !supplyId || !dayOfMonth) {
-    return res.status(400).json({ error: 'Patient ID, supply ID, and day are required' });
-  }
-
-  // First check if user has permission
-  db.get(
-    'SELECT * FROM patients WHERE id = ?',
-    [patientId],
-    (err, patient) => {
-      if (err) {
-        return res.status(500).json({ error: 'Database error' });
-      }
-      if (!patient) {
-        return res.status(404).json({ error: 'Patient not found' });
-      }
-
-      // Check permission
-      if (req.user.role !== 'admin' && req.user.facilityId !== patient.facility_id) {
-        return res.status(403).json({ error: 'Access denied' });
-      }
-
-      // Upsert tracking data
-      db.run(
-        `INSERT OR REPLACE INTO supply_tracking 
-         (patient_id, supply_id, day_of_month, quantity, wound_dx, updated_at) 
-         VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-        [patientId, supplyId, dayOfMonth, quantity || 0, woundDx || null],
-        function(err) {
-          if (err) {
-            return res.status(500).json({ error: 'Database error' });
-          }
-          res.json({ message: 'Tracking data updated successfully' });
+        if (!patientId || !supplyId || !dayOfMonth) {
+            return res.status(400).json({ error: 'Patient ID, supply ID, and day are required' });
         }
-      );
+
+        // First check if user has permission
+        const patientCheck = await pool.query('SELECT * FROM patients WHERE id = $1', [patientId]);
+        
+        if (patientCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Patient not found' });
+        }
+
+        const patient = patientCheck.rows[0];
+
+        // Check permission
+        if (req.user.role !== 'admin' && req.user.facilityId !== patient.facility_id) {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+
+        // Upsert tracking data with wound_dx support
+        await pool.query(
+            `INSERT INTO tracking (patient_id, supply_id, day_of_month, quantity, wound_dx, updated_at) 
+             VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+             ON CONFLICT (patient_id, supply_id, day_of_month) 
+             DO UPDATE SET 
+                quantity = EXCLUDED.quantity,
+                wound_dx = CASE 
+                    WHEN EXCLUDED.wound_dx IS NOT NULL AND EXCLUDED.wound_dx != '' 
+                    THEN EXCLUDED.wound_dx 
+                    ELSE tracking.wound_dx 
+                END,
+                updated_at = CURRENT_TIMESTAMP`,
+            [patientId, supplyId, dayOfMonth, quantity || 0, woundDx || null]
+        );
+
+        res.json({ message: 'Tracking data updated successfully' });
+    } catch (error) {
+        console.error('Error updating tracking data:', error);
+        res.status(500).json({ error: 'Database error' });
     }
-  );
 });
 
 // Dashboard routes
-app.get('/api/dashboard/summary', authenticateToken, (req, res) => {
-  const { facilityId, month } = req.query;
-  
-  let query = `
-    SELECT 
-      p.id,
-      p.name,
-      p.mrn,
-      p.month,
-      f.name as facility_name,
-      p.created_at,
-      COALESCE(SUM(st.quantity), 0) as total_units,
-      COALESCE(SUM(st.quantity * s.cost), 0) as total_cost,
-      GROUP_CONCAT(DISTINCT st.wound_dx) as wound_diagnoses,
-      GROUP_CONCAT(DISTINCT s.code) as supply_codes,
-      GROUP_CONCAT(DISTINCT s.hcpcs) as hcpcs_codes
-    FROM patients p
-    LEFT JOIN facilities f ON p.facility_id = f.id
-    LEFT JOIN supply_tracking st ON p.id = st.patient_id
-    LEFT JOIN supplies s ON st.supply_id = s.id
-    WHERE 1=1
-  `;
-  
-  const params = [];
-  
-  // Apply filters
-  if (req.user.role !== 'admin' && req.user.facilityId) {
-    query += ' AND p.facility_id = ?';
-    params.push(req.user.facilityId);
-  } else if (facilityId) {
-    query += ' AND p.facility_id = ?';
-    params.push(facilityId);
-  }
-  
-  if (month) {
-    query += ' AND p.month = ?';
-    params.push(month);
-  }
-  
-  query += ' GROUP BY p.id ORDER BY p.created_at DESC';
+app.get('/api/dashboard/summary', authenticateToken, async (req, res) => {
+    try {
+        const { facilityId, month } = req.query;
+        
+        let query = `
+            SELECT 
+                p.id,
+                p.name,
+                p.mrn,
+                p.month,
+                f.name as facility_name,
+                p.created_at,
+                COALESCE(SUM(t.quantity), 0) as total_units,
+                COALESCE(SUM(t.quantity * s.cost), 0) as total_cost,
+                STRING_AGG(DISTINCT t.wound_dx, '; ') FILTER (WHERE t.wound_dx IS NOT NULL AND t.wound_dx != '') as wound_diagnoses,
+                STRING_AGG(DISTINCT s.code::text, ',') as supply_codes,
+                STRING_AGG(DISTINCT s.hcpcs, ',') FILTER (WHERE s.hcpcs IS NOT NULL AND s.hcpcs != '') as hcpcs_codes
+            FROM patients p
+            LEFT JOIN facilities f ON p.facility_id = f.id
+            LEFT JOIN tracking t ON p.id = t.patient_id
+            LEFT JOIN supplies s ON t.supply_id = s.id
+            WHERE 1=1
+        `;
+        
+        const params = [];
+        let paramCount = 0;
+        
+        // Apply filters
+        if (req.user.role !== 'admin' && req.user.facilityId) {
+            paramCount++;
+            query += ` AND p.facility_id = ${paramCount}`;
+            params.push(req.user.facilityId);
+        } else if (facilityId) {
+            paramCount++;
+            query += ` AND p.facility_id = ${paramCount}`;
+            params.push(facilityId);
+        }
+        
+        if (month) {
+            paramCount++;
+            query += ` AND p.month = ${paramCount}`;
+            params.push(month);
+        }
+        
+        query += ' GROUP BY p.id, f.name ORDER BY p.created_at DESC';
 
-  db.all(query, params, (err, rows) => {
-    if (err) {
-      return res.status(500).json({ error: 'Database error' });
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Error fetching dashboard summary:', error);
+        res.status(500).json({ error: 'Database error' });
     }
-    res.json(rows);
-  });
 });
 
 // Reports routes
-app.get('/api/reports/itemized-summary', authenticateToken, (req, res) => {
-  const { facilityId, month } = req.query;
-  
-  let query = `
-    SELECT 
-      p.name as patient_name,
-      p.mrn,
-      f.name as facility_name,
-      s.code as ar_code,
-      s.description as item_description,
-      s.hcpcs,
-      SUM(st.quantity) as total_units,
-      s.cost as unit_cost,
-      SUM(st.quantity * s.cost) as total_cost,
-      st.wound_dx
-    FROM patients p
-    JOIN supply_tracking st ON p.id = st.patient_id
-    JOIN supplies s ON st.supply_id = s.id
-    LEFT JOIN facilities f ON p.facility_id = f.id
-    WHERE st.quantity > 0
-  `;
-  
-  const params = [];
-  
-  // Apply filters
-  if (req.user.role !== 'admin' && req.user.facilityId) {
-    query += ' AND p.facility_id = ?';
-    params.push(req.user.facilityId);
-  } else if (facilityId) {
-    query += ' AND p.facility_id = ?';
-    params.push(facilityId);
-  }
-  
-  if (month) {
-    query += ' AND p.month = ?';
-    params.push(month);
-  }
-  
-  query += ' GROUP BY p.id, s.id ORDER BY p.name, s.code';
+app.get('/api/reports/itemized-summary', authenticateToken, async (req, res) => {
+    try {
+        const { facilityId, month } = req.query;
+        
+        let query = `
+            SELECT 
+                p.name as patient_name,
+                p.mrn,
+                f.name as facility_name,
+                s.code as ar_code,
+                s.description as item_description,
+                s.hcpcs,
+                SUM(t.quantity) as total_units,
+                s.cost as unit_cost,
+                SUM(t.quantity * s.cost) as total_cost,
+                t.wound_dx
+            FROM patients p
+            JOIN tracking t ON p.id = t.patient_id
+            JOIN supplies s ON t.supply_id = s.id
+            LEFT JOIN facilities f ON p.facility_id = f.id
+            WHERE t.quantity > 0
+        `;
+        
+        const params = [];
+        let paramCount = 0;
+        
+        // Apply filters
+        if (req.user.role !== 'admin' && req.user.facilityId) {
+            paramCount++;
+            query += ` AND p.facility_id = ${paramCount}`;
+            params.push(req.user.facilityId);
+        } else if (facilityId) {
+            paramCount++;
+            query += ` AND p.facility_id = ${paramCount}`;
+            params.push(facilityId);
+        }
+        
+        if (month) {
+            paramCount++;
+            query += ` AND p.month = ${paramCount}`;
+            params.push(month);
+        }
+        
+        query += ' GROUP BY p.id, s.id, p.name, p.mrn, f.name, s.code, s.description, s.hcpcs, s.cost, t.wound_dx ORDER BY p.name, s.code';
 
-  db.all(query, params, (err, rows) => {
-    if (err) {
-      return res.status(500).json({ error: 'Database error' });
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Error fetching itemized summary:', error);
+        res.status(500).json({ error: 'Database error' });
     }
-    res.json(rows);
-  });
 });
 
 // Users management routes (admin only)
-app.get('/api/users', authenticateToken, requireAdmin, (req, res) => {
-  db.all(
-    `SELECT u.*, f.name as facility_name 
-     FROM users u 
-     LEFT JOIN facilities f ON u.facility_id = f.id 
-     ORDER BY u.created_at DESC`,
-    [],
-    (err, rows) => {
-      if (err) {
-        return res.status(500).json({ error: 'Database error' });
-      }
-      // Remove password from response
-      const users = rows.map(user => {
-        const { password, ...userWithoutPassword } = user;
-        return userWithoutPassword;
-      });
-      res.json(users);
+app.get('/api/users', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const result = await pool.query(
+            `SELECT u.id, u.name, u.email, u.role, u.facility_id, u.is_approved, u.created_at, u.updated_at, f.name as facility_name 
+             FROM users u 
+             LEFT JOIN facilities f ON u.facility_id = f.id 
+             ORDER BY u.created_at DESC`
+        );
+        
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Error fetching users:', error);
+        res.status(500).json({ error: 'Database error' });
     }
-  );
 });
 
-app.put('/api/users/:id/approval', authenticateToken, requireAdmin, (req, res) => {
-  const { isApproved } = req.body;
-  const userId = req.params.id;
+app.put('/api/users/:id/approval', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { isApproved } = req.body;
+        const userId = req.params.id;
 
-  db.run(
-    'UPDATE users SET is_approved = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-    [isApproved ? 1 : 0, userId],
-    function(err) {
-      if (err) {
-        return res.status(500).json({ error: 'Database error' });
-      }
-      if (this.changes === 0) {
-        return res.status(404).json({ error: 'User not found' });
-      }
-      res.json({ message: 'User approval status updated successfully' });
+        const result = await pool.query(
+            'UPDATE users SET is_approved = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+            [isApproved, userId]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        res.json({ message: 'User approval status updated successfully' });
+    } catch (error) {
+        console.error('Error updating user approval:', error);
+        res.status(500).json({ error: 'Database error' });
     }
-  );
 });
 
-app.delete('/api/users/:id', authenticateToken, requireAdmin, (req, res) => {
-  const userId = req.params.id;
+app.delete('/api/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const userId = req.params.id;
 
-  // Prevent deleting yourself
-  if (parseInt(userId) === req.user.id) {
-    return res.status(400).json({ error: 'Cannot delete your own account' });
-  }
+        // Prevent deleting yourself
+        if (parseInt(userId) === req.user.id) {
+            return res.status(400).json({ error: 'Cannot delete your own account' });
+        }
 
-  db.run('DELETE FROM users WHERE id = ?', [userId], function(err) {
-    if (err) {
-      return res.status(500).json({ error: 'Database error' });
+        const result = await pool.query('DELETE FROM users WHERE id = $1', [userId]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        res.json({ message: 'User deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        res.status(500).json({ error: 'Database error' });
     }
-    if (this.changes === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    res.json({ message: 'User deleted successfully' });
-  });
 });
 
 // Serve the main HTML file
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Something went wrong!' });
+    console.error(err.stack);
+    res.status(500).json({ error: 'Something went wrong!' });
 });
 
 // 404 handler
 app.use((req, res) => {
-  res.status(404).json({ error: 'Route not found' });
+    res.status(404).json({ error: 'Route not found' });
 });
 
 // Graceful shutdown
 process.on('SIGINT', () => {
-  console.log('Shutting down server...');
-  db.close((err) => {
-    if (err) {
-      console.error(err.message);
-    }
-    console.log('Database connection closed.');
-    process.exit(0);
-  });
+    console.log('Shutting down server...');
+    pool.end(() => {
+        console.log('Database connection pool closed.');
+        process.exit(0);
+    });
 });
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`🏥 Wound Care RT Supply Tracker running on port ${PORT}`);
-  console.log(`🌐 Server URL: http://localhost:${PORT}`);
-  console.log(`👤 Default admin: admin@system.com / admin123`);
+    console.log(`🏥 Wound Care RT Supply Tracker running on port ${PORT}`);
+    console.log(`🌐 Server URL: http://localhost:${PORT}`);
+    console.log(`👤 Login credentials available in your migration data`);
+    console.log(`📋 Connected to existing PostgreSQL database`);
 });
 
 module.exports = app;
