@@ -286,6 +286,89 @@ app.delete('/api/facilities/:id', authenticateToken, requireAdmin, async (req, r
     }
 });
 
+// Add debugging endpoint to check database contents
+app.get('/api/debug/database-info', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const facilityCount = await pool.query('SELECT COUNT(*) as count FROM facilities');
+        const patientCount = await pool.query('SELECT COUNT(*) as count FROM patients');
+        const trackingCount = await pool.query('SELECT COUNT(*) as count FROM tracking');
+        const trackingWithDataCount = await pool.query('SELECT COUNT(*) as count FROM tracking WHERE quantity > 0');
+        const suppliesCount = await pool.query('SELECT COUNT(*) as count FROM supplies');
+        
+        const samplePatients = await pool.query('SELECT p.id, p.name, p.month, f.name as facility_name FROM patients p LEFT JOIN facilities f ON p.facility_id = f.id LIMIT 5');
+        const sampleTracking = await pool.query('SELECT t.*, p.name as patient_name, s.description as supply_name FROM tracking t LEFT JOIN patients p ON t.patient_id = p.id LEFT JOIN supplies s ON t.supply_id = s.id WHERE t.quantity > 0 LIMIT 5');
+        
+        const facilitiesList = await pool.query('SELECT id, name FROM facilities ORDER BY name');
+        const monthsList = await pool.query('SELECT DISTINCT month FROM patients ORDER BY month DESC');
+        
+        res.json({
+            counts: {
+                facilities: parseInt(facilityCount.rows[0].count),
+                patients: parseInt(patientCount.rows[0].count),
+                totalTracking: parseInt(trackingCount.rows[0].count),
+                trackingWithData: parseInt(trackingWithDataCount.rows[0].count),
+                supplies: parseInt(suppliesCount.rows[0].count)
+            },
+            sampleData: {
+                patients: samplePatients.rows,
+                tracking: sampleTracking.rows
+            },
+            availableFilters: {
+                facilities: facilitiesList.rows,
+                months: monthsList.rows
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching database info:', error);
+        res.status(500).json({ error: 'Database error: ' + error.message });
+    }
+});
+app.post('/api/admin/cleanup-orphaned-patients', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { deleteOrphaned = false, reassignToFacilityId = null } = req.body;
+        
+        if (deleteOrphaned) {
+            // Delete patients with no valid facility
+            const result = await pool.query(`
+                DELETE FROM patients 
+                WHERE facility_id IS NULL OR facility_id NOT IN (SELECT id FROM facilities)
+            `);
+            
+            res.json({ 
+                message: `Deleted ${result.rowCount} orphaned patient(s)`,
+                deletedCount: result.rowCount 
+            });
+        } else if (reassignToFacilityId) {
+            // Reassign patients to a specific facility
+            const result = await pool.query(`
+                UPDATE patients 
+                SET facility_id = $1 
+                WHERE facility_id IS NULL OR facility_id NOT IN (SELECT id FROM facilities)
+            `, [reassignToFacilityId]);
+            
+            res.json({ 
+                message: `Reassigned ${result.rowCount} orphaned patient(s) to facility`,
+                reassignedCount: result.rowCount 
+            });
+        } else {
+            // Just return count of orphaned patients
+            const result = await pool.query(`
+                SELECT COUNT(*) as count 
+                FROM patients 
+                WHERE facility_id IS NULL OR facility_id NOT IN (SELECT id FROM facilities)
+            `);
+            
+            res.json({ 
+                orphanedCount: parseInt(result.rows[0].count),
+                message: 'Use deleteOrphaned=true or reassignToFacilityId=X to fix orphaned patients'
+            });
+        }
+    } catch (error) {
+        console.error('Error cleaning up orphaned patients:', error);
+        res.status(500).json({ error: 'Database error' });
+    }
+});
+
 // Add endpoint to clean up orphaned patients
 app.post('/api/admin/cleanup-orphaned-patients', authenticateToken, requireAdmin, async (req, res) => {
     try {
