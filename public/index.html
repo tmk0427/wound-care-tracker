@@ -542,7 +542,9 @@
                     </div>
                     <div class="filter-group">
                         <label>Month</label>
-                        <input type="month" id="dashboardMonthFilter" onchange="loadDashboard()">
+                        <select id="dashboardMonthFilter" onchange="loadDashboard()">
+                            <option value="">All Months</option>
+                        </select>
                     </div>
                 </div>
 
@@ -574,6 +576,21 @@
             <div id="patientsSection" class="section">
                 <h2>👥 Patient Management</h2>
                 
+                <div class="filter-container">
+                    <div class="filter-group">
+                        <label>Facility</label>
+                        <select id="patientsFacilityFilter" onchange="loadPatientsTable()">
+                            <option value="">All Facilities</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Month</label>
+                        <select id="patientsMonthFilter" onchange="loadPatientsTable()">
+                            <option value="">All Months</option>
+                        </select>
+                    </div>
+                </div>
+                
                 <div class="card">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                         <h3>Patient List</h3>
@@ -603,15 +620,30 @@
                 
                 <div class="filter-container">
                     <div class="filter-group">
+                        <label>Facility</label>
+                        <select id="trackingFacilityFilter" onchange="filterTrackingPatients()">
+                            <option value="">All Facilities</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Month</label>
+                        <select id="trackingMonthFilter" onchange="filterTrackingPatients()">
+                            <option value="">All Months</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
                         <label>Select Patient</label>
                         <select id="trackingPatientSelect" onchange="loadPatientTracking()">
                             <option value="">Choose a patient...</option>
                         </select>
                     </div>
+                    <div class="filter-group">
+                        <button class="btn btn-small" onclick="showAddMonthModal()">+ Add New Month</button>
+                    </div>
                 </div>
 
                 <div id="trackingContent" class="loading">
-                    Select a patient to begin tracking supplies
+                    Select filters and patient to begin tracking supplies
                 </div>
             </div>
 
@@ -633,7 +665,9 @@
                             </div>
                             <div class="filter-group">
                                 <label>Month</label>
-                                <input type="month" id="reportMonthFilter">
+                                <select id="reportMonthFilter">
+                                    <option value="">All Months</option>
+                                </select>
                             </div>
                         </div>
                         
@@ -871,6 +905,60 @@
         </div>
     </div>
 
+    <!-- Add Month Modal -->
+    <div id="addMonthModal" class="modal">
+        <div class="modal-content">
+            <h3>Add New Month</h3>
+            <p>Add a new month/year for patient tracking</p>
+            <div class="form-group">
+                <label>Month/Year</label>
+                <input type="month" id="newMonthInput" placeholder="Select month and year">
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                <button class="btn btn-secondary" onclick="closeModal('addMonthModal')">Cancel</button>
+                <button class="btn" onclick="addNewMonth()">Add Month</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit User Modal -->
+    <div id="editUserModal" class="modal">
+        <div class="modal-content">
+            <h3>Edit User</h3>
+            <input type="hidden" id="editUserId">
+            <div class="form-group">
+                <label>Full Name</label>
+                <input type="text" id="editUserName" placeholder="Full name">
+            </div>
+            <div class="form-group">
+                <label>Email Address</label>
+                <input type="email" id="editUserEmail" placeholder="Email address">
+            </div>
+            <div class="form-group">
+                <label>Role</label>
+                <select id="editUserRole">
+                    <option value="user">User</option>
+                    <option value="admin">Admin</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Facility</label>
+                <select id="editUserFacility">
+                    <option value="">No facility assigned</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="editUserApproved"> Account Approved
+                </label>
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                <button class="btn btn-secondary" onclick="closeModal('editUserModal')">Cancel</button>
+                <button class="btn" onclick="updateUser()">Update User</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Global variables
         let currentUser = null;
@@ -878,6 +966,30 @@
         let supplies = [];
         let facilities = [];
         let patients = [];
+        let availableMonths = [];
+
+        // Generate available months from 08-2024 to 24 months in the future
+        function generateAvailableMonths() {
+            const months = [];
+            const startDate = new Date('2024-08-01');
+            const currentDate = new Date();
+            const endDate = new Date(currentDate.getFullYear() + 2, currentDate.getMonth() + 24, 1);
+            
+            let iterDate = new Date(startDate);
+            while (iterDate <= endDate) {
+                const yearMonth = iterDate.getFullYear() + '-' + 
+                                 String(iterDate.getMonth() + 1).padStart(2, '0');
+                const displayText = iterDate.toLocaleDateString('en-US', { 
+                    year: 'numeric', 
+                    month: 'long' 
+                });
+                months.push({ value: yearMonth, text: displayText });
+                iterDate.setMonth(iterDate.getMonth() + 1);
+            }
+            
+            availableMonths = months;
+            return months;
+        }
 
         // Authentication functions
         async function apiCall(endpoint, options = {}) {
@@ -1026,6 +1138,9 @@
 
         async function initializeApp() {
             try {
+                // Generate available months
+                generateAvailableMonths();
+                
                 await Promise.all([
                     loadSupplies(),
                     loadFacilities(),
@@ -1104,19 +1219,28 @@
         }
 
         function populateFilters() {
+            // Generate months if not already done
+            if (availableMonths.length === 0) {
+                generateAvailableMonths();
+            }
+            
             // Populate facility filters
             const facilitySelects = [
                 'dashboardFacilityFilter',
                 'reportFacilityFilter',
-                'newPatientFacility'
+                'newPatientFacility',
+                'patientsFacilityFilter',
+                'trackingFacilityFilter',
+                'editUserFacility'
             ];
             
             facilitySelects.forEach(selectId => {
                 const select = document.getElementById(selectId);
                 if (select) {
-                    select.innerHTML = selectId.includes('dashboard') || selectId.includes('report') 
-                        ? '<option value="">All Facilities</option>' 
-                        : '<option value="">Select facility...</option>';
+                    const isFormField = selectId.includes('new') || selectId.includes('edit');
+                    select.innerHTML = isFormField 
+                        ? (selectId.includes('editUser') ? '<option value="">No facility assigned</option>' : '<option value="">Select facility...</option>')
+                        : '<option value="">All Facilities</option>';
                     
                     facilities.forEach(facility => {
                         const option = document.createElement('option');
@@ -1127,13 +1251,103 @@
                 }
             });
             
-            // Set current month in filters
+            // Populate month filters
+            const monthSelects = [
+                'dashboardMonthFilter',
+                'reportMonthFilter', 
+                'patientsMonthFilter',
+                'trackingMonthFilter'
+            ];
+            
+            monthSelects.forEach(selectId => {
+                const select = document.getElementById(selectId);
+                if (select) {
+                    select.innerHTML = '<option value="">All Months</option>';
+                    availableMonths.forEach(month => {
+                        const option = document.createElement('option');
+                        option.value = month.value;
+                        option.textContent = month.text;
+                        select.appendChild(option);
+                    });
+                }
+            });
+            
+            // Set current month in patient form
             const today = new Date();
             const currentMonth = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
-            const monthInputs = document.querySelectorAll('input[type="month"]');
-            monthInputs.forEach(input => {
-                if (!input.value) input.value = currentMonth;
+            const newPatientMonth = document.getElementById('newPatientMonth');
+            if (newPatientMonth && !newPatientMonth.value) {
+                newPatientMonth.value = currentMonth;
+            }
+        }
+
+        // Filter functions
+        async function loadPatientsTable() {
+            try {
+                const facilityFilter = document.getElementById('patientsFacilityFilter')?.value;
+                const monthFilter = document.getElementById('patientsMonthFilter')?.value;
+                
+                let filteredPatients = [...patients];
+                
+                if (facilityFilter) {
+                    filteredPatients = filteredPatients.filter(p => 
+                        p.facility_id == facilityFilter
+                    );
+                }
+                
+                if (monthFilter) {
+                    filteredPatients = filteredPatients.filter(p => 
+                        p.month === monthFilter
+                    );
+                }
+                
+                const tbody = document.querySelector('#patientsTable tbody');
+                tbody.innerHTML = filteredPatients.map(patient => `
+                    <tr>
+                        <td>${patient.name}</td>
+                        <td>${patient.mrn || 'N/A'}</td>
+                        <td>${patient.month}</td>
+                        <td>${patient.facility_name || 'N/A'}</td>
+                        <td>
+                            <button class="btn btn-small btn-danger" onclick="deletePatient(${patient.id})">Delete</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Failed to load patients table:', error);
+            }
+        }
+
+        function filterTrackingPatients() {
+            const facilityFilter = document.getElementById('trackingFacilityFilter').value;
+            const monthFilter = document.getElementById('trackingMonthFilter').value;
+            const select = document.getElementById('trackingPatientSelect');
+            
+            let filteredPatients = [...patients];
+            
+            if (facilityFilter) {
+                filteredPatients = filteredPatients.filter(p => 
+                    p.facility_id == facilityFilter
+                );
+            }
+            
+            if (monthFilter) {
+                filteredPatients = filteredPatients.filter(p => 
+                    p.month === monthFilter
+                );
+            }
+            
+            select.innerHTML = '<option value="">Choose a patient...</option>';
+            filteredPatients.forEach(patient => {
+                const option = document.createElement('option');
+                option.value = patient.id;
+                option.textContent = `${patient.name} - ${patient.month} (${patient.facility_name || 'N/A'})`;
+                select.appendChild(option);
             });
+            
+            // Clear tracking content when filters change
+            document.getElementById('trackingContent').innerHTML = 
+                '<div class="loading">Select filters and patient to begin tracking supplies</div>';
         }
 
         async function loadDashboard() {
@@ -1210,15 +1424,8 @@
         }
 
         async function loadPatientsForTracking() {
-            const select = document.getElementById('trackingPatientSelect');
-            select.innerHTML = '<option value="">Choose a patient...</option>';
-            
-            patients.forEach(patient => {
-                const option = document.createElement('option');
-                option.value = patient.id;
-                option.textContent = `${patient.name} - ${patient.month} (${patient.facility_name || 'N/A'})`;
-                select.appendChild(option);
-            });
+            // This will be called by filterTrackingPatients, so we just trigger the filter
+            filterTrackingPatients();
         }
 
         async function loadPatientTracking() {
@@ -1438,6 +1645,7 @@
                             </span>
                         </td>
                         <td>
+                            <button class="btn btn-small btn-secondary" onclick="editUser(${user.id})">Edit</button>
                             ${!user.is_approved ? `
                                 <button class="btn btn-small btn-success" onclick="approveUser(${user.id})">Approve</button>
                             ` : ''}
@@ -1478,6 +1686,17 @@
             if (modalId === 'editFacilityModal') {
                 document.getElementById('editFacilityId').value = '';
                 document.getElementById('editFacilityName').value = '';
+            }
+            if (modalId === 'editUserModal') {
+                document.getElementById('editUserId').value = '';
+                document.getElementById('editUserName').value = '';
+                document.getElementById('editUserEmail').value = '';
+                document.getElementById('editUserRole').value = 'user';
+                document.getElementById('editUserFacility').value = '';
+                document.getElementById('editUserApproved').checked = false;
+            }
+            if (modalId === 'addMonthModal') {
+                document.getElementById('newMonthInput').value = '';
             }
         }
 
@@ -1701,6 +1920,120 @@
             } catch (error) {
                 alert('Failed to delete facility: ' + error.message);
             }
+        }
+
+        // User editing functions
+        async function editUser(userId) {
+            try {
+                const users = await apiCall('/users');
+                const user = users.find(u => u.id === userId);
+                if (!user) return;
+
+                document.getElementById('editUserId').value = user.id;
+                document.getElementById('editUserName').value = user.name;
+                document.getElementById('editUserEmail').value = user.email;
+                document.getElementById('editUserRole').value = user.role;
+                document.getElementById('editUserFacility').value = user.facility_id || '';
+                document.getElementById('editUserApproved').checked = user.is_approved;
+                
+                document.getElementById('editUserModal').style.display = 'flex';
+            } catch (error) {
+                console.error('Failed to load user for editing:', error);
+            }
+        }
+
+        async function updateUser() {
+            const userId = document.getElementById('editUserId').value;
+            const name = document.getElementById('editUserName').value.trim();
+            const email = document.getElementById('editUserEmail').value.trim();
+            const role = document.getElementById('editUserRole').value;
+            const facilityId = document.getElementById('editUserFacility').value;
+            const isApproved = document.getElementById('editUserApproved').checked;
+
+            if (!name || !email) {
+                alert('Please fill in required fields');
+                return;
+            }
+
+            try {
+                // NOTE: This requires adding a PUT /api/users/:id endpoint to your server.js
+                // Add this to your backend:
+                /*
+                app.put('/api/users/:id', authenticateToken, async (req, res) => {
+                    if (req.user.role !== 'admin') {
+                        return res.status(403).json({ error: 'Admin access required' });
+                    }
+                    const userId = parseInt(req.params.id);
+                    const { name, email, role, facilityId, isApproved } = req.body;
+                    
+                    const result = await pool.query(
+                        'UPDATE users SET name = $1, email = $2, role = $3, facility_id = $4, is_approved = $5, updated_at = CURRENT_TIMESTAMP WHERE id = $6 RETURNING *',
+                        [name, email, role, facilityId, isApproved, userId]
+                    );
+                    
+                    if (result.rows.length === 0) {
+                        return res.status(404).json({ error: 'User not found' });
+                    }
+                    
+                    delete result.rows[0].password;
+                    res.json(result.rows[0]);
+                });
+                */
+                
+                await apiCall(`/users/${userId}`, {
+                    method: 'PUT',
+                    body: { 
+                        name, 
+                        email, 
+                        role, 
+                        facilityId: facilityId ? parseInt(facilityId) : null,
+                        isApproved 
+                    }
+                });
+
+                closeModal('editUserModal');
+                if (currentSection === 'users') loadUsersTable();
+                
+            } catch (error) {
+                alert('Failed to update user. Backend endpoint may need to be added: ' + error.message);
+            }
+        }
+
+        // Month management functions
+        function showAddMonthModal() {
+            document.getElementById('addMonthModal').style.display = 'flex';
+        }
+
+        function addNewMonth() {
+            const monthInput = document.getElementById('newMonthInput').value;
+            if (!monthInput) {
+                alert('Please select a month and year');
+                return;
+            }
+
+            const [year, month] = monthInput.split('-');
+            const monthText = new Date(year, month - 1, 1).toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'long' 
+            });
+
+            // Check if month already exists
+            if (!availableMonths.find(m => m.value === monthInput)) {
+                availableMonths.push({ value: monthInput, text: monthText });
+                
+                // Sort months chronologically
+                availableMonths.sort((a, b) => a.value.localeCompare(b.value));
+                
+                // Refresh all month filters
+                populateFilters();
+                
+                alert(`${monthText} has been added to available months`);
+            } else {
+                alert('This month is already available');
+            }
+
+            closeModal('addMonthModal');
+            document.getElementById('newMonthInput').value = '';
         }
 
         async function approveUser(userId) {
