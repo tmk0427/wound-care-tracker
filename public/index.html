@@ -330,7 +330,7 @@
                         <h3>Report Results</h3>
                         <div class="table-container">
                             <table id="reportTable">
-                                <thead><tr><th>Patient</th><th>MRN</th><th>Facility</th><th>AR Code</th><th>Description</th><th>HCPCS</th><th>Units</th><th>Unit Cost</th><th>Total Cost</th><th>Wound Dx</th></tr></thead>
+                                <thead><tr><th>Patient</th><th>MRN</th><th>Month</th><th>Facility</th><th>AR Code</th><th>Description</th><th>HCPCS</th><th>Units</th><th>Unit Cost</th><th>Total Cost</th><th>Wound Dx</th></tr></thead>
                                 <tbody></tbody>
                             </table>
                         </div>
@@ -1156,7 +1156,7 @@
             try {
                 const data = await apiCall('/reports/itemized-summary?' + params);
                 const tbody = document.querySelector('#reportTable tbody');
-                tbody.innerHTML = data.map(item => '<tr><td>' + item.patient_name + '</td><td>' + (item.mrn || 'N/A') + '</td><td>' + item.facility_name + '</td><td>' + item.ar_code + '</td><td>' + item.item_description + '</td><td>' + (item.hcpcs || 'N/A') + '</td><td>' + item.total_units + '</td><td>$' + parseFloat(item.unit_cost || 0).toFixed(2) + '</td><td>$' + parseFloat(item.total_cost || 0).toFixed(2) + '</td><td>' + (item.wound_dx || 'N/A') + '</td></tr>').join('');
+                tbody.innerHTML = data.map(item => '<tr><td>' + item.patient_name + '</td><td>' + (item.mrn || 'N/A') + '</td><td>' + item.month + '</td><td>' + item.facility_name + '</td><td>' + item.ar_code + '</td><td>' + item.item_description + '</td><td>' + (item.hcpcs || 'N/A') + '</td><td>' + item.total_units + '</td><td>$' + parseFloat(item.unit_cost || 0).toFixed(2) + '</td><td>$' + parseFloat(item.total_cost || 0).toFixed(2) + '</td><td>' + (item.wound_dx || 'N/A') + '</td></tr>').join('');
                 document.getElementById('reportResults').style.display = 'block';
                 const totalCost = data.reduce((sum, item) => sum + parseFloat(item.total_cost || 0), 0);
                 const totalUnits = data.reduce((sum, item) => sum + parseInt(item.total_units || 0), 0);
