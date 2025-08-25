@@ -1795,6 +1795,11 @@
             try {
                 const response = await fetch(url, config);
                 
+                // Handle network errors
+                if (!response) {
+                    throw new Error('Network error - no response received');
+                }
+                
                 const contentType = response.headers.get('content-type');
                 if (!contentType || !contentType.includes('application/json')) {
                     const text = await response.text();
@@ -1811,6 +1816,12 @@
                 return data;
             } catch (error) {
                 console.error('API Error:', error);
+                
+                // Handle specific error types
+                if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+                    throw new Error('Network connection error. Please check your internet connection.');
+                }
+                
                 throw error;
             }
         }
@@ -2035,8 +2046,8 @@
                     apiCall('/supplies')
                 ]);
 
-                facilities = facilitiesData;
-                supplies = suppliesData;
+                facilities = facilitiesData || [];
+                supplies = suppliesData || [];
                 allSupplies = supplies;
                 filteredSupplies = supplies;
 
@@ -2048,7 +2059,7 @@
                 await loadDashboard();
                 await loadPatients();
                 await loadSupplies();
-                if (currentUser.role === 'admin') {
+                if (currentUser && currentUser.role === 'admin') {
                     await loadFacilities();
                     await loadUsers();
                 }
@@ -2057,7 +2068,7 @@
                 showNotification('🎯 All enhanced features are now active and ready to use!');
             } catch (error) {
                 console.error('Failed to load data:', error);
-                showNotification('Failed to load some data: ' + error.message, true);
+                showNotification('Failed to load some data: ' + (error.message || 'Unknown error'), true);
             } finally {
                 hideLoading();
             }
@@ -2278,7 +2289,7 @@
                 
                 if (currentUser.role === 'admin') {
                     row.innerHTML = `
-                        <td>${patient.name}</td>
+                        <td>${patient.name || ''}</td>
                         <td>${patient.mrn || 'N/A'}</td>
                         <td>${patient.wound_diagnoses || 'N/A'}</td>
                         <td>${patient.supply_codes || 'N/A'}</td>
@@ -2291,7 +2302,7 @@
                     `;
                 } else {
                     row.innerHTML = `
-                        <td>${patient.name}</td>
+                        <td>${patient.name || ''}</td>
                         <td>${patient.mrn || 'N/A'}</td>
                         <td>${patient.wound_diagnoses || 'N/A'}</td>
                         <td>${formatMonthForDisplay(patient.month)}</td>
@@ -2331,10 +2342,10 @@
                     
                     if (currentUser.role === 'admin') {
                         row.innerHTML = `
-                            <td>${patient.name}</td>
+                            <td>${patient.name || ''}</td>
                             <td>${patient.mrn || '-'}</td>
                             <td>${formatMonthForDisplay(patient.month)}</td>
-                            <td>${patient.facility_name}</td>
+                            <td>${patient.facility_name || 'Unknown'}</td>
                             <td>${parseInt(patient.total_units) || 0}</td>
                             <td>${formatCurrency(totalCost)}</td>
                             <td class="actions">
@@ -2344,10 +2355,10 @@
                         `;
                     } else {
                         row.innerHTML = `
-                            <td>${patient.name}</td>
+                            <td>${patient.name || ''}</td>
                             <td>${patient.mrn || '-'}</td>
                             <td>${formatMonthForDisplay(patient.month)}</td>
-                            <td>${patient.facility_name}</td>
+                            <td>${patient.facility_name || 'Unknown'}</td>
                             <td>${parseInt(patient.total_units) || 0}</td>
                             <td class="actions">
                                 <button class="btn btn-sm btn-primary" onclick="viewPatientDetails(${patient.id})">View</button>
@@ -2420,7 +2431,7 @@
                 filteredPatients.forEach(patient => {
                     const option = document.createElement('option');
                     option.value = patient.id;
-                    option.textContent = `${patient.name} (${formatMonthForDisplay(patient.month)}) - ${patient.facility_name || 'Unknown'}`;
+                    option.textContent = `${patient.name || 'Unknown'} (${formatMonthForDisplay(patient.month)}) - ${patient.facility_name || 'Unknown'}`;
                     patientSelect.appendChild(option);
                 });
             } catch (error) {
@@ -2543,23 +2554,23 @@
                 if (currentUser.role === 'admin') {
                     // Admin sees all columns
                     rowHTML = `
-                        <td style="font-weight: bold; color: #667eea;">${supply.code}</td>
-                        <td style="text-align: left;" title="${supply.description}">${supply.description}</td>
+                        <td style="font-weight: bold; color: #667eea;">${supply.code || ''}</td>
+                        <td style="text-align: left;" title="${supply.description || ''}">${supply.description || ''}</td>
                         <td style="text-align: left;">
                             <textarea class="wound-dx-input" 
                                       onchange="updateWoundDx(${patientId}, ${supply.id}, this.value)"
                                       placeholder="Enter wound diagnosis">${allWoundDx}</textarea>
                         </td>
                         <td>${supply.hcpcs || 'N/A'}</td>
-                        <td>${formatCurrency(supply.cost)}</td>
+                        <td>${formatCurrency(supply.cost || 0)}</td>
                         <td class="total-cell" id="total-${supply.id}">${totalUnits}</td>
                         <td class="cost-cell" id="cost-${supply.id}">${formatCurrency(totalCost)}</td>
                     `;
                 } else {
                     // Regular users see limited columns
                     rowHTML = `
-                        <td style="font-weight: bold; color: #667eea;">${supply.code}</td>
-                        <td style="text-align: left;" title="${supply.description}">${supply.description}</td>
+                        <td style="font-weight: bold; color: #667eea;">${supply.code || ''}</td>
+                        <td style="text-align: left;" title="${supply.description || ''}">${supply.description || ''}</td>
                         <td style="text-align: left;">
                             <textarea class="wound-dx-input" 
                                       onchange="updateWoundDx(${patientId}, ${supply.id}, this.value)"
@@ -2676,13 +2687,15 @@
                 const day = parseInt(input.getAttribute('data-day'));
                 const quantity = parseInt(input.value) || 0;
 
-                if (!supplyTotals[supplyId]) {
-                    supplyTotals[supplyId] = 0;
+                if (supplyId && !isNaN(day)) {
+                    if (!supplyTotals[supplyId]) {
+                        supplyTotals[supplyId] = 0;
+                    }
+                    
+                    supplyTotals[supplyId] += quantity;
+                    dayTotals[day] = (dayTotals[day] || 0) + quantity;
+                    grandTotal += quantity;
                 }
-                
-                supplyTotals[supplyId] += quantity;
-                dayTotals[day] += quantity;
-                grandTotal += quantity;
             });
 
             // Update supply totals and costs
@@ -2752,9 +2765,13 @@
                 suppliesData.sort((a, b) => a.code - b.code).forEach(supply => {
                     const row = document.createElement('tr');
                     
+                    // Safely escape strings for onclick handlers
+                    const safeDescription = (supply.description || '').replace(/'/g, "\\'").replace(/"/g, '\\"');
+                    const safeHcpcs = (supply.hcpcs || '').replace(/'/g, "\\'").replace(/"/g, '\\"');
+                    
                     row.innerHTML = `
                         <td><strong>${supply.code}</strong></td>
-                        <td>${supply.description}</td>
+                        <td>${supply.description || ''}</td>
                         <td>${supply.hcpcs || 'N/A'}</td>
                         <td>${formatCurrency(supply.cost)}</td>
                         <td>
@@ -2764,8 +2781,8 @@
                         </td>
                         <td>
                             ${currentUser.role === 'admin' ? `
-                                <button class="btn btn-sm btn-warning" onclick="editSupply(${supply.id}, '${supply.code}', '${supply.description.replace(/'/g, "\\'")}', '${supply.hcpcs || ''}', '${supply.cost}')" style="margin-right: 5px;">Edit</button>
-                                <button class="btn btn-sm btn-danger" onclick="deleteSupply(${supply.id}, ${supply.is_custom})">Delete</button>
+                                <button class="btn btn-sm btn-warning" onclick="editSupply(${supply.id}, '${supply.code}', '${safeDescription}', '${safeHcpcs}', '${supply.cost || 0}')" style="margin-right: 5px;">Edit</button>
+                                <button class="btn btn-sm btn-danger" onclick="deleteSupply(${supply.id}, ${supply.is_custom ? 'true' : 'false'})">Delete</button>
                             ` : '-'}
                         </td>
                     `;
@@ -2866,7 +2883,9 @@
             document.getElementById('addSupplyBtn').textContent = '➕ Add Supply';
         }
 
-        async function deleteSupply(supplyId, isCustomSupply) {
+        async function deleteSupply(supplyId, isCustomSupplyStr) {
+            // Convert string to boolean
+            const isCustomSupply = isCustomSupplyStr === 'true';
             const supplyType = isCustomSupply ? 'custom supply' : 'system supply';
             const warningMessage = !isCustomSupply ? 
                 `⚠️ Are you sure you want to delete this ${supplyType}? This is a system supply and may affect existing tracking data.` :
@@ -2950,8 +2969,11 @@
                     const row = document.createElement('tr');
                     const patientCount = facilityPatientCounts[facility.id] || 0;
                     
+                    // Safely escape facility name for onclick handlers
+                    const safeName = (facility.name || '').replace(/'/g, "\\'").replace(/"/g, '\\"');
+                    
                     row.innerHTML = `
-                        <td><strong>${facility.name}</strong></td>
+                        <td><strong>${facility.name || ''}</strong></td>
                         <td>
                             <span style="color: ${patientCount > 0 ? '#4299e1' : '#718096'};">
                                 ${patientCount} patient${patientCount !== 1 ? 's' : ''}
@@ -2959,8 +2981,8 @@
                         </td>
                         <td>${formatDate(facility.created_at)}</td>
                         <td>
-                            <button class="btn btn-sm btn-warning" onclick="editFacility(${facility.id}, '${facility.name.replace(/'/g, "\\'")}')" style="margin-right: 5px;">Edit</button>
-                            <button class="btn btn-sm btn-danger" onclick="deleteFacility(${facility.id}, '${facility.name.replace(/'/g, "\\'")}', ${patientCount})" 
+                            <button class="btn btn-sm btn-warning" onclick="editFacility(${facility.id}, '${safeName}')" style="margin-right: 5px;">Edit</button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteFacility(${facility.id}, '${safeName}', ${patientCount})" 
                                     ${patientCount > 0 ? 'title="Cannot delete - has patients assigned"' : ''}>Delete</button>
                         </td>
                     `;
@@ -3133,9 +3155,12 @@
                     const statusClass = user.is_approved ? 'status-approved' : 'status-pending';
                     const statusText = user.is_approved ? 'Approved' : 'Pending';
                     
+                    // Safely escape user name for onclick handlers
+                    const safeName = (user.name || '').replace(/'/g, "\\'").replace(/"/g, '\\"');
+                    
                     row.innerHTML = `
-                        <td>${user.name}</td>
-                        <td>${user.email}</td>
+                        <td>${user.name || ''}</td>
+                        <td>${user.email || ''}</td>
                         <td>${user.facility_name || 'N/A'}</td>
                         <td>
                             <span class="status-badge ${user.role === 'admin' ? 'status-admin' : 'status-approved'}">
@@ -3155,7 +3180,7 @@
                                 <button class="btn btn-sm btn-warning" onclick="suspendUser(${user.id})" style="margin-right: 5px;">Suspend</button>
                             ` : ''}
                             ${user.role !== 'admin' && user.id !== currentUser.id ? `
-                                <button class="btn btn-sm btn-danger" onclick="deleteUser(${user.id}, '${user.name.replace(/'/g, "\\'")}')">Delete</button>
+                                <button class="btn btn-sm btn-danger" onclick="deleteUser(${user.id}, '${safeName}')">Delete</button>
                             ` : user.id === currentUser.id ? '<em style="color: #718096;">Current User</em>' : '<em style="color: #718096;">Protected</em>'}
                         </td>
                     `;
