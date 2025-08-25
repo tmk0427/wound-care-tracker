@@ -544,6 +544,7 @@
             background: #f7fafc;
             border-radius: 12px;
             border-left: 4px solid #667eea;
+            transition: all 0.3s ease;
         }
 
         .supply-actions {
@@ -998,7 +999,7 @@
             </div>
         </div>
 
-                    <div class="tabs">
+        <div class="tabs">
             <div class="tab active" onclick="showTab('dashboard', this)">🏠 Dashboard</div>
             <div class="tab" onclick="showTab('patients', this)">👥 Patient Management</div>
             <div class="tab" onclick="showTab('tracking', this)">📊 Supply Tracking</div>
@@ -2049,6 +2050,7 @@
                 await loadSupplies();
                 if (currentUser.role === 'admin') {
                     await loadFacilities();
+                    await loadUsers();
                 }
                 
                 console.log('✅ Enhanced wound care system fully loaded!');
@@ -2761,10 +2763,10 @@
                             </span>
                         </td>
                         <td>
-                            ${supply.is_custom && currentUser.role === 'admin' ? `
-                                <button class="btn btn-sm btn-warning" onclick="editSupply(${supply.id}, '${supply.code}', '${supply.description}', '${supply.hcpcs || ''}', '${supply.cost}')">Edit</button>
-                                <button class="btn btn-sm btn-danger" onclick="deleteSupply(${supply.id})">Delete</button>
-                            ` : currentUser.role !== 'admin' ? '-' : 'System Supply'}
+                            ${currentUser.role === 'admin' ? `
+                                <button class="btn btn-sm btn-warning" onclick="editSupply(${supply.id}, '${supply.code}', '${supply.description.replace(/'/g, "\\'")}', '${supply.hcpcs || ''}', '${supply.cost}')" style="margin-right: 5px;">Edit</button>
+                                <button class="btn btn-sm btn-danger" onclick="deleteSupply(${supply.id}, ${supply.is_custom})">Delete</button>
+                            ` : '-'}
                         </td>
                     `;
                     tbody.appendChild(row);
@@ -2818,11 +2820,15 @@
                             cost: cost 
                         }
                     });
-                    showNotification('✅ Supply added successfully!');
+                    showNotification('✅ New custom supply added successfully!');
                 }
 
                 clearSupplyForm();
                 await loadSupplies();
+                
+                // Refresh supplies for tracking
+                allSupplies = supplies;
+                filteredSupplies = supplies;
                 
             } catch (error) {
                 showNotification(error.message, true);
@@ -2838,7 +2844,17 @@
             document.getElementById('addSupplyBtn').textContent = '💾 Update Supply';
             
             // Scroll to form
-            document.getElementById('supplyArCode').scrollIntoView({ behavior: 'smooth' });
+            document.getElementById('supplyArCode').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            
+            // Highlight the form briefly
+            const form = document.querySelector('.supply-form');
+            form.style.background = '#e6f3ff';
+            form.style.border = '2px solid #4299e1';
+            setTimeout(() => {
+                form.style.background = '#f7fafc';
+                form.style.border = 'none';
+                form.style.borderLeft = '4px solid #667eea';
+            }, 2000);
         }
 
         function clearSupplyForm() {
@@ -2850,14 +2866,27 @@
             document.getElementById('addSupplyBtn').textContent = '➕ Add Supply';
         }
 
-        async function deleteSupply(supplyId) {
-            if (confirm('Are you sure you want to delete this supply?')) {
+        async function deleteSupply(supplyId, isCustomSupply) {
+            const supplyType = isCustomSupply ? 'custom supply' : 'system supply';
+            const warningMessage = !isCustomSupply ? 
+                `⚠️ Are you sure you want to delete this ${supplyType}? This is a system supply and may affect existing tracking data.` :
+                `Are you sure you want to delete this ${supplyType}?`;
+                
+            if (confirm(warningMessage)) {
                 try {
                     await apiCall(`/supplies/${supplyId}`, { method: 'DELETE' });
                     showNotification('✅ Supply deleted successfully!');
                     await loadSupplies();
+                    
+                    // Refresh supplies in tracking if needed
+                    allSupplies = supplies;
+                    filteredSupplies = supplies;
                 } catch (error) {
-                    showNotification('Failed to delete supply: ' + error.message, true);
+                    if (error.message.includes('being used in patient tracking')) {
+                        showNotification('❌ Cannot delete supply - it is being used in patient tracking records. Remove all tracking data first.', true);
+                    } else {
+                        showNotification('Failed to delete supply: ' + error.message, true);
+                    }
                 }
             }
         }
@@ -2881,6 +2910,8 @@
 
         // ===== FACILITY MANAGEMENT =====
         async function loadFacilities() {
+            if (currentUser.role !== 'admin') return;
+            
             try {
                 const facilitiesData = await apiCall('/facilities');
                 facilities = facilitiesData;
@@ -2900,17 +2931,37 @@
                     facilityPatientCounts[facilityId]++;
                 });
 
-                facilitiesData.sort((a, b) => a.name.localeCompare(b.name)).forEach(facility => {
+                // Apply search filter
+                const searchTerm = document.getElementById('facilitySearch')?.value.toLowerCase() || '';
+                let filteredFacilities = facilitiesData;
+                
+                if (searchTerm) {
+                    filteredFacilities = facilitiesData.filter(facility => 
+                        facility.name.toLowerCase().includes(searchTerm)
+                    );
+                }
+
+                if (filteredFacilities.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 40px; color: #718096;">No facilities found</td></tr>';
+                    return;
+                }
+
+                filteredFacilities.sort((a, b) => a.name.localeCompare(b.name)).forEach(facility => {
                     const row = document.createElement('tr');
                     const patientCount = facilityPatientCounts[facility.id] || 0;
                     
                     row.innerHTML = `
                         <td><strong>${facility.name}</strong></td>
-                        <td>${patientCount} patients</td>
+                        <td>
+                            <span style="color: ${patientCount > 0 ? '#4299e1' : '#718096'};">
+                                ${patientCount} patient${patientCount !== 1 ? 's' : ''}
+                            </span>
+                        </td>
                         <td>${formatDate(facility.created_at)}</td>
                         <td>
                             <button class="btn btn-sm btn-warning" onclick="editFacility(${facility.id}, '${facility.name.replace(/'/g, "\\'")}')" style="margin-right: 5px;">Edit</button>
-                            <button class="btn btn-sm btn-danger" onclick="deleteFacility(${facility.id}, '${facility.name.replace(/'/g, "\\'")}', ${patientCount})">Delete</button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteFacility(${facility.id}, '${facility.name.replace(/'/g, "\\'")}', ${patientCount})" 
+                                    ${patientCount > 0 ? 'title="Cannot delete - has patients assigned"' : ''}>Delete</button>
                         </td>
                     `;
                     tbody.appendChild(row);
@@ -2919,6 +2970,8 @@
             } catch (error) {
                 console.error('Error loading facilities:', error);
                 showNotification('Failed to load facilities: ' + error.message, true);
+                const tbody = document.getElementById('facilitiesTableBody');
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 40px; color: #e53e3e;">Error loading facilities</td></tr>';
             }
         }
 
@@ -2936,6 +2989,7 @@
                 return;
             }
 
+            // Get name from either the main form or modal form
             const name = document.getElementById('facilityName').value.trim() || 
                         document.getElementById('modalFacilityName').value.trim();
 
@@ -2945,6 +2999,8 @@
             }
 
             try {
+                showLoading();
+                
                 if (editingFacilityId) {
                     // Update existing facility
                     await apiCall(`/facilities/${editingFacilityId}`, {
@@ -2977,32 +3033,45 @@
                 
             } catch (error) {
                 showNotification(error.message, true);
+            } finally {
+                hideLoading();
             }
         }
 
         function editFacility(facilityId, facilityName) {
-            // Using modal for consistency
             editingFacilityId = facilityId;
             document.getElementById('facilityModalTitle').textContent = 'Edit Facility';
-            document.getElementById('facilitySubmitBtn').textContent = 'Update Facility';
+            document.getElementById('facilitySubmitBtn').textContent = '💾 Update Facility';
             document.getElementById('modalFacilityName').value = facilityName;
             document.getElementById('addFacilityModal').style.display = 'flex';
+            
+            // Focus on the input field
+            setTimeout(() => {
+                document.getElementById('modalFacilityName').focus();
+                document.getElementById('modalFacilityName').select();
+            }, 100);
         }
 
         function clearFacilityForm() {
             editingFacilityId = null;
             document.getElementById('facilityName').value = '';
+            document.getElementById('modalFacilityName').value = '';
             document.getElementById('addFacilityBtn').textContent = '➕ Add Facility';
+            document.getElementById('facilityModalTitle').textContent = 'Add New Facility';
+            document.getElementById('facilitySubmitBtn').textContent = 'Add Facility';
         }
 
         async function deleteFacility(facilityId, facilityName, patientCount) {
             if (patientCount > 0) {
-                showNotification(`Cannot delete "${facilityName}" - it has ${patientCount} patients assigned. Please reassign or delete patients first.`, true);
+                showNotification(`❌ Cannot delete "${facilityName}" - it has ${patientCount} patient${patientCount !== 1 ? 's' : ''} assigned. Please reassign or delete patients first.`, true);
                 return;
             }
 
-            if (confirm(`Are you sure you want to delete "${facilityName}"? This action cannot be undone.`)) {
+            const confirmMessage = `⚠️ Are you sure you want to permanently delete facility "${facilityName}"?\n\nThis action cannot be undone and will also remove any associated data.`;
+            
+            if (confirm(confirmMessage)) {
                 try {
+                    showLoading();
                     await apiCall(`/facilities/${facilityId}`, { method: 'DELETE' });
                     showNotification('✅ Facility deleted successfully!');
                     
@@ -3015,317 +3084,14 @@
                     
                 } catch (error) {
                     showNotification('Failed to delete facility: ' + error.message, true);
+                } finally {
+                    hideLoading();
                 }
             }
         }
 
         function filterFacilitiesTable() {
-            const searchTerm = document.getElementById('facilitySearch').value.toLowerCase();
-            const rows = document.querySelectorAll('#facilitiesTable tbody tr');
-
-            rows.forEach(row => {
-                const facilityName = row.cells[0]?.textContent.toLowerCase() || '';
-                const matchesSearch = facilityName.includes(searchTerm);
-                row.style.display = matchesSearch ? '' : 'none';
-            });
-        }
-
-        // ===== SUMMARY REPORT =====
-        async function updateSummaryReport() {
-            try {
-                showLoading();
-                
-                const facilityFilter = document.getElementById('summaryFacilityFilter')?.value;
-                const monthFilter = document.getElementById('summaryMonthFilter')?.value;
-
-                const params = new URLSearchParams();
-                if (facilityFilter) params.append('facilityId', facilityFilter);
-                if (monthFilter) params.append('month', monthFilter);
-
-                const itemizedData = await apiCall(`/reports/itemized-summary?${params.toString()}`);
-                
-                console.log('Itemized summary data:', itemizedData);
-                
-                lastSummaryData = itemizedData;
-                const tbody = document.getElementById('summaryTableBody');
-                tbody.innerHTML = '';
-
-                if (itemizedData.length === 0) {
-                    const colSpan = currentUser.role === 'admin' ? '10' : '9';
-                    tbody.innerHTML = `<tr><td colspan="${colSpan}" style="text-align: center; padding: 40px; color: #718096; font-style: italic;">
-                        <div style="font-size: 48px; margin-bottom: 15px;">📊</div>
-                        <div>No tracking data found for the selected filters</div>
-                        <div style="font-size: 14px; margin-top: 10px; color: #a0aec0;">Try adjusting your facility or month filters</div>
-                    </td></tr>`;
-                    return;
-                }
-
-                itemizedData.forEach(item => {
-                    const row = document.createElement('tr');
-                    
-                    if (currentUser.role === 'admin') {
-                        row.innerHTML = `
-                            <td style="font-weight: 500;">${item.patient_name}</td>
-                            <td>${item.mrn || 'N/A'}</td>
-                            <td><strong style="color: #667eea; font-weight: 700;">${item.ar_code}</strong></td>
-                            <td style="max-width: 250px; word-wrap: break-word; color: #4a5568;">${item.item_description}</td>
-                            <td style="color: #4a5568;">${item.hcpcs || 'N/A'}</td>
-                            <td style="text-align: right; font-weight: 600; color: #2d3748;">${item.total_units}</td>
-                            <td style="text-align: right; font-weight: 600; color: #2d3748;">${formatCurrency(item.total_cost)}</td>
-                            <td style="color: #4a5568;">${formatMonthForDisplay(item.month)}</td>
-                            <td style="color: #4a5568;">${item.facility_name}</td>
-                            <td style="color: #718096; font-size: 13px;">${formatDate(item.last_updated)}</td>
-                        `;
-                    } else {
-                        row.innerHTML = `
-                            <td style="font-weight: 500;">${item.patient_name}</td>
-                            <td>${item.mrn || 'N/A'}</td>
-                            <td><strong style="color: #667eea; font-weight: 700;">${item.ar_code}</strong></td>
-                            <td style="max-width: 250px; word-wrap: break-word; color: #4a5568;">${item.item_description}</td>
-                            <td style="color: #4a5568;">${item.hcpcs || 'N/A'}</td>
-                            <td style="text-align: right; font-weight: 600; color: #2d3748;">${item.total_units}</td>
-                            <td style="color: #4a5568;">${formatMonthForDisplay(item.month)}</td>
-                            <td style="color: #4a5568;">${item.facility_name}</td>
-                            <td style="color: #718096; font-size: 13px;">${formatDate(item.last_updated)}</td>
-                        `;
-                    }
-                    
-                    tbody.appendChild(row);
-                });
-                
-                // Calculate and display summary statistics
-                const totalRecords = itemizedData.length;
-                const totalUnits = itemizedData.reduce((sum, item) => sum + parseInt(item.total_units || 0), 0);
-                const totalCosts = itemizedData.reduce((sum, item) => sum + parseFloat(item.total_cost || 0), 0);
-                const uniquePatients = new Set(itemizedData.map(item => item.patient_name)).size;
-                const uniqueSupplies = new Set(itemizedData.map(item => item.ar_code)).size;
-                
-                console.log(`📊 Summary: ${totalRecords} records, ${uniquePatients} patients, ${uniqueSupplies} supplies, ${totalUnits} units, ${formatCurrency(totalCosts)} total cost`);
-                
-                let message = `📊 Loaded ${totalRecords} itemized records for ${uniquePatients} patients using ${uniqueSupplies} different supplies`;
-                if (currentUser.role === 'admin') {
-                    message += ` • Total: ${totalUnits.toLocaleString()} units, ${formatCurrency(totalCosts)}`;
-                }
-                
-                showNotification(message);
-            } catch (error) {
-                console.error('Summary report error:', error);
-                showNotification('Failed to update summary report: ' + error.message, true);
-                
-                // Show error in table
-                const tbody = document.getElementById('summaryTableBody');
-                const colSpan = currentUser.role === 'admin' ? '10' : '9';
-                tbody.innerHTML = `<tr><td colspan="${colSpan}" style="text-align: center; padding: 40px; color: #e53e3e;">
-                    <div style="font-size: 48px; margin-bottom: 15px;">⚠️</div>
-                    <div style="font-weight: 600; margin-bottom: 10px;">Error loading report</div>
-                    <div style="font-size: 14px;">${error.message}</div>
-                </td></tr>`;
-            } finally {
-                hideLoading();
-            }
-        }
-
-        async function downloadSummaryReport() {
-            if (!lastSummaryData || lastSummaryData.length === 0) {
-                showNotification('No data to export. Please refresh the report first.', true);
-                return;
-            }
-
-            try {
-                showLoading();
-                const wb = XLSX.utils.book_new();
-                
-                const exportData = lastSummaryData.map(item => {
-                    const baseData = {
-                        'Patient Name': item.patient_name,
-                        'MRN': item.mrn || 'N/A',
-                        'AR Code': item.ar_code,
-                        'Item Description': item.item_description,
-                        'HCPCS': item.hcpcs || 'N/A',
-                        'Total Units': item.total_units,
-                        'Month/Year': formatMonthForDisplay(item.month),
-                        'Facility': item.facility_name,
-                        'Last Updated': formatDate(item.last_updated)
-                    };
-                    
-                    // Add cost columns for admins
-                    if (currentUser.role === 'admin') {
-                        baseData['Unit Cost'] = parseFloat(item.unit_cost || 0).toFixed(2);
-                        baseData['Total Cost'] = parseFloat(item.total_cost || 0).toFixed(2);
-                    }
-                    
-                    return baseData;
-                });
-
-                const ws = XLSX.utils.json_to_sheet(exportData);
-                
-                // Set column widths for better readability
-                const colWidths = [
-                    {wch: 20}, // Patient Name
-                    {wch: 12}, // MRN
-                    {wch: 10}, // AR Code
-                    {wch: 30}, // Item Description
-                    {wch: 10}, // HCPCS
-                    {wch: 12}, // Total Units
-                    {wch: 12}, // Month/Year
-                    {wch: 15}, // Facility
-                    {wch: 15}  // Last Updated
-                ];
-                
-                if (currentUser.role === 'admin') {
-                    colWidths.splice(6, 0, {wch: 12}); // Unit Cost
-                    colWidths.splice(7, 0, {wch: 12}); // Total Cost
-                }
-                
-                ws['!cols'] = colWidths;
-                
-                // Add summary information as a separate sheet
-                const summaryStats = [{
-                    'Metric': 'Total Records',
-                    'Value': lastSummaryData.length
-                }, {
-                    'Metric': 'Unique Patients', 
-                    'Value': new Set(lastSummaryData.map(item => item.patient_name)).size
-                }, {
-                    'Metric': 'Unique Supplies',
-                    'Value': new Set(lastSummaryData.map(item => item.ar_code)).size
-                }, {
-                    'Metric': 'Total Units',
-                    'Value': lastSummaryData.reduce((sum, item) => sum + parseInt(item.total_units || 0), 0)
-                }];
-                
-                if (currentUser.role === 'admin') {
-                    summaryStats.push({
-                        'Metric': 'Total Cost',
-                        'Value': lastSummaryData.reduce((sum, item) => sum + parseFloat(item.total_cost || 0), 0).toFixed(2)
-                    });
-                }
-                
-                const summaryWs = XLSX.utils.json_to_sheet(summaryStats);
-                summaryWs['!cols'] = [{wch: 20}, {wch: 15}];
-                
-                XLSX.utils.book_append_sheet(wb, ws, 'Itemized Report');
-                XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
-
-                const today = new Date().toISOString().split('T')[0];
-                const facilityFilter = document.getElementById('summaryFacilityFilter')?.value;
-                const monthFilter = document.getElementById('summaryMonthFilter')?.value;
-                
-                let filename = `Itemized_Summary_Report_${today}`;
-                if (facilityFilter) {
-                    const facility = facilities.find(f => f.id == facilityFilter);
-                    if (facility) filename += `_${facility.name.replace(/[^a-zA-Z0-9]/g, '_')}`;
-                }
-                if (monthFilter) {
-                    filename += `_${monthFilter.replace('-', '_')}`;
-                }
-                filename += '.xlsx';
-                
-                XLSX.writeFile(wb, filename);
-                
-                showNotification(`📥 Report exported: ${lastSummaryData.length} itemized records in ${filename}`);
-
-            } catch (error) {
-                console.error('Export error:', error);
-                showNotification('Failed to export report: ' + error.message, true);
-            } finally {
-                hideLoading();
-            }
-        }
-
-        // Enhanced debug function for the new data structure
-        function debugSummaryData() {
-            if (!lastSummaryData || lastSummaryData.length === 0) {
-                showNotification('No summary data available. Please refresh the report first.', true);
-                return;
-            }
-
-            const debugInfo = document.getElementById('debugInfo');
-            const debugModal = document.getElementById('debugModal');
-            
-            const totalUnits = lastSummaryData.reduce((sum, item) => sum + parseInt(item.total_units || 0), 0);
-            const totalCost = lastSummaryData.reduce((sum, item) => sum + parseFloat(item.total_cost || 0), 0);
-            const uniquePatients = new Set(lastSummaryData.map(item => item.patient_name));
-            const uniqueSupplies = new Set(lastSummaryData.map(item => item.ar_code));
-            const facilities = new Set(lastSummaryData.map(item => item.facility_name));
-            
-            let debugText = `Enhanced Itemized Summary Report Debug Information
-Generated: ${new Date().toLocaleString()}
-User: ${currentUser ? currentUser.name : 'Unknown'} (${currentUser ? currentUser.role : 'Unknown'})
-
-=== SUMMARY STATISTICS ===
-Total Itemized Records: ${lastSummaryData.length}
-Unique Patients: ${uniquePatients.size}
-Unique Supply Codes: ${uniqueSupplies.size}
-Total Units (All Items): ${totalUnits.toLocaleString()}
-Total Cost (All Items): $${totalCost.toFixed(2)}
-Facilities: ${facilities.size}
-
-=== BREAKDOWN BY PATIENT ===`;
-
-            [...uniquePatients].sort().forEach(patientName => {
-                const patientRecords = lastSummaryData.filter(item => item.patient_name === patientName);
-                const patientUnits = patientRecords.reduce((sum, item) => sum + parseInt(item.total_units || 0), 0);
-                const patientCost = patientRecords.reduce((sum, item) => sum + parseFloat(item.total_cost || 0), 0);
-                
-                debugText += `\n${patientName}: ${patientRecords.length} supplies, ${patientUnits} units, $${patientCost.toFixed(2)}`;
-                patientRecords.forEach(record => {
-                    debugText += `\n  - AR ${record.ar_code}: ${record.total_units} units @ $${parseFloat(record.unit_cost || 0).toFixed(2)} = $${parseFloat(record.total_cost || 0).toFixed(2)}`;
-                });
-            });
-
-            debugText += `\n\n=== BREAKDOWN BY SUPPLY CODE ===`;
-            
-            [...uniqueSupplies].sort((a, b) => a - b).forEach(arCode => {
-                const supplyRecords = lastSummaryData.filter(item => item.ar_code === arCode);
-                const supplyUnits = supplyRecords.reduce((sum, item) => sum + parseInt(item.total_units || 0), 0);
-                const supplyCost = supplyRecords.reduce((sum, item) => sum + parseFloat(item.total_cost || 0), 0);
-                const supplyDescription = supplyRecords[0]?.item_description || 'Unknown';
-                
-                debugText += `\nAR ${arCode} (${supplyDescription}): ${supplyRecords.length} patients, ${supplyUnits} total units, $${supplyCost.toFixed(2)}`;
-            });
-
-            debugText += `\n\n=== FACILITIES ===`;
-            [...facilities].sort().forEach(facilityName => {
-                const facilityRecords = lastSummaryData.filter(item => item.facility_name === facilityName);
-                const facilityPatients = new Set(facilityRecords.map(item => item.patient_name)).size;
-                const facilityUnits = facilityRecords.reduce((sum, item) => sum + parseInt(item.total_units || 0), 0);
-                const facilityCost = facilityRecords.reduce((sum, item) => sum + parseFloat(item.total_cost || 0), 0);
-                
-                debugText += `\n${facilityName}: ${facilityPatients} patients, ${facilityRecords.length} records, ${facilityUnits} units, $${facilityCost.toFixed(2)}`;
-            });
-
-            debugText += `\n\n=== DATA VALIDATION ===`;
-            let hasIssues = false;
-            
-            lastSummaryData.forEach((item, index) => {
-                const issues = [];
-                if (!item.patient_name) issues.push('Missing patient name');
-                if (!item.ar_code) issues.push('Missing AR code');
-                if (!item.item_description) issues.push('Missing item description');
-                if (isNaN(parseFloat(item.total_cost))) issues.push('Invalid total cost');
-                if (isNaN(parseInt(item.total_units))) issues.push('Invalid total units');
-                if (!item.last_updated) issues.push('Missing updated date');
-                
-                if (issues.length > 0) {
-                    if (!hasIssues) {
-                        debugText += `\nDATA ISSUES FOUND:`;
-                        hasIssues = true;
-                    }
-                    debugText += `\nRecord ${index + 1} (${item.patient_name} - AR ${item.ar_code}): ${issues.join(', ')}`;
-                }
-            });
-
-            if (!hasIssues) {
-                debugText += `\nNo data validation issues found. All ${lastSummaryData.length} records are valid.`;
-            }
-
-            debugInfo.textContent = debugText;
-            debugModal.style.display = 'flex';
-        }
-
-        function closeDebugModal() {
-            document.getElementById('debugModal').style.display = 'none';
+            loadFacilities(); // Just reload with current search term
         }
 
         // ===== USER MANAGEMENT =====
@@ -3333,11 +3099,36 @@ Facilities: ${facilities.size}
             if (currentUser.role !== 'admin') return;
             
             try {
-                users = await apiCall('/users');
+                const usersData = await apiCall('/users');
+                users = usersData;
+                
                 const tbody = document.getElementById('usersTableBody');
                 tbody.innerHTML = '';
 
-                users.forEach(user => {
+                // Apply filters
+                const roleFilter = document.getElementById('userRoleFilter')?.value || '';
+                const statusFilter = document.getElementById('userStatusFilter')?.value || '';
+
+                let filteredUsers = usersData;
+                
+                if (roleFilter) {
+                    filteredUsers = filteredUsers.filter(user => user.role === roleFilter);
+                }
+                
+                if (statusFilter) {
+                    if (statusFilter === 'approved') {
+                        filteredUsers = filteredUsers.filter(user => user.is_approved);
+                    } else if (statusFilter === 'pending') {
+                        filteredUsers = filteredUsers.filter(user => !user.is_approved);
+                    }
+                }
+
+                if (filteredUsers.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color: #718096;">No users found matching the selected filters</td></tr>';
+                    return;
+                }
+
+                filteredUsers.forEach(user => {
                     const row = document.createElement('tr');
                     const statusClass = user.is_approved ? 'status-approved' : 'status-pending';
                     const statusText = user.is_approved ? 'Approved' : 'Pending';
@@ -3348,7 +3139,7 @@ Facilities: ${facilities.size}
                         <td>${user.facility_name || 'N/A'}</td>
                         <td>
                             <span class="status-badge ${user.role === 'admin' ? 'status-admin' : 'status-approved'}">
-                                ${user.role}
+                                ${user.role === 'admin' ? 'Admin' : 'User'}
                             </span>
                         </td>
                         <td>
@@ -3359,490 +3150,23 @@ Facilities: ${facilities.size}
                         <td>${formatDate(user.created_at)}</td>
                         <td class="actions">
                             ${!user.is_approved ? `
-                                <button class="btn btn-sm btn-success" onclick="approveUser(${user.id})">Approve</button>
+                                <button class="btn btn-sm btn-success" onclick="approveUser(${user.id})" style="margin-right: 5px;">Approve</button>
                             ` : user.id !== currentUser.id ? `
-                                <button class="btn btn-sm btn-warning" onclick="suspendUser(${user.id})">Suspend</button>
+                                <button class="btn btn-sm btn-warning" onclick="suspendUser(${user.id})" style="margin-right: 5px;">Suspend</button>
                             ` : ''}
                             ${user.role !== 'admin' && user.id !== currentUser.id ? `
-                                <button class="btn btn-sm btn-danger" onclick="deleteUser(${user.id})">Delete</button>
-                            ` : ''}
+                                <button class="btn btn-sm btn-danger" onclick="deleteUser(${user.id}, '${user.name.replace(/'/g, "\\'")}')">Delete</button>
+                            ` : user.id === currentUser.id ? '<em style="color: #718096;">Current User</em>' : '<em style="color: #718096;">Protected</em>'}
                         </td>
                     `;
                     tbody.appendChild(row);
                 });
             } catch (error) {
-                showNotification('Failed to load users', true);
+                showNotification('Failed to load users: ' + error.message, true);
+                const tbody = document.getElementById('usersTableBody');
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color: #e53e3e;">Error loading users</td></tr>';
             }
         }
 
         function openAddUserModal() {
             document.getElementById('addUserModal').style.display = 'flex';
-        }
-
-        async function approveUser(userId) {
-            try {
-                await apiCall(`/users/${userId}/approval`, {
-                    method: 'PUT',
-                    body: { isApproved: true }
-                });
-                showNotification('✅ User approved successfully!');
-                loadUsers();
-            } catch (error) {
-                showNotification('Failed to approve user: ' + error.message, true);
-            }
-        }
-
-        async function suspendUser(userId) {
-            try {
-                await apiCall(`/users/${userId}/approval`, {
-                    method: 'PUT',
-                    body: { isApproved: false }
-                });
-                showNotification('✅ User suspended successfully!');
-                loadUsers();
-            } catch (error) {
-                showNotification('Failed to suspend user: ' + error.message, true);
-            }
-        }
-
-        async function deleteUser(userId) {
-            if (confirm('Are you sure you want to delete this user?')) {
-                try {
-                    await apiCall(`/users/${userId}`, { method: 'DELETE' });
-                    showNotification('✅ User deleted successfully!');
-                    loadUsers();
-                } catch (error) {
-                    showNotification('Failed to delete user: ' + error.message, true);
-                }
-            }
-        }
-
-        // ===== EXCEL IMPORT/EXPORT FUNCTIONS =====
-        function downloadExcelTemplate() {
-            const templateData = [
-                {
-                    'Name': 'Smith, John',
-                    'MRN': 'MRN12345',
-                    'Month': '01-2025',
-                    'Facility': 'Main Hospital'
-                },
-                {
-                    'Name': 'Johnson, Mary',
-                    'MRN': 'MRN67890',
-                    'Month': '02-2025',
-                    'Facility': 'Clinic North'
-                },
-                {
-                    'Name': 'Brown, Robert',
-                    'MRN': 'MRN11111',
-                    'Month': '08-2024',
-                    'Facility': 'Main Hospital'
-                }
-            ];
-
-            const wb = XLSX.utils.book_new();
-            const ws = XLSX.utils.json_to_sheet(templateData);
-            
-            // Set column widths for better readability
-            ws['!cols'] = [
-                {wch: 20}, // Name
-                {wch: 15}, // MRN  
-                {wch: 12}, // Month
-                {wch: 20}  // Facility
-            ];
-
-            // Force Month column to be treated as text to prevent Excel auto-conversion
-            // Get the range of data
-            const range = XLSX.utils.decode_range(ws['!ref']);
-            
-            // Set Month column (column C) to text format
-            for (let row = range.s.r; row <= range.e.r; row++) {
-                const cellAddress = XLSX.utils.encode_cell({r: row, c: 2}); // Column C (Month)
-                if (ws[cellAddress]) {
-                    // Set cell type to string and add text formatting
-                    ws[cellAddress].t = 's'; // String type
-                    ws[cellAddress].z = '@'; // Text format code
-                }
-            }
-
-            // Add formatting to prevent Excel auto-conversion
-            if (!ws['!cols']) ws['!cols'] = [];
-            ws['!cols'][2] = {wch: 12, style: {numFmt: '@'}}; // Column C as text
-
-            XLSX.utils.book_append_sheet(wb, ws, 'Patient Template');
-            
-            const filename = `Patient_Import_Template_${new Date().toISOString().split('T')[0]}.xlsx`;
-            XLSX.writeFile(wb, filename);
-            
-            showNotification('📥 Patient template downloaded! Month column is formatted as TEXT to preserve MM-YYYY format.');
-        }
-
-        function downloadSupplyTemplate() {
-            const templateData = [
-                {
-                    'Code': 800,
-                    'Description': 'Custom Foam Dressing 8x8',
-                    'HCPCS': 'A6211',
-                    'Cost': 15.50
-                },
-                {
-                    'Code': 801,
-                    'Description': 'Custom Hydrogel Dressing 6x6',
-                    'HCPCS': 'A6242',
-                    'Cost': 12.75
-                }
-            ];
-
-            downloadExcel(templateData, 'Supply_Import_Template');
-            showNotification('✅ Supply import template downloaded!');
-        }
-
-        function downloadExcel(data, filename) {
-            const wb = XLSX.utils.book_new();
-            const ws = XLSX.utils.json_to_sheet(data);
-            XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
-            XLSX.writeFile(wb, `${filename}_${new Date().toISOString().split('T')[0]}.xlsx`);
-        }
-
-        function showExcelImportModal() {
-            document.getElementById('excelImportModal').style.display = 'flex';
-        }
-
-        function showExcelFormatHelp() {
-            document.getElementById('excelFormatHelpModal').style.display = 'flex';
-        }
-
-        function closeExcelImportModal() {
-            document.getElementById('excelImportModal').style.display = 'none';
-            document.getElementById('importResults').style.display = 'none';
-            document.getElementById('importResults').innerHTML = '';
-            document.getElementById('processImportBtn').disabled = true;
-            document.getElementById('processImportBtn').textContent = 'Import Data';
-            document.getElementById('excelFileInput').value = '';
-            excelData = null;
-        }
-
-        function handleExcelFile(file) {
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-                    const jsonData = XLSX.utils.sheet_to_json(worksheet);
-
-                    excelData = jsonData;
-                    displayImportPreview(jsonData);
-                    document.getElementById('processImportBtn').disabled = false;
-                } catch (error) {
-                    showNotification('Error reading Excel file: ' + error.message, true);
-                }
-            };
-            reader.readAsArrayBuffer(file);
-        }
-
-        function displayImportPreview(data) {
-            const resultsDiv = document.getElementById('importResults');
-            
-            // Process the data to show what format will be used
-            const processedPreview = data.slice(0, 5).map((row, index) => {
-                let monthDisplay = row.Month ? row.Month.toString().trim() : 'N/A';
-                let monthWarning = '';
-                
-                // Check if month looks like it was auto-converted by Excel
-                if (monthDisplay.includes('/')) {
-                    monthWarning = ' ⚠️ (Excel auto-converted - will be processed)';
-                }
-                
-                return {
-                    ...row,
-                    monthDisplay,
-                    monthWarning
-                };
-            });
-            
-            resultsDiv.innerHTML = `
-                <h4>Import Preview (${data.length} records)</h4>
-                <div style="max-height: 150px; overflow-y: auto; background: #f7fafc; padding: 10px; border-radius: 4px;">
-                    ${processedPreview.map((row, index) => `
-                        <div style="margin-bottom: 5px; padding: 5px; background: white; border-radius: 3px;">
-                            <strong>${row.Name || 'N/A'}</strong> - MRN: ${row.MRN || 'N/A'} - Month: ${row.monthDisplay}${row.monthWarning} - Facility: ${row.Facility || 'N/A'}
-                        </div>
-                    `).join('')}
-                    ${data.length > 5 ? `<div style="text-align: center; color: #718096; font-style: italic;">... and ${data.length - 5} more records</div>` : ''}
-                </div>
-                <div style="margin-top: 10px; font-size: 12px; color: #718096;">
-                    <strong>Note:</strong> System will auto-convert Excel date formats to MM-YYYY. Ensure facility names match exactly.
-                </div>
-                ${processedPreview.some(row => row.monthWarning) ? `
-                    <div style="margin-top: 10px; padding: 10px; background: #fff3cd; border-radius: 4px; border-left: 4px solid #ffc107;">
-                        <strong>⚠️ Excel Auto-Conversion Detected:</strong> Some dates appear to be auto-converted by Excel (8/1/2024 instead of 08-2024). 
-                        The import will handle this, but for future uploads, format the Month column as TEXT in Excel.
-                    </div>
-                ` : ''}
-            `;
-            resultsDiv.style.display = 'block';
-        }
-
-        async function processExcelImport() {
-            if (!excelData || excelData.length === 0) {
-                showNotification('No data to import', true);
-                return;
-            }
-
-            showLoading();
-            let successCount = 0;
-            let errorCount = 0;
-            const errors = [];
-
-            try {
-                for (let i = 0; i < excelData.length; i++) {
-                    const row = excelData[i];
-                    
-                    try {
-                        // Validate required fields
-                        if (!row.Name || !row.MRN || !row.Month || !row.Facility) {
-                            throw new Error(`Row ${i + 1}: Missing required fields (Name, MRN, Month, Facility)`);
-                        }
-
-                        // Convert MM-YYYY to YYYY-MM format, handling various Excel formats
-                        let month = row.Month.toString().trim();
-                        
-                        // Handle Excel date auto-conversion (like "8/1/2024" or date objects)
-                        if (month.includes('/')) {
-                            // Handle formats like "8/1/2024" (Excel auto-converted)
-                            const dateParts = month.split('/');
-                            if (dateParts.length >= 3) {
-                                const mm = dateParts[0].padStart(2, '0');
-                                const yyyy = dateParts[2];
-                                month = `${mm}-${yyyy}`;
-                            } else if (dateParts.length === 2) {
-                                // Handle "8/2024" format
-                                const mm = dateParts[0].padStart(2, '0');
-                                const yyyy = dateParts[1];
-                                month = `${mm}-${yyyy}`;
-                            }
-                        }
-                        
-                        // Handle MM-YYYY format (preferred)
-                        if (month.includes('-')) {
-                            const [mm, yyyy] = month.split('-');
-                            if (mm.length <= 2 && yyyy.length === 4) {
-                                const paddedMM = mm.padStart(2, '0');
-                                month = `${yyyy}-${paddedMM}`;
-                            } else {
-                                throw new Error(`Row ${i + 1}: Invalid month format. Use MM-YYYY (e.g., 01-2025, 08-2024)`);
-                            }
-                        } else {
-                            throw new Error(`Row ${i + 1}: Invalid month format. Use MM-YYYY (e.g., 01-2025, 08-2024)`);
-                        }
-
-                        // Find facility ID by name
-                        const facility = facilities.find(f => 
-                            f.name.toLowerCase() === row.Facility.toString().toLowerCase().trim()
-                        );
-                        
-                        if (!facility) {
-                            throw new Error(`Row ${i + 1}: Facility "${row.Facility}" not found`);
-                        }
-
-                        // Create patient
-                        await apiCall('/patients', {
-                            method: 'POST',
-                            body: {
-                                name: row.Name.toString().trim(),
-                                mrn: row.MRN.toString().trim(),
-                                month: month,
-                                facilityId: facility.id
-                            }
-                        });
-
-                        successCount++;
-                    } catch (error) {
-                        errorCount++;
-                        errors.push(`Row ${i + 1}: ${error.message}`);
-                        console.error(`Import error for row ${i + 1}:`, error);
-                    }
-                }
-
-                // Show results
-                let message = `✅ Import completed: ${successCount} patients imported`;
-                if (errorCount > 0) {
-                    message += `, ${errorCount} errors`;
-                }
-
-                showNotification(message, errorCount > 0);
-
-                // Update import results display
-                const resultsDiv = document.getElementById('importResults');
-                resultsDiv.innerHTML = `
-                    <h4>Import Results</h4>
-                    <div style="background: #f7fafc; padding: 15px; border-radius: 8px;">
-                        <div style="color: #38a169; font-weight: bold; margin-bottom: 10px;">
-                            ✅ Successfully imported: ${successCount} patients
-                        </div>
-                        ${errorCount > 0 ? `
-                            <div style="color: #e53e3e; font-weight: bold; margin-bottom: 10px;">
-                                ❌ Errors: ${errorCount}
-                            </div>
-                            <div style="max-height: 150px; overflow-y: auto; background: #fed7d7; padding: 10px; border-radius: 4px;">
-                                ${errors.map(error => `<div style="margin-bottom: 5px; font-size: 12px;">${error}</div>`).join('')}
-                            </div>
-                        ` : ''}
-                    </div>
-                `;
-
-                // Refresh patient list if any were imported successfully
-                if (successCount > 0) {
-                    await loadPatients();
-                    await loadDashboard();
-                    await refreshPatientSelect();
-                }
-
-                // Keep modal open to show results
-                document.getElementById('processImportBtn').disabled = true;
-                document.getElementById('processImportBtn').textContent = 'Import Complete';
-
-            } catch (error) {
-                console.error('Import process error:', error);
-                showNotification('Import failed: ' + error.message, true);
-            } finally {
-                hideLoading();
-            }
-        }
-
-        function showSupplyImportModal() {
-            document.getElementById('supplyImportModal').style.display = 'flex';
-        }
-
-        function closeSupplyImportModal() {
-            document.getElementById('supplyImportModal').style.display = 'none';
-            document.getElementById('supplyImportResults').style.display = 'none';
-            document.getElementById('processSupplyImportBtn').disabled = true;
-            supplyExcelData = null;
-        }
-
-        function handleSupplyFile(file) {
-            showNotification('Supply import feature is ready for backend implementation');
-        }
-
-        async function processSupplyImport() {
-            showNotification('Supply import feature is ready for backend implementation');
-        }
-
-        // ===== MODAL FUNCTIONS =====
-        function closeModal(modalId) {
-            document.getElementById(modalId).style.display = 'none';
-        }
-
-        // Form submissions
-        document.getElementById('addPatientForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const formData = {
-                name: document.getElementById('patientName').value,
-                mrn: document.getElementById('patientMRN').value,
-                month: document.getElementById('patientMonth').value,
-                facilityId: document.getElementById('patientFacility').value
-            };
-
-            try {
-                showLoading();
-                await apiCall('/patients', { method: 'POST', body: formData });
-                showNotification('✅ Patient added successfully!');
-                closeModal('addPatientModal');
-                document.getElementById('addPatientForm').reset();
-                loadPatients();
-                loadDashboard();
-                refreshPatientSelect();
-            } catch (error) {
-                showNotification('Failed to add patient: ' + error.message, true);
-            } finally {
-                hideLoading();
-            }
-        });
-
-        document.getElementById('addUserForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const formData = {
-                name: document.getElementById('userName').value,
-                email: document.getElementById('userEmail').value,
-                password: document.getElementById('userPassword').value,
-                role: document.getElementById('userRole').value,
-                facilityId: document.getElementById('userFacility').value || null
-            };
-
-            try {
-                showLoading();
-                await apiCall('/auth/register', { method: 'POST', body: formData });
-                showNotification('✅ User added successfully!');
-                closeModal('addUserModal');
-                document.getElementById('addUserForm').reset();
-                loadUsers();
-            } catch (error) {
-                showNotification('Failed to add user: ' + error.message, true);
-            } finally {
-                hideLoading();
-            }
-        });
-
-        document.getElementById('addFacilityForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            await addFacility();
-        });
-
-        // ===== AUTO-LOGIN CHECK =====
-        if (authToken) {
-            console.log('🔍 Checking stored auth token...');
-            
-            apiCall('/auth/verify').then(response => {
-                currentUser = response.user;
-                
-                console.log('✅ Token valid, auto-logging in user:', currentUser.email);
-                
-                document.getElementById('loginContainer').style.display = 'none';
-                document.getElementById('mainApp').style.display = 'block';
-                
-                setupUserInterface();
-                initApp();
-            }).catch(error => {
-                console.log('❌ Stored token invalid, showing login');
-                localStorage.removeItem('authToken');
-                authToken = null;
-                currentUser = null;
-            });
-        } else {
-            console.log('🔍 No stored token, showing login screen');
-        }
-
-        // ===== EVENT LISTENERS =====
-        
-        // Enter key login support
-        document.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter' && document.getElementById('loginContainer').style.display !== 'none') {
-                login();
-            }
-        });
-
-        // Close modals when clicking outside
-        document.addEventListener('click', function(e) {
-            const modals = document.querySelectorAll('.modal');
-            modals.forEach(modal => {
-                if (e.target === modal) {
-                    modal.style.display = 'none';
-                }
-            });
-            
-            // Close debug modal
-            if (e.target === document.getElementById('debugModal')) {
-                closeDebugModal();
-            }
-        });
-
-        console.log('🎉 Enhanced Wound Care RT Supply Tracker fully initialized!');
-    </script>
-</body>
-</html>
