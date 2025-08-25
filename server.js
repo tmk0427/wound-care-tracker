@@ -712,7 +712,7 @@ app.get('/api/dashboard/summary', authenticateToken, async (req, res) => {
                 params.push(month);
             }
             
-            query += ' GROUP BY p.id, f.name ORDER BY p.created_at DESC';
+            query += ' GROUP BY p.id, f.name ORDER BY p.name ASC';
             
             const result = await safeQuery(query, params);
             res.json(result.rows);
@@ -758,7 +758,7 @@ app.get('/api/dashboard/summary', authenticateToken, async (req, res) => {
                 params.push(month);
             }
             
-            simpleQuery += ' ORDER BY p.created_at DESC LIMIT 50';
+            simpleQuery += ' ORDER BY p.name ASC LIMIT 50';
             
             const result = await safeQuery(simpleQuery, params);
             res.json(result.rows);
@@ -1000,3 +1000,4 @@ app.listen(PORT, () => {
 });
 
 module.exports = app;
+
