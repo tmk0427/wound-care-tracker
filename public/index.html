@@ -3,44 +3,78 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wound Care RT Supply Tracker - Test</title>
+    <title>Wound Care RT Supply Tracker</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
+            color: #333;
+        }
+
+        /* Login Styles */
+        .login-container {
             display: flex;
             justify-content: center;
             align-items: center;
+            min-height: 100vh;
+            padding: 20px;
         }
-        .login-container {
+
+        .login-card {
             background: white;
             padding: 40px;
             border-radius: 15px;
-            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
             width: 100%;
             max-width: 400px;
             text-align: center;
         }
+
+        .login-card h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+
+        .login-card p {
+            color: #666;
+            margin-bottom: 30px;
+        }
+
         .form-group {
             margin-bottom: 20px;
             text-align: left;
         }
+
         .form-group label {
             display: block;
             margin-bottom: 8px;
             font-weight: 600;
             color: #4a5568;
         }
-        .form-group input {
+
+        .form-group input, .form-group select {
             width: 100%;
             padding: 12px;
             border: 2px solid #e2e8f0;
             border-radius: 8px;
             font-size: 16px;
+            transition: border-color 0.3s;
         }
-        .auth-btn {
+
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
             width: 100%;
             padding: 12px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -50,61 +84,808 @@
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
+            transition: transform 0.2s;
         }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            transform: none;
+        }
+
         .error-message {
             color: #e53e3e;
             margin-top: 10px;
             font-size: 14px;
             display: none;
         }
+
+        .toggle-auth {
+            margin-top: 20px;
+            color: #667eea;
+            cursor: pointer;
+            text-decoration: underline;
+        }
+
+        /* Main App Styles */
         .main-app {
             display: none;
-            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 15px 0;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 20px;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .nav {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px 0;
+            margin-bottom: 20px;
+        }
+
+        .nav-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            gap: 20px;
+        }
+
+        .nav-btn {
+            padding: 10px 20px;
+            background: transparent;
+            border: 2px solid #667eea;
+            color: #667eea;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .nav-btn:hover, .nav-btn.active {
+            background: #667eea;
             color: white;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        .section {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            display: none;
+        }
+
+        .section.active {
+            display: block;
+        }
+
+        .section h2 {
+            color: #667eea;
+            margin-bottom: 25px;
+            font-size: 28px;
+        }
+
+        .grid {
+            display: grid;
+            gap: 20px;
+        }
+
+        .grid-2 {
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        }
+
+        .grid-3 {
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        }
+
+        .card {
+            background: #f8fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 25px;
+            transition: all 0.3s;
+        }
+
+        .card:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+        }
+
+        .card h3 {
+            color: #4a5568;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
             text-align: center;
+        }
+
+        .stat-number {
+            font-size: 36px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            margin-top: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        th, td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        th {
+            background: #f8fafc;
+            font-weight: 600;
+            color: #4a5568;
+        }
+
+        tr:hover {
+            background: #f1f5f9;
+        }
+
+        .btn-small {
+            padding: 8px 16px;
+            font-size: 14px;
+            border-radius: 6px;
+            margin-right: 8px;
+        }
+
+        .btn-secondary {
+            background: #e2e8f0;
+            color: #4a5568;
+        }
+
+        .btn-danger {
+            background: #e53e3e;
+        }
+
+        .btn-success {
+            background: #38a169;
+        }
+
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal h3 {
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .tracking-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(40px, 1fr));
+            gap: 5px;
+            margin-bottom: 20px;
+        }
+
+        .day-input {
+            width: 100%;
+            padding: 8px;
+            text-align: center;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+        }
+
+        .supply-row {
+            background: #f8fafc;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+
+        .supply-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .filter-container {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .filter-group label {
+            font-size: 14px;
+            color: #4a5568;
+            font-weight: 500;
+        }
+
+        .filter-group select, .filter-group input {
+            padding: 8px 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .success-message {
+            color: #38a169;
+            background: #f0fff4;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            display: none;
+        }
+
+        .admin-only {
+            display: none;
+        }
+
+        .admin-only.show-admin {
+            display: block;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            .nav-content {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            }
+
+            .filter-container {
+                flex-direction: column;
+            }
+
+            .modal-content {
+                margin: 20px;
+                width: auto;
+            }
+
+            .section {
+                padding: 20px;
+            }
         }
     </style>
 </head>
 <body>
-    <!-- Login Form -->
-    <div id="loginContainer" class="login-container">
-        <h1>🏥 Wound Care RT Supply Tracker</h1>
-        <p style="margin: 20px 0; color: #666;">Test Version - Login Check</p>
-        
-        <div class="form-group">
-            <label for="loginEmail">Email Address</label>
-            <input type="email" id="loginEmail" placeholder="admin@system.com" value="admin@system.com">
+    <!-- Login/Register Screen -->
+    <div id="authContainer" class="login-container">
+        <div class="login-card">
+            <h1>🏥 Wound Care RT Supply Tracker</h1>
+            <p>Healthcare Supply Management System</p>
+            
+            <!-- Login Form -->
+            <div id="loginForm">
+                <div class="form-group">
+                    <label for="loginEmail">Email Address</label>
+                    <input type="email" id="loginEmail" placeholder="Enter your email" required>
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">Password</label>
+                    <input type="password" id="loginPassword" placeholder="Enter your password" required>
+                </div>
+                <button class="btn" onclick="login()" id="loginBtn">Sign In</button>
+                <div id="loginError" class="error-message"></div>
+                <div class="toggle-auth" onclick="toggleAuthMode()">Need an account? Register here</div>
+            </div>
+
+            <!-- Register Form -->
+            <div id="registerForm" style="display: none;">
+                <div class="form-group">
+                    <label for="registerName">Full Name</label>
+                    <input type="text" id="registerName" placeholder="Enter your full name" required>
+                </div>
+                <div class="form-group">
+                    <label for="registerEmail">Email Address</label>
+                    <input type="email" id="registerEmail" placeholder="Enter your email" required>
+                </div>
+                <div class="form-group">
+                    <label for="registerPassword">Password</label>
+                    <input type="password" id="registerPassword" placeholder="Create a password" required>
+                </div>
+                <div class="form-group">
+                    <label for="registerFacility">Facility</label>
+                    <select id="registerFacility" required>
+                        <option value="">Select a facility</option>
+                    </select>
+                </div>
+                <button class="btn" onclick="register()" id="registerBtn">Register</button>
+                <div id="registerError" class="error-message"></div>
+                <div class="toggle-auth" onclick="toggleAuthMode()">Already have an account? Sign in</div>
+            </div>
         </div>
-        <div class="form-group">
-            <label for="loginPassword">Password</label>
-            <input type="password" id="loginPassword" placeholder="admin123" value="admin123">
-        </div>
-        <button class="auth-btn" onclick="login()" id="loginBtn">Sign In</button>
-        <div id="loginError" class="error-message">Invalid credentials</div>
     </div>
 
-    <!-- Main App (hidden initially) -->
+    <!-- Main Application -->
     <div id="mainApp" class="main-app">
-        <h1>✅ Login Successful!</h1>
-        <p>JavaScript is working properly.</p>
-        <p>User: <span id="userInfo"></span></p>
-        <button class="auth-btn" onclick="logout()" style="margin-top: 20px; max-width: 200px;">Logout</button>
+        <!-- Header -->
+        <div class="header">
+            <div class="header-content">
+                <div class="logo">🏥 Wound Care RT Supply Tracker</div>
+                <div class="user-info">
+                    <span id="userWelcome">Welcome, User</span>
+                    <button class="btn btn-small" onclick="logout()">Logout</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation -->
+        <div class="nav">
+            <div class="nav-content">
+                <button class="nav-btn active" onclick="showSection('dashboard')">Dashboard</button>
+                <button class="nav-btn" onclick="showSection('patients')">Patients</button>
+                <button class="nav-btn" onclick="showSection('tracking')">Supply Tracking</button>
+                <button class="nav-btn" onclick="showSection('reports')">Reports</button>
+                <button class="nav-btn admin-only" onclick="showSection('supplies')">Manage Supplies</button>
+                <button class="nav-btn admin-only" onclick="showSection('facilities')">Manage Facilities</button>
+                <button class="nav-btn admin-only" onclick="showSection('users')">Manage Users</button>
+            </div>
+        </div>
+
+        <div class="container">
+            <!-- Dashboard Section -->
+            <div id="dashboardSection" class="section active">
+                <h2>📊 Dashboard Overview</h2>
+                
+                <div class="filter-container">
+                    <div class="filter-group">
+                        <label>Facility</label>
+                        <select id="dashboardFacilityFilter" onchange="loadDashboard()">
+                            <option value="">All Facilities</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Month</label>
+                        <input type="month" id="dashboardMonthFilter" onchange="loadDashboard()">
+                    </div>
+                </div>
+
+                <div class="stats-grid" id="statsGrid">
+                    <!-- Stats will be populated here -->
+                </div>
+
+                <div class="card">
+                    <h3>Recent Patient Activity</h3>
+                    <div class="table-container">
+                        <table id="dashboardTable">
+                            <thead>
+                                <tr>
+                                    <th>Patient</th>
+                                    <th>Month</th>
+                                    <th>Facility</th>
+                                    <th>Total Units</th>
+                                    <th>Total Cost</th>
+                                    <th>Wound Diagnoses</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Patients Section -->
+            <div id="patientsSection" class="section">
+                <h2>👥 Patient Management</h2>
+                
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3>Patient List</h3>
+                        <button class="btn btn-small" onclick="showAddPatientModal()">+ Add Patient</button>
+                    </div>
+                    
+                    <div class="table-container">
+                        <table id="patientsTable">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>MRN</th>
+                                    <th>Month</th>
+                                    <th>Facility</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Supply Tracking Section -->
+            <div id="trackingSection" class="section">
+                <h2>📋 Supply Tracking</h2>
+                
+                <div class="filter-container">
+                    <div class="filter-group">
+                        <label>Select Patient</label>
+                        <select id="trackingPatientSelect" onchange="loadPatientTracking()">
+                            <option value="">Choose a patient...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="trackingContent" class="loading">
+                    Select a patient to begin tracking supplies
+                </div>
+            </div>
+
+            <!-- Reports Section -->
+            <div id="reportsSection" class="section">
+                <h2>📈 Reports & Analytics</h2>
+                
+                <div class="grid grid-2">
+                    <div class="card">
+                        <h3>Itemized Summary Report</h3>
+                        <p>Detailed breakdown of supply usage by patient</p>
+                        
+                        <div class="filter-container">
+                            <div class="filter-group">
+                                <label>Facility</label>
+                                <select id="reportFacilityFilter">
+                                    <option value="">All Facilities</option>
+                                </select>
+                            </div>
+                            <div class="filter-group">
+                                <label>Month</label>
+                                <input type="month" id="reportMonthFilter">
+                            </div>
+                        </div>
+                        
+                        <button class="btn" onclick="generateItemizedReport()">Generate Report</button>
+                    </div>
+                    
+                    <div class="card">
+                        <h3>Export Options</h3>
+                        <p>Export data for external analysis</p>
+                        <button class="btn btn-secondary" onclick="exportData('csv')">Export as CSV</button>
+                        <button class="btn btn-secondary" onclick="exportData('excel')" style="margin-top: 10px;">Export as Excel</button>
+                    </div>
+                </div>
+
+                <div id="reportResults" style="display: none;">
+                    <div class="card">
+                        <h3>Report Results</h3>
+                        <div class="table-container">
+                            <table id="reportTable">
+                                <thead>
+                                    <tr>
+                                        <th>Patient</th>
+                                        <th>MRN</th>
+                                        <th>Facility</th>
+                                        <th>AR Code</th>
+                                        <th>Description</th>
+                                        <th>HCPCS</th>
+                                        <th>Units</th>
+                                        <th>Unit Cost</th>
+                                        <th>Total Cost</th>
+                                        <th>Wound Dx</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Supplies Management Section (Admin Only) -->
+            <div id="suppliesSection" class="section">
+                <h2>🏥 Supply Management</h2>
+                
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3>Supply Catalog</h3>
+                        <button class="btn btn-small" onclick="showAddSupplyModal()">+ Add Supply</button>
+                    </div>
+                    
+                    <div class="table-container">
+                        <table id="suppliesTable">
+                            <thead>
+                                <tr>
+                                    <th>Code</th>
+                                    <th>Description</th>
+                                    <th>HCPCS</th>
+                                    <th>Cost</th>
+                                    <th>Type</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Facilities Management Section (Admin Only) -->
+            <div id="facilitiesSection" class="section">
+                <h2>🏢 Facility Management</h2>
+                
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3>Healthcare Facilities</h3>
+                        <button class="btn btn-small" onclick="showAddFacilityModal()">+ Add Facility</button>
+                    </div>
+                    
+                    <div class="table-container">
+                        <table id="facilitiesTable">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Created</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- User Management Section (Admin Only) -->
+            <div id="usersSection" class="section">
+                <h2>👤 User Management</h2>
+                
+                <div class="card">
+                    <h3>System Users</h3>
+                    
+                    <div class="table-container">
+                        <table id="usersTable">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Role</th>
+                                    <th>Facility</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <!-- Add Patient Modal -->
+    <div id="addPatientModal" class="modal">
+        <div class="modal-content">
+            <h3>Add New Patient</h3>
+            <div class="success-message" id="patientSuccess"></div>
+            <div class="form-group">
+                <label>Patient Name</label>
+                <input type="text" id="newPatientName" placeholder="Last, First">
+            </div>
+            <div class="form-group">
+                <label>MRN</label>
+                <input type="text" id="newPatientMRN" placeholder="Medical Record Number">
+            </div>
+            <div class="form-group">
+                <label>Month</label>
+                <input type="month" id="newPatientMonth">
+            </div>
+            <div class="form-group">
+                <label>Facility</label>
+                <select id="newPatientFacility">
+                    <option value="">Select facility...</option>
+                </select>
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                <button class="btn btn-secondary" onclick="closeModal('addPatientModal')">Cancel</button>
+                <button class="btn" onclick="addPatient()">Add Patient</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Supply Modal -->
+    <div id="addSupplyModal" class="modal">
+        <div class="modal-content">
+            <h3>Add New Supply</h3>
+            <div class="form-group">
+                <label>AR Code</label>
+                <input type="number" id="newSupplyCode" placeholder="Supply code">
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <input type="text" id="newSupplyDescription" placeholder="Supply description">
+            </div>
+            <div class="form-group">
+                <label>HCPCS Code</label>
+                <input type="text" id="newSupplyHCPCS" placeholder="HCPCS code">
+            </div>
+            <div class="form-group">
+                <label>Unit Cost</label>
+                <input type="number" id="newSupplyCost" step="0.01" placeholder="0.00">
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                <button class="btn btn-secondary" onclick="closeModal('addSupplyModal')">Cancel</button>
+                <button class="btn" onclick="addSupply()">Add Supply</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Facility Modal -->
+    <div id="addFacilityModal" class="modal">
+        <div class="modal-content">
+            <h3>Add New Facility</h3>
+            <div class="form-group">
+                <label>Facility Name</label>
+                <input type="text" id="newFacilityName" placeholder="Facility name">
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                <button class="btn btn-secondary" onclick="closeModal('addFacilityModal')">Cancel</button>
+                <button class="btn" onclick="addFacility()">Add Facility</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Supply Modal -->
+    <div id="editSupplyModal" class="modal">
+        <div class="modal-content">
+            <h3>Edit Supply</h3>
+            <input type="hidden" id="editSupplyId">
+            <div class="form-group">
+                <label>AR Code</label>
+                <input type="number" id="editSupplyCode" placeholder="Supply code">
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <input type="text" id="editSupplyDescription" placeholder="Supply description">
+            </div>
+            <div class="form-group">
+                <label>HCPCS Code</label>
+                <input type="text" id="editSupplyHCPCS" placeholder="HCPCS code">
+            </div>
+            <div class="form-group">
+                <label>Unit Cost</label>
+                <input type="number" id="editSupplyCost" step="0.01" placeholder="0.00">
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                <button class="btn btn-secondary" onclick="closeModal('editSupplyModal')">Cancel</button>
+                <button class="btn" onclick="updateSupply()">Update Supply</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Facility Modal -->
+    <div id="editFacilityModal" class="modal">
+        <div class="modal-content">
+            <h3>Edit Facility</h3>
+            <input type="hidden" id="editFacilityId">
+            <div class="form-group">
+                <label>Facility Name</label>
+                <input type="text" id="editFacilityName" placeholder="Facility name">
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                <button class="btn btn-secondary" onclick="closeModal('editFacilityModal')">Cancel</button>
+                <button class="btn" onclick="updateFacility()">Update Facility</button>
+            </div>
+        </div>
     </div>
 
     <script>
         // Global variables
         let currentUser = null;
-        let authToken = localStorage.getItem('authToken');
-        
-        console.log('🔍 JavaScript loaded successfully');
+        let currentSection = 'dashboard';
+        let supplies = [];
+        let facilities = [];
+        let patients = [];
 
-        // API helper function
+        // Authentication functions
         async function apiCall(endpoint, options = {}) {
-            const url = `/api${endpoint}`;
+            const token = localStorage.getItem('authToken');
             const config = {
                 headers: {
                     'Content-Type': 'application/json',
-                    ...(authToken && { 'Authorization': `Bearer ${authToken}` })
+                    ...(token && { 'Authorization': `Bearer ${token}` })
                 },
                 ...options
             };
@@ -113,38 +894,29 @@
                 config.body = JSON.stringify(options.body);
             }
 
-            console.log('📡 API Call:', url, config);
-
             try {
-                const response = await fetch(url, config);
-                console.log('📡 Response status:', response.status);
+                const response = await fetch(`/api${endpoint}`, config);
                 
                 if (!response.ok) {
                     const errorText = await response.text();
-                    console.error('📡 Response error:', errorText);
                     throw new Error(errorText || `HTTP ${response.status}`);
                 }
                 
-                const data = await response.json();
-                console.log('📡 Response data:', data);
-                return data;
+                return await response.json();
             } catch (error) {
-                console.error('📡 API Error:', error);
+                console.error('API Error:', error);
                 throw error;
             }
         }
 
-        // Login function
         async function login() {
-            console.log('🔑 Login function called');
-            
             const email = document.getElementById('loginEmail').value.trim();
             const password = document.getElementById('loginPassword').value.trim();
             const loginBtn = document.getElementById('loginBtn');
             const loginError = document.getElementById('loginError');
 
             if (!email || !password) {
-                showError('Please enter both email and password');
+                showError('loginError', 'Please enter both email and password');
                 return;
             }
 
@@ -153,85 +925,853 @@
             loginError.style.display = 'none';
 
             try {
-                console.log('📡 Attempting login with:', { email });
-                
                 const response = await apiCall('/auth/login', {
                     method: 'POST',
                     body: { email, password }
                 });
 
-                console.log('✅ Login successful:', response);
-
-                authToken = response.token;
+                localStorage.setItem('authToken', response.token);
                 currentUser = response.user;
-                localStorage.setItem('authToken', authToken);
-
-                // Show success
-                document.getElementById('loginContainer').style.display = 'none';
-                document.getElementById('mainApp').style.display = 'block';
-                document.getElementById('userInfo').textContent = currentUser.name || currentUser.email;
-                
+                showMainApp();
             } catch (error) {
-                console.error('❌ Login failed:', error);
-                showError(error.message || 'Login failed');
+                showError('loginError', error.message || 'Login failed');
             } finally {
                 loginBtn.disabled = false;
                 loginBtn.textContent = 'Sign In';
             }
         }
 
-        // Logout function
-        function logout() {
-            console.log('🔓 Logout function called');
-            
-            authToken = null;
-            currentUser = null;
-            localStorage.removeItem('authToken');
+        async function register() {
+            const name = document.getElementById('registerName').value.trim();
+            const email = document.getElementById('registerEmail').value.trim();
+            const password = document.getElementById('registerPassword').value.trim();
+            const facilityId = document.getElementById('registerFacility').value;
+            const registerBtn = document.getElementById('registerBtn');
+            const registerError = document.getElementById('registerError');
 
-            document.getElementById('loginContainer').style.display = 'block';
-            document.getElementById('mainApp').style.display = 'none';
-            
-            document.getElementById('loginEmail').value = 'admin@system.com';
-            document.getElementById('loginPassword').value = 'admin123';
-        }
+            if (!name || !email || !password || !facilityId) {
+                showError('registerError', 'Please fill in all fields');
+                return;
+            }
 
-        // Show error function
-        function showError(message) {
-            console.log('❌ Showing error:', message);
-            const loginError = document.getElementById('loginError');
-            loginError.textContent = message;
-            loginError.style.display = 'block';
-        }
+            registerBtn.disabled = true;
+            registerBtn.textContent = 'Registering...';
+            registerError.style.display = 'none';
 
-        // Auto-login check
-        if (authToken) {
-            console.log('🔍 Checking stored auth token...');
-            
-            apiCall('/auth/verify')
-                .then(response => {
-                    if (response && response.user) {
-                        console.log('✅ Auto-login successful');
-                        currentUser = response.user;
-                        document.getElementById('loginContainer').style.display = 'none';
-                        document.getElementById('mainApp').style.display = 'block';
-                        document.getElementById('userInfo').textContent = currentUser.name || currentUser.email;
-                    }
-                })
-                .catch(error => {
-                    console.log('❌ Token invalid:', error);
-                    localStorage.removeItem('authToken');
-                    authToken = null;
+            try {
+                await apiCall('/auth/register', {
+                    method: 'POST',
+                    body: { name, email, password, facilityId: parseInt(facilityId) }
                 });
+
+                alert('Registration successful! Please wait for admin approval before logging in.');
+                toggleAuthMode();
+            } catch (error) {
+                showError('registerError', error.message || 'Registration failed');
+            } finally {
+                registerBtn.disabled = false;
+                registerBtn.textContent = 'Register';
+            }
         }
 
-        // Enter key support
-        document.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter' && document.getElementById('loginContainer').style.display !== 'none') {
-                login();
+        function logout() {
+            localStorage.removeItem('authToken');
+            currentUser = null;
+            document.getElementById('authContainer').style.display = 'flex';
+            document.getElementById('mainApp').style.display = 'none';
+        }
+
+        function toggleAuthMode() {
+            const loginForm = document.getElementById('loginForm');
+            const registerForm = document.getElementById('registerForm');
+            
+            if (loginForm.style.display === 'none') {
+                loginForm.style.display = 'block';
+                registerForm.style.display = 'none';
+            } else {
+                loginForm.style.display = 'none';
+                registerForm.style.display = 'block';
+                loadFacilitiesForRegistration();
+            }
+        }
+
+        async function loadFacilitiesForRegistration() {
+            try {
+                const facilities = await apiCall('/facilities/public');
+                const select = document.getElementById('registerFacility');
+                select.innerHTML = '<option value="">Select a facility</option>';
+                facilities.forEach(facility => {
+                    const option = document.createElement('option');
+                    option.value = facility.id;
+                    option.textContent = facility.name;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Failed to load facilities:', error);
+            }
+        }
+
+        function showMainApp() {
+            document.getElementById('authContainer').style.display = 'none';
+            document.getElementById('mainApp').style.display = 'block';
+            document.getElementById('userWelcome').textContent = `Welcome, ${currentUser.name}`;
+            
+            // Show admin sections if user is admin
+            if (currentUser.role === 'admin') {
+                document.querySelectorAll('.admin-only').forEach(el => el.classList.add('show-admin'));
+            }
+            
+            initializeApp();
+        }
+
+        async function initializeApp() {
+            try {
+                await Promise.all([
+                    loadSupplies(),
+                    loadFacilities(),
+                    loadPatients(),
+                    loadDashboard()
+                ]);
+                populateFilters();
+            } catch (error) {
+                console.error('Failed to initialize app:', error);
+            }
+        }
+
+        // Navigation
+        function showSection(sectionName) {
+            // Update navigation
+            document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            // Update sections
+            document.querySelectorAll('.section').forEach(section => section.classList.remove('active'));
+            document.getElementById(`${sectionName}Section`).classList.add('active');
+            
+            currentSection = sectionName;
+            
+            // Load section-specific data
+            switch(sectionName) {
+                case 'dashboard':
+                    loadDashboard();
+                    break;
+                case 'patients':
+                    loadPatientsTable();
+                    break;
+                case 'tracking':
+                    loadPatientsForTracking();
+                    break;
+                case 'reports':
+                    break;
+                case 'supplies':
+                    loadSuppliesTable();
+                    break;
+                case 'facilities':
+                    loadFacilitiesTable();
+                    break;
+                case 'users':
+                    loadUsersTable();
+                    break;
+            }
+        }
+
+        // Data loading functions
+        async function loadSupplies() {
+            try {
+                supplies = await apiCall('/supplies');
+            } catch (error) {
+                console.error('Failed to load supplies:', error);
+                supplies = [];
+            }
+        }
+
+        async function loadFacilities() {
+            try {
+                facilities = await apiCall('/facilities');
+            } catch (error) {
+                console.error('Failed to load facilities:', error);
+                facilities = [];
+            }
+        }
+
+        async function loadPatients() {
+            try {
+                patients = await apiCall('/patients');
+            } catch (error) {
+                console.error('Failed to load patients:', error);
+                patients = [];
+            }
+        }
+
+        function populateFilters() {
+            // Populate facility filters
+            const facilitySelects = [
+                'dashboardFacilityFilter',
+                'reportFacilityFilter',
+                'newPatientFacility'
+            ];
+            
+            facilitySelects.forEach(selectId => {
+                const select = document.getElementById(selectId);
+                if (select) {
+                    select.innerHTML = selectId.includes('dashboard') || selectId.includes('report') 
+                        ? '<option value="">All Facilities</option>' 
+                        : '<option value="">Select facility...</option>';
+                    
+                    facilities.forEach(facility => {
+                        const option = document.createElement('option');
+                        option.value = facility.id;
+                        option.textContent = facility.name;
+                        select.appendChild(option);
+                    });
+                }
+            });
+            
+            // Set current month in filters
+            const today = new Date();
+            const currentMonth = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
+            const monthInputs = document.querySelectorAll('input[type="month"]');
+            monthInputs.forEach(input => {
+                if (!input.value) input.value = currentMonth;
+            });
+        }
+
+        async function loadDashboard() {
+            try {
+                const facilityId = document.getElementById('dashboardFacilityFilter').value;
+                const month = document.getElementById('dashboardMonthFilter').value;
+                
+                const params = new URLSearchParams();
+                if (facilityId) params.append('facilityId', facilityId);
+                if (month) params.append('month', month);
+                
+                const data = await apiCall(`/dashboard/summary?${params}`);
+                
+                // Update stats
+                const totalPatients = data.length;
+                const totalUnits = data.reduce((sum, item) => sum + parseInt(item.total_units || 0), 0);
+                const totalCost = data.reduce((sum, item) => sum + parseFloat(item.total_cost || 0), 0);
+                const activeFacilities = new Set(data.map(item => item.facility_name)).size;
+                
+                document.getElementById('statsGrid').innerHTML = `
+                    <div class="stat-card">
+                        <div class="stat-number">${totalPatients}</div>
+                        <div class="stat-label">Total Patients</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${totalUnits.toLocaleString()}</div>
+                        <div class="stat-label">Supply Units Used</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">$${totalCost.toFixed(2)}</div>
+                        <div class="stat-label">Total Supply Cost</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${activeFacilities}</div>
+                        <div class="stat-label">Active Facilities</div>
+                    </div>
+                `;
+                
+                // Update table
+                const tbody = document.querySelector('#dashboardTable tbody');
+                tbody.innerHTML = data.slice(0, 10).map(item => `
+                    <tr>
+                        <td>${item.name}</td>
+                        <td>${item.month}</td>
+                        <td>${item.facility_name || 'N/A'}</td>
+                        <td>${item.total_units || 0}</td>
+                        <td>$${parseFloat(item.total_cost || 0).toFixed(2)}</td>
+                        <td>${item.wound_diagnoses || 'N/A'}</td>
+                    </tr>
+                `).join('');
+                
+            } catch (error) {
+                console.error('Failed to load dashboard:', error);
+            }
+        }
+
+        async function loadPatientsTable() {
+            try {
+                const tbody = document.querySelector('#patientsTable tbody');
+                tbody.innerHTML = patients.map(patient => `
+                    <tr>
+                        <td>${patient.name}</td>
+                        <td>${patient.mrn || 'N/A'}</td>
+                        <td>${patient.month}</td>
+                        <td>${patient.facility_name || 'N/A'}</td>
+                        <td>
+                            <button class="btn btn-small btn-danger" onclick="deletePatient(${patient.id})">Delete</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Failed to load patients table:', error);
+            }
+        }
+
+        async function loadPatientsForTracking() {
+            const select = document.getElementById('trackingPatientSelect');
+            select.innerHTML = '<option value="">Choose a patient...</option>';
+            
+            patients.forEach(patient => {
+                const option = document.createElement('option');
+                option.value = patient.id;
+                option.textContent = `${patient.name} - ${patient.month} (${patient.facility_name || 'N/A'})`;
+                select.appendChild(option);
+            });
+        }
+
+        async function loadPatientTracking() {
+            const patientId = document.getElementById('trackingPatientSelect').value;
+            const contentDiv = document.getElementById('trackingContent');
+            
+            if (!patientId) {
+                contentDiv.innerHTML = '<div class="loading">Select a patient to begin tracking supplies</div>';
+                return;
+            }
+            
+            try {
+                const trackingData = await apiCall(`/tracking/${patientId}`);
+                const patient = patients.find(p => p.id === parseInt(patientId));
+                
+                if (!patient) return;
+                
+                // Group tracking data by supply
+                const trackingBySupply = {};
+                trackingData.forEach(item => {
+                    if (!trackingBySupply[item.supply_id]) {
+                        trackingBySupply[item.supply_id] = {
+                            supply: supplies.find(s => s.id === item.supply_id),
+                            days: {},
+                            wound_dx: item.wound_dx
+                        };
+                    }
+                    trackingBySupply[item.supply_id].days[item.day_of_month] = item.quantity;
+                    if (item.wound_dx) {
+                        trackingBySupply[item.supply_id].wound_dx = item.wound_dx;
+                    }
+                });
+                
+                let html = `
+                    <div class="card">
+                        <h3>Supply Tracking for ${patient.name} - ${patient.month}</h3>
+                        <p><strong>Facility:</strong> ${patient.facility_name || 'N/A'}</p>
+                        <p><strong>MRN:</strong> ${patient.mrn || 'N/A'}</p>
+                    </div>
+                `;
+                
+                supplies.forEach(supply => {
+                    const tracking = trackingBySupply[supply.id] || { days: {}, wound_dx: '' };
+                    
+                    html += `
+                        <div class="supply-row">
+                            <div class="supply-header">
+                                <div>
+                                    <strong>${supply.code} - ${supply.description}</strong>
+                                    ${supply.hcpcs ? `<span style="color: #666;"> (${supply.hcpcs})</span>` : ''}
+                                </div>
+                                <div style="color: #667eea; font-weight: bold;">
+                                    $${parseFloat(supply.cost || 0).toFixed(2)} each
+                                </div>
+                            </div>
+                            <div style="margin-bottom: 10px;">
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Wound Diagnosis:</label>
+                                <input type="text" class="day-input" style="width: 100%;" 
+                                       value="${tracking.wound_dx || ''}"
+                                       placeholder="Enter wound diagnosis..."
+                                       onchange="updateWoundDx(${patientId}, ${supply.id}, this.value)">
+                            </div>
+                            <div class="tracking-grid">
+                                ${Array.from({length: 31}, (_, i) => {
+                                    const day = i + 1;
+                                    const quantity = tracking.days[day] || 0;
+                                    return `
+                                        <div style="text-align: center;">
+                                            <div style="font-size: 12px; margin-bottom: 2px;">${day}</div>
+                                            <input type="number" class="day-input" min="0" 
+                                                   value="${quantity}" 
+                                                   onchange="updateTracking(${patientId}, ${supply.id}, ${day}, this.value)">
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                contentDiv.innerHTML = html;
+                
+            } catch (error) {
+                console.error('Failed to load patient tracking:', error);
+                contentDiv.innerHTML = '<div class="error">Failed to load tracking data</div>';
+            }
+        }
+
+        async function updateTracking(patientId, supplyId, dayOfMonth, quantity) {
+            try {
+                await apiCall('/tracking', {
+                    method: 'POST',
+                    body: {
+                        patientId: parseInt(patientId),
+                        supplyId: parseInt(supplyId),
+                        dayOfMonth: parseInt(dayOfMonth),
+                        quantity: parseInt(quantity) || 0
+                    }
+                });
+            } catch (error) {
+                console.error('Failed to update tracking:', error);
+                alert('Failed to save tracking data');
+            }
+        }
+
+        async function updateWoundDx(patientId, supplyId, woundDx) {
+            try {
+                await apiCall('/tracking', {
+                    method: 'POST',
+                    body: {
+                        patientId: parseInt(patientId),
+                        supplyId: parseInt(supplyId),
+                        dayOfMonth: 1,
+                        woundDx: woundDx
+                    }
+                });
+            } catch (error) {
+                console.error('Failed to update wound diagnosis:', error);
+                alert('Failed to save wound diagnosis');
+            }
+        }
+
+        // Reports
+        async function generateItemizedReport() {
+            const facilityId = document.getElementById('reportFacilityFilter').value;
+            const month = document.getElementById('reportMonthFilter').value;
+            
+            const params = new URLSearchParams();
+            if (facilityId) params.append('facilityId', facilityId);
+            if (month) params.append('month', month);
+            
+            try {
+                const data = await apiCall(`/reports/itemized-summary?${params}`);
+                
+                const tbody = document.querySelector('#reportTable tbody');
+                tbody.innerHTML = data.map(item => `
+                    <tr>
+                        <td>${item.patient_name}</td>
+                        <td>${item.mrn || 'N/A'}</td>
+                        <td>${item.facility_name}</td>
+                        <td>${item.ar_code}</td>
+                        <td>${item.item_description}</td>
+                        <td>${item.hcpcs || 'N/A'}</td>
+                        <td>${item.total_units}</td>
+                        <td>$${parseFloat(item.unit_cost || 0).toFixed(2)}</td>
+                        <td>$${parseFloat(item.total_cost || 0).toFixed(2)}</td>
+                        <td>${item.wound_dx || 'N/A'}</td>
+                    </tr>
+                `).join('');
+                
+                document.getElementById('reportResults').style.display = 'block';
+            } catch (error) {
+                console.error('Failed to generate report:', error);
+                alert('Failed to generate report');
+            }
+        }
+
+        // Admin functions
+        async function loadSuppliesTable() {
+            if (currentUser.role !== 'admin') return;
+            
+            try {
+                const tbody = document.querySelector('#suppliesTable tbody');
+                tbody.innerHTML = supplies.map(supply => `
+                    <tr>
+                        <td>${supply.code}</td>
+                        <td>${supply.description}</td>
+                        <td>${supply.hcpcs || 'N/A'}</td>
+                        <td>$${parseFloat(supply.cost || 0).toFixed(2)}</td>
+                        <td>${supply.is_custom ? 'Custom' : 'Standard'}</td>
+                        <td>
+                            <button class="btn btn-small btn-secondary" onclick="editSupply(${supply.id})">Edit</button>
+                            <button class="btn btn-small btn-danger" onclick="deleteSupply(${supply.id})">Delete</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Failed to load supplies table:', error);
+            }
+        }
+
+        async function loadFacilitiesTable() {
+            if (currentUser.role !== 'admin') return;
+            
+            try {
+                const tbody = document.querySelector('#facilitiesTable tbody');
+                tbody.innerHTML = facilities.map(facility => `
+                    <tr>
+                        <td>${facility.name}</td>
+                        <td>${new Date(facility.created_at).toLocaleDateString()}</td>
+                        <td>
+                            <button class="btn btn-small btn-secondary" onclick="editFacility(${facility.id})">Edit</button>
+                            <button class="btn btn-small btn-danger" onclick="deleteFacility(${facility.id})">Delete</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Failed to load facilities table:', error);
+            }
+        }
+
+        async function loadUsersTable() {
+            if (currentUser.role !== 'admin') return;
+            
+            try {
+                const users = await apiCall('/users');
+                const tbody = document.querySelector('#usersTable tbody');
+                tbody.innerHTML = users.map(user => `
+                    <tr>
+                        <td>${user.name}</td>
+                        <td>${user.email}</td>
+                        <td>${user.role}</td>
+                        <td>${user.facility_name || 'N/A'}</td>
+                        <td>
+                            <span style="color: ${user.is_approved ? '#38a169' : '#e53e3e'};">
+                                ${user.is_approved ? 'Approved' : 'Pending'}
+                            </span>
+                        </td>
+                        <td>
+                            ${!user.is_approved ? `
+                                <button class="btn btn-small btn-success" onclick="approveUser(${user.id})">Approve</button>
+                            ` : ''}
+                            ${user.id !== currentUser.id ? `
+                                <button class="btn btn-small btn-danger" onclick="deleteUser(${user.id})">Delete</button>
+                            ` : ''}
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Failed to load users table:', error);
+            }
+        }
+
+        // Modal functions
+        function showAddPatientModal() {
+            document.getElementById('addPatientModal').style.display = 'flex';
+        }
+
+        function showAddSupplyModal() {
+            document.getElementById('addSupplyModal').style.display = 'flex';
+        }
+
+        function showAddFacilityModal() {
+            document.getElementById('addFacilityModal').style.display = 'flex';
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+            // Clear any form data when closing modals
+            if (modalId === 'editSupplyModal') {
+                document.getElementById('editSupplyId').value = '';
+                document.getElementById('editSupplyCode').value = '';
+                document.getElementById('editSupplyDescription').value = '';
+                document.getElementById('editSupplyHCPCS').value = '';
+                document.getElementById('editSupplyCost').value = '';
+            }
+            if (modalId === 'editFacilityModal') {
+                document.getElementById('editFacilityId').value = '';
+                document.getElementById('editFacilityName').value = '';
+            }
+        }
+
+        // CRUD operations
+        async function addPatient() {
+            const name = document.getElementById('newPatientName').value.trim();
+            const mrn = document.getElementById('newPatientMRN').value.trim();
+            const month = document.getElementById('newPatientMonth').value;
+            const facilityId = document.getElementById('newPatientFacility').value;
+
+            if (!name || !month || !facilityId) {
+                alert('Please fill in required fields');
+                return;
+            }
+
+            try {
+                await apiCall('/patients', {
+                    method: 'POST',
+                    body: { name, mrn, month, facilityId: parseInt(facilityId) }
+                });
+
+                document.getElementById('patientSuccess').textContent = 'Patient added successfully!';
+                document.getElementById('patientSuccess').style.display = 'block';
+                
+                // Clear form
+                document.getElementById('newPatientName').value = '';
+                document.getElementById('newPatientMRN').value = '';
+                document.getElementById('newPatientMonth').value = '';
+                document.getElementById('newPatientFacility').value = '';
+                
+                // Reload data
+                await loadPatients();
+                if (currentSection === 'patients') loadPatientsTable();
+                
+                setTimeout(() => {
+                    closeModal('addPatientModal');
+                    document.getElementById('patientSuccess').style.display = 'none';
+                }, 2000);
+                
+            } catch (error) {
+                alert('Failed to add patient: ' + error.message);
+            }
+        }
+
+        async function deletePatient(patientId) {
+            if (!confirm('Are you sure you want to delete this patient? All tracking data will be lost.')) {
+                return;
+            }
+
+            try {
+                await apiCall(`/patients/${patientId}`, { method: 'DELETE' });
+                await loadPatients();
+                loadPatientsTable();
+            } catch (error) {
+                alert('Failed to delete patient: ' + error.message);
+            }
+        }
+
+        async function addSupply() {
+            const code = document.getElementById('newSupplyCode').value;
+            const description = document.getElementById('newSupplyDescription').value.trim();
+            const hcpcs = document.getElementById('newSupplyHCPCS').value.trim();
+            const cost = document.getElementById('newSupplyCost').value;
+
+            if (!code || !description) {
+                alert('Please fill in required fields');
+                return;
+            }
+
+            try {
+                await apiCall('/supplies', {
+                    method: 'POST',
+                    body: { code: parseInt(code), description, hcpcs, cost: parseFloat(cost) || 0 }
+                });
+
+                // Clear form
+                document.getElementById('newSupplyCode').value = '';
+                document.getElementById('newSupplyDescription').value = '';
+                document.getElementById('newSupplyHCPCS').value = '';
+                document.getElementById('newSupplyCost').value = '';
+                
+                closeModal('addSupplyModal');
+                await loadSupplies();
+                if (currentSection === 'supplies') loadSuppliesTable();
+                
+            } catch (error) {
+                alert('Failed to add supply: ' + error.message);
+            }
+        }
+
+        async function addFacility() {
+            const name = document.getElementById('newFacilityName').value.trim();
+
+            if (!name) {
+                alert('Please enter facility name');
+                return;
+            }
+
+            try {
+                await apiCall('/facilities', {
+                    method: 'POST',
+                    body: { name }
+                });
+
+                document.getElementById('newFacilityName').value = '';
+                closeModal('addFacilityModal');
+                await loadFacilities();
+                if (currentSection === 'facilities') loadFacilitiesTable();
+                populateFilters();
+                
+            } catch (error) {
+                alert('Failed to add facility: ' + error.message);
+            }
+        }
+
+        async function editSupply(supplyId) {
+            const supply = supplies.find(s => s.id === supplyId);
+            if (!supply) return;
+
+            document.getElementById('editSupplyId').value = supply.id;
+            document.getElementById('editSupplyCode').value = supply.code;
+            document.getElementById('editSupplyDescription').value = supply.description;
+            document.getElementById('editSupplyHCPCS').value = supply.hcpcs || '';
+            document.getElementById('editSupplyCost').value = supply.cost || 0;
+            
+            document.getElementById('editSupplyModal').style.display = 'flex';
+        }
+
+        async function updateSupply() {
+            const supplyId = document.getElementById('editSupplyId').value;
+            const code = document.getElementById('editSupplyCode').value;
+            const description = document.getElementById('editSupplyDescription').value.trim();
+            const hcpcs = document.getElementById('editSupplyHCPCS').value.trim();
+            const cost = document.getElementById('editSupplyCost').value;
+
+            if (!code || !description) {
+                alert('Please fill in required fields');
+                return;
+            }
+
+            try {
+                await apiCall(`/supplies/${supplyId}`, {
+                    method: 'PUT',
+                    body: { code: parseInt(code), description, hcpcs, cost: parseFloat(cost) || 0 }
+                });
+
+                closeModal('editSupplyModal');
+                await loadSupplies();
+                if (currentSection === 'supplies') loadSuppliesTable();
+                
+            } catch (error) {
+                alert('Failed to update supply: ' + error.message);
+            }
+        }
+
+        async function deleteSupply(supplyId) {
+            const supply = supplies.find(s => s.id === supplyId);
+            if (!supply) return;
+
+            if (!confirm(`Are you sure you want to delete supply "${supply.description}"? This action cannot be undone.`)) {
+                return;
+            }
+
+            try {
+                await apiCall(`/supplies/${supplyId}`, { method: 'DELETE' });
+                await loadSupplies();
+                if (currentSection === 'supplies') loadSuppliesTable();
+            } catch (error) {
+                alert('Failed to delete supply: ' + error.message);
+            }
+        }
+
+        async function editFacility(facilityId) {
+            const facility = facilities.find(f => f.id === facilityId);
+            if (!facility) return;
+
+            document.getElementById('editFacilityId').value = facility.id;
+            document.getElementById('editFacilityName').value = facility.name;
+            
+            document.getElementById('editFacilityModal').style.display = 'flex';
+        }
+
+        async function updateFacility() {
+            const facilityId = document.getElementById('editFacilityId').value;
+            const name = document.getElementById('editFacilityName').value.trim();
+
+            if (!name) {
+                alert('Please enter facility name');
+                return;
+            }
+
+            try {
+                await apiCall(`/facilities/${facilityId}`, {
+                    method: 'PUT',
+                    body: { name }
+                });
+
+                closeModal('editFacilityModal');
+                await loadFacilities();
+                if (currentSection === 'facilities') loadFacilitiesTable();
+                populateFilters();
+                
+            } catch (error) {
+                alert('Failed to update facility: ' + error.message);
+            }
+        }
+
+        async function deleteFacility(facilityId) {
+            const facility = facilities.find(f => f.id === facilityId);
+            if (!facility) return;
+
+            if (!confirm(`Are you sure you want to delete facility "${facility.name}"? This action cannot be undone.`)) {
+                return;
+            }
+
+            try {
+                await apiCall(`/facilities/${facilityId}`, { method: 'DELETE' });
+                await loadFacilities();
+                if (currentSection === 'facilities') loadFacilitiesTable();
+                populateFilters();
+            } catch (error) {
+                alert('Failed to delete facility: ' + error.message);
+            }
+        }
+
+        async function approveUser(userId) {
+            try {
+                await apiCall(`/users/${userId}/approval`, {
+                    method: 'PUT',
+                    body: { isApproved: true }
+                });
+                loadUsersTable();
+            } catch (error) {
+                alert('Failed to approve user: ' + error.message);
+            }
+        }
+
+        async function deleteUser(userId) {
+            if (!confirm('Are you sure you want to delete this user?')) {
+                return;
+            }
+
+            try {
+                await apiCall(`/users/${userId}`, { method: 'DELETE' });
+                loadUsersTable();
+            } catch (error) {
+                alert('Failed to delete user: ' + error.message);
+            }
+        }
+
+        function showError(elementId, message) {
+            const errorElement = document.getElementById(elementId);
+            errorElement.textContent = message;
+            errorElement.style.display = 'block';
+        }
+
+        // Export functions
+        function exportData(format) {
+            alert(`Export to ${format.toUpperCase()} functionality would be implemented here`);
+        }
+
+        // Auto-login check on page load
+        window.addEventListener('load', async () => {
+            const token = localStorage.getItem('authToken');
+            if (token) {
+                try {
+                    const response = await apiCall('/auth/verify');
+                    if (response && response.user) {
+                        currentUser = response.user;
+                        showMainApp();
+                    }
+                } catch (error) {
+                    localStorage.removeItem('authToken');
+                }
             }
         });
 
-        console.log('🎉 Test page ready - all functions defined');
+        // Enter key support for login
+        document.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && document.getElementById('authContainer').style.display !== 'none') {
+                if (document.getElementById('loginForm').style.display !== 'none') {
+                    login();
+                } else {
+                    register();
+                }
+            }
+        });
+
+        // Close modals when clicking outside
+        window.addEventListener('click', (e) => {
+            if (e.target.classList.contains('modal')) {
+                e.target.style.display = 'none';
+            }
+        });
     </script>
 </body>
 </html>
