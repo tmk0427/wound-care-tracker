@@ -47,7 +47,7 @@ pool.connect((err, client, release) => {
 async function safeQuery(query, params = []) {
     try {
         console.log('🔍 Executing query:', query.substring(0, 100) + '...');
-        console.log('🔍 Parameters:', params);
+        console.log('📝 Parameters:', params);
         
         const result = await pool.query(query, params);
         console.log('✅ Query successful, returned', result.rows.length, 'rows');
@@ -1001,3 +1001,4 @@ app.listen(PORT, () => {
 });
 
 module.exports = app;
+
