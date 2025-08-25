@@ -178,7 +178,7 @@ app.get('/api/auth/verify', authenticateToken, async (req, res) => {
 // Facilities routes
 app.get('/api/facilities/public', async (req, res) => {
     try {
-        const result = await pool.query('SELECT id, name FROM facilities ORDER BY name');
+        const result = await pool.query('SELECT id, name FROM facilities ORDER BY name ASC');
         res.json(result.rows);
     } catch (error) {
         console.error('Error fetching public facilities:', error);
@@ -188,7 +188,7 @@ app.get('/api/facilities/public', async (req, res) => {
 
 app.get('/api/facilities', authenticateToken, async (req, res) => {
     try {
-        const result = await pool.query('SELECT * FROM facilities ORDER BY name');
+        const result = await pool.query('SELECT * FROM facilities ORDER BY name ASC');
         res.json(result.rows);
     } catch (error) {
         console.error('Error fetching facilities:', error);
@@ -251,6 +251,28 @@ app.delete('/api/facilities/:id', authenticateToken, requireAdmin, async (req, r
     try {
         const facilityId = req.params.id;
 
+        // Check if facility has any associated patients
+        const patientCheck = await pool.query('SELECT COUNT(*) as count FROM patients WHERE facility_id = $1', [facilityId]);
+        const patientCount = parseInt(patientCheck.rows[0].count);
+
+        if (patientCount > 0) {
+            return res.status(400).json({ 
+                error: `Cannot delete facility. It has ${patientCount} associated patient(s). Please reassign or delete patients first.`,
+                patientCount: patientCount 
+            });
+        }
+
+        // Check if facility has any associated users
+        const userCheck = await pool.query('SELECT COUNT(*) as count FROM users WHERE facility_id = $1', [facilityId]);
+        const userCount = parseInt(userCheck.rows[0].count);
+
+        if (userCount > 0) {
+            return res.status(400).json({ 
+                error: `Cannot delete facility. It has ${userCount} associated user(s). Please reassign users first.`,
+                userCount: userCount 
+            });
+        }
+
         const result = await pool.query('DELETE FROM facilities WHERE id = $1', [facilityId]);
 
         if (result.rowCount === 0) {
@@ -264,10 +286,86 @@ app.delete('/api/facilities/:id', authenticateToken, requireAdmin, async (req, r
     }
 });
 
+// Add endpoint to clean up orphaned patients
+app.post('/api/admin/cleanup-orphaned-patients', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { deleteOrphaned = false, reassignToFacilityId = null } = req.body;
+        
+        if (deleteOrphaned) {
+            // Delete patients with no valid facility
+            const result = await pool.query(`
+                DELETE FROM patients 
+                WHERE facility_id IS NULL OR facility_id NOT IN (SELECT id FROM facilities)
+            `);
+            
+            res.json({ 
+                message: `Deleted ${result.rowCount} orphaned patient(s)`,
+                deletedCount: result.rowCount 
+            });
+        } else if (reassignToFacilityId) {
+            // Reassign patients to a specific facility
+            const result = await pool.query(`
+                UPDATE patients 
+                SET facility_id = $1 
+                WHERE facility_id IS NULL OR facility_id NOT IN (SELECT id FROM facilities)
+            `, [reassignToFacilityId]);
+            
+            res.json({ 
+                message: `Reassigned ${result.rowCount} orphaned patient(s) to facility`,
+                reassignedCount: result.rowCount 
+            });
+        } else {
+            // Just return count of orphaned patients
+            const result = await pool.query(`
+                SELECT COUNT(*) as count 
+                FROM patients 
+                WHERE facility_id IS NULL OR facility_id NOT IN (SELECT id FROM facilities)
+            `);
+            
+            res.json({ 
+                orphanedCount: parseInt(result.rows[0].count),
+                message: 'Use deleteOrphaned=true or reassignToFacilityId=X to fix orphaned patients'
+            });
+        }
+    } catch (error) {
+        console.error('Error cleaning up orphaned patients:', error);
+        res.status(500).json({ error: 'Database error' });
+    }
+});
+
+// Add endpoint to clean up orphaned data
+app.get('/api/admin/orphaned-data', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const orphanedPatients = await pool.query(`
+            SELECT p.*, 'No facility' as issue 
+            FROM patients p 
+            WHERE p.facility_id IS NULL OR p.facility_id NOT IN (SELECT id FROM facilities)
+        `);
+        
+        const orphanedUsers = await pool.query(`
+            SELECT u.id, u.name, u.email, u.facility_id, 'No facility' as issue 
+            FROM users u 
+            WHERE u.facility_id IS NOT NULL AND u.facility_id NOT IN (SELECT id FROM facilities)
+        `);
+
+        res.json({
+            orphanedPatients: orphanedPatients.rows,
+            orphanedUsers: orphanedUsers.rows,
+            summary: {
+                patients: orphanedPatients.rows.length,
+                users: orphanedUsers.rows.length
+            }
+        });
+    } catch (error) {
+        console.error('Error checking orphaned data:', error);
+        res.status(500).json({ error: 'Database error' });
+    }
+});
+
 // Supplies routes
 app.get('/api/supplies', authenticateToken, async (req, res) => {
     try {
-        const result = await pool.query('SELECT * FROM supplies ORDER BY code');
+        const result = await pool.query('SELECT * FROM supplies ORDER BY code ASC');
         res.json(result.rows);
     } catch (error) {
         console.error('Error fetching supplies:', error);
@@ -359,7 +457,7 @@ app.get('/api/patients', authenticateToken, async (req, res) => {
             params.push(req.user.facilityId);
         }
 
-        query += ' ORDER BY p.created_at DESC';
+        query += ' ORDER BY p.name ASC'; // Changed to alphabetical order A-Z
 
         const result = await pool.query(query, params);
         res.json(result.rows);
@@ -653,7 +751,7 @@ app.get('/api/users', authenticateToken, requireAdmin, async (req, res) => {
             `SELECT u.id, u.name, u.email, u.role, u.facility_id, u.is_approved, u.created_at, u.updated_at, f.name as facility_name 
              FROM users u 
              LEFT JOIN facilities f ON u.facility_id = f.id 
-             ORDER BY u.created_at DESC`
+             ORDER BY u.name ASC`
         );
         
         res.json(result.rows);
