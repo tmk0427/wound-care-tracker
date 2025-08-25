@@ -1411,17 +1411,7 @@
                 }
                 
                 const tbody = document.querySelector('#patientsTable tbody');
-                tbody.innerHTML = filteredPatients.map(patient => `
-                    <tr>
-                        <td>${patient.name}</td>
-                        <td>${patient.mrn || 'N/A'}</td>
-                        <td>${patient.month}</td>
-                        <td>${patient.facility_name || 'N/A'}</td>
-                        <td>
-                            <button class="btn btn-small btn-danger" onclick="deletePatient(${patient.id})">Delete</button>
-                        </td>
-                    </tr>
-                `).join('');
+                tbody.innerHTML = filteredPatients.map(patient => `<tr><td>${patient.name}</td><td>${patient.mrn || 'N/A'}</td><td>${patient.month}</td><td>${patient.facility_name || 'N/A'}</td><td><button class="btn btn-small btn-danger" onclick="deletePatient(${patient.id})">Delete</button></td></tr>`).join('');
             } catch (error) {
                 console.error('Failed to load patients table:', error);
             }
@@ -1476,37 +1466,10 @@
                 const totalCost = data.reduce((sum, item) => sum + parseFloat(item.total_cost || 0), 0);
                 const activeFacilities = new Set(data.map(item => item.facility_name)).size;
                 
-                document.getElementById('statsGrid').innerHTML = `
-                    <div class="stat-card">
-                        <div class="stat-number">${totalPatients}</div>
-                        <div class="stat-label">Total Patients</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number">${totalUnits.toLocaleString()}</div>
-                        <div class="stat-label">Supply Units Used</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number">$${totalCost.toFixed(2)}</div>
-                        <div class="stat-label">Total Supply Cost</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number">${activeFacilities}</div>
-                        <div class="stat-label">Active Facilities</div>
-                    </div>
-                `;
+                document.getElementById('statsGrid').innerHTML = `<div class="stat-card"><div class="stat-number">${totalPatients}</div><div class="stat-label">Total Patients</div></div><div class="stat-card"><div class="stat-number">${totalUnits.toLocaleString()}</div><div class="stat-label">Supply Units Used</div></div><div class="stat-card"><div class="stat-number">${totalCost.toFixed(2)}</div><div class="stat-label">Total Supply Cost</div></div><div class="stat-card"><div class="stat-number">${activeFacilities}</div><div class="stat-label">Active Facilities</div></div>`;
                 
-                // Update table
                 const tbody = document.querySelector('#dashboardTable tbody');
-                tbody.innerHTML = data.slice(0, 10).map(item => `
-                    <tr>
-                        <td>${item.name}</td>
-                        <td>${item.month}</td>
-                        <td>${item.facility_name || 'N/A'}</td>
-                        <td>${item.total_units || 0}</td>
-                        <td>$${parseFloat(item.total_cost || 0).toFixed(2)}</td>
-                        <td>${item.wound_diagnoses || 'N/A'}</td>
-                    </tr>
-                `).join('');
+                tbody.innerHTML = data.slice(0, 10).map(item => `<tr><td>${item.name}</td><td>${item.month}</td><td>${item.facility_name || 'N/A'}</td><td>${item.total_units || 0}</td><td>${parseFloat(item.total_cost || 0).toFixed(2)}</td><td>${item.wound_diagnoses || 'N/A'}</td></tr>`).join('');
                 
             } catch (error) {
                 console.error('Failed to load dashboard:', error);
@@ -1909,19 +1872,7 @@
             
             try {
                 const tbody = document.querySelector('#suppliesTable tbody');
-                tbody.innerHTML = supplies.map(supply => `
-                    <tr>
-                        <td>${supply.code}</td>
-                        <td>${supply.description}</td>
-                        <td>${supply.hcpcs || 'N/A'}</td>
-                        <td>$${parseFloat(supply.cost || 0).toFixed(2)}</td>
-                        <td>${supply.is_custom ? 'Custom' : 'Standard'}</td>
-                        <td>
-                            <button class="btn btn-small btn-secondary" onclick="editSupply(${supply.id})">Edit</button>
-                            <button class="btn btn-small btn-danger" onclick="deleteSupply(${supply.id})">Delete</button>
-                        </td>
-                    </tr>
-                `).join('');
+                tbody.innerHTML = supplies.map(supply => `<tr><td>${supply.code}</td><td>${supply.description}</td><td>${supply.hcpcs || 'N/A'}</td><td>${parseFloat(supply.cost || 0).toFixed(2)}</td><td>${supply.is_custom ? 'Custom' : 'Standard'}</td><td><button class="btn btn-small btn-secondary" onclick="editSupply(${supply.id})">Edit</button><button class="btn btn-small btn-danger" onclick="deleteSupply(${supply.id})">Delete</button></td></tr>`).join('');
             } catch (error) {
                 console.error('Failed to load supplies table:', error);
             }
@@ -1932,16 +1883,7 @@
             
             try {
                 const tbody = document.querySelector('#facilitiesTable tbody');
-                tbody.innerHTML = facilities.map(facility => `
-                    <tr>
-                        <td>${facility.name}</td>
-                        <td>${new Date(facility.created_at).toLocaleDateString()}</td>
-                        <td>
-                            <button class="btn btn-small btn-secondary" onclick="editFacility(${facility.id})">Edit</button>
-                            <button class="btn btn-small btn-danger" onclick="deleteFacility(${facility.id})">Delete</button>
-                        </td>
-                    </tr>
-                `).join('');
+                tbody.innerHTML = facilities.map(facility => `<tr><td>${facility.name}</td><td>${new Date(facility.created_at).toLocaleDateString()}</td><td><button class="btn btn-small btn-secondary" onclick="editFacility(${facility.id})">Edit</button><button class="btn btn-small btn-danger" onclick="deleteFacility(${facility.id})">Delete</button></td></tr>`).join('');
             } catch (error) {
                 console.error('Failed to load facilities table:', error);
             }
@@ -1953,28 +1895,7 @@
             try {
                 const users = await apiCall('/users');
                 const tbody = document.querySelector('#usersTable tbody');
-                tbody.innerHTML = users.map(user => `
-                    <tr>
-                        <td>${user.name}</td>
-                        <td>${user.email}</td>
-                        <td>${user.role}</td>
-                        <td>${user.facility_name || 'N/A'}</td>
-                        <td>
-                            <span style="color: ${user.is_approved ? '#38a169' : '#e53e3e'};">
-                                ${user.is_approved ? 'Approved' : 'Pending'}
-                            </span>
-                        </td>
-                        <td>
-                            <button class="btn btn-small btn-secondary" onclick="editUser(${user.id})">Edit</button>
-                            ${!user.is_approved ? `
-                                <button class="btn btn-small btn-success" onclick="approveUser(${user.id})">Approve</button>
-                            ` : ''}
-                            ${user.id !== currentUser.id ? `
-                                <button class="btn btn-small btn-danger" onclick="deleteUser(${user.id})">Delete</button>
-                            ` : ''}
-                        </td>
-                    </tr>
-                `).join('');
+                tbody.innerHTML = users.map(user => `<tr><td>${user.name}</td><td>${user.email}</td><td>${user.role}</td><td>${user.facility_name || 'N/A'}</td><td><span style="color: ${user.is_approved ? '#38a169' : '#e53e3e'};">${user.is_approved ? 'Approved' : 'Pending'}</span></td><td><button class="btn btn-small btn-secondary" onclick="editUser(${user.id})">Edit</button>${!user.is_approved ? `<button class="btn btn-small btn-success" onclick="approveUser(${user.id})">Approve</button>` : ''}${user.id !== currentUser.id ? `<button class="btn btn-small btn-danger" onclick="deleteUser(${user.id})">Delete</button>` : ''}</td></tr>`).join('');
             } catch (error) {
                 console.error('Failed to load users table:', error);
             }
@@ -2401,19 +2322,10 @@
                 // Get fresh patient data
                 const patientData = await apiCall('/patients');
                 
-                const data = [
-                    ['Patient Name', 'MRN', 'Month', 'Facility', 'Created Date', 'Updated Date']
-                ];
+                const data = [['Patient Name', 'MRN', 'Month', 'Facility', 'Created Date', 'Updated Date']];
                 
                 patientData.forEach(patient => {
-                    data.push([
-                        patient.name || '',
-                        patient.mrn || '',
-                        patient.month || '',
-                        patient.facility_name || '',
-                        new Date(patient.created_at).toLocaleDateString(),
-                        new Date(patient.updated_at).toLocaleDateString()
-                    ]);
+                    data.push([patient.name || '', patient.mrn || '', patient.month || '', patient.facility_name || '', new Date(patient.created_at).toLocaleDateString(), new Date(patient.updated_at).toLocaleDateString()]);
                 });
                 
                 const filename = `all-patients-${new Date().toISOString().split('T')[0]}`;
@@ -2440,9 +2352,7 @@
                 
                 const dashboardData = await apiCall(`/dashboard/summary?${params}`);
                 
-                const data = [
-                    ['Patient Name', 'MRN', 'Month', 'Facility', 'Total Units', 'Total Cost', 'Wound Diagnoses', 'Supply Codes', 'HCPCS Codes', 'Created Date']
-                ];
+                const data = [['Patient Name', 'MRN', 'Month', 'Facility', 'Total Units', 'Total Cost', 'Wound Diagnoses', 'Supply Codes', 'HCPCS Codes', 'Created Date']];
                 
                 dashboardData.forEach(item => {
                     data.push([
