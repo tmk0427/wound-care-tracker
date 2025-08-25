@@ -3,8 +3,6 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
-const multer = require('multer');
-const XLSX = require('xlsx');
 const path = require('path');
 
 const app = express();
@@ -23,8 +21,8 @@ app.set('trust proxy', 1);
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Serve static files from public directory
-app.use(express.static('public'));
+// Serve static files from current directory
+app.use(express.static('.'));
 
 // JWT Secret
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
@@ -473,6 +471,46 @@ app.post('/api/patients', authenticateToken, async (req, res) => {
     }
 });
 
+// Update patient
+app.put('/api/patients/:id', authenticateToken, async (req, res) => {
+    try {
+        const patientId = parseInt(req.params.id);
+        const { name, mrn } = req.body;
+
+        if (!name) {
+            return res.status(400).json({ error: 'Patient name is required' });
+        }
+
+        // Verify patient access (non-admin users can only edit patients from their facility)
+        let patientQuery = 'SELECT * FROM patients WHERE id = $1';
+        let patientParams = [patientId];
+
+        if (req.user.role !== 'admin' && req.user.facilityId) {
+            patientQuery += ' AND facility_id = $2';
+            patientParams.push(req.user.facilityId);
+        }
+
+        const patientResult = await pool.query(patientQuery, patientParams);
+        if (patientResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Patient not found or access denied' });
+        }
+
+        const result = await pool.query(
+            'UPDATE patients SET name = $1, mrn = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3 RETURNING *',
+            [name, mrn, patientId]
+        );
+
+        res.json(result.rows[0]);
+    } catch (error) {
+        console.error('Error updating patient:', error);
+        if (error.code === '23505') {
+            res.status(400).json({ error: 'A patient with this name already exists for this month and facility' });
+        } else {
+            res.status(500).json({ error: 'Internal server error' });
+        }
+    }
+});
+
 // Delete patient
 app.delete('/api/patients/:id', authenticateToken, async (req, res) => {
     try {
@@ -805,18 +843,182 @@ app.post('/api/tracking', authenticateToken, async (req, res) => {
     }
 });
 
+// ===== DATABASE INITIALIZATION =====
+
+async function initializeDatabase() {
+    try {
+        console.log('🔧 Initializing database...');
+
+        // Create tables
+        await pool.query(`
+            -- Create facilities table
+            CREATE TABLE IF NOT EXISTS facilities (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(255) NOT NULL UNIQUE,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+
+            -- Create supplies table
+            CREATE TABLE IF NOT EXISTS supplies (
+                id SERIAL PRIMARY KEY,
+                code INTEGER NOT NULL UNIQUE,
+                description TEXT NOT NULL,
+                hcpcs VARCHAR(10),
+                cost DECIMAL(10,2) DEFAULT 0.00,
+                is_custom BOOLEAN DEFAULT false,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+
+            -- Create users table
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,
+                email VARCHAR(255) NOT NULL UNIQUE,
+                password VARCHAR(255) NOT NULL,
+                role VARCHAR(20) DEFAULT 'user' CHECK (role IN ('admin', 'user')),
+                facility_id INTEGER REFERENCES facilities(id) ON DELETE SET NULL,
+                is_approved BOOLEAN DEFAULT false,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+
+            -- Create patients table
+            CREATE TABLE IF NOT EXISTS patients (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,
+                month VARCHAR(7) NOT NULL,
+                mrn VARCHAR(50),
+                facility_id INTEGER NOT NULL REFERENCES facilities(id) ON DELETE CASCADE,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(name, month, facility_id)
+            );
+
+            -- Create tracking table
+            CREATE TABLE IF NOT EXISTS tracking (
+                id SERIAL PRIMARY KEY,
+                patient_id INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+                supply_id INTEGER NOT NULL REFERENCES supplies(id) ON DELETE CASCADE,
+                day_of_month INTEGER NOT NULL CHECK (day_of_month >= 1 AND day_of_month <= 31),
+                quantity INTEGER NOT NULL DEFAULT 0 CHECK (quantity >= 0),
+                wound_dx TEXT,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(patient_id, supply_id, day_of_month)
+            );
+        `);
+
+        // Create indexes
+        await pool.query(`
+            CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+            CREATE INDEX IF NOT EXISTS idx_users_facility ON users(facility_id);
+            CREATE INDEX IF NOT EXISTS idx_patients_facility ON patients(facility_id);
+            CREATE INDEX IF NOT EXISTS idx_patients_month ON patients(month);
+            CREATE INDEX IF NOT EXISTS idx_tracking_patient ON tracking(patient_id);
+            CREATE INDEX IF NOT EXISTS idx_tracking_supply ON tracking(supply_id);
+            CREATE INDEX IF NOT EXISTS idx_supplies_code ON supplies(code);
+        `);
+
+        // Insert default data
+        await pool.query(`
+            INSERT INTO facilities (name) VALUES 
+                ('Main Hospital'),
+                ('Clinic North'),
+                ('Clinic South'),
+                ('Outpatient Center')
+            ON CONFLICT (name) DO NOTHING;
+        `);
+
+        // Insert comprehensive supplies
+        const supplies = [
+            { code: 700, description: 'Foam Dressing 4x4', hcpcs: 'A6209', cost: 5.50 },
+            { code: 701, description: 'Hydrocolloid Dressing 6x6', hcpcs: 'A6234', cost: 8.75 },
+            { code: 702, description: 'Alginate Dressing 2x2', hcpcs: 'A6196', cost: 12.25 },
+            { code: 703, description: 'Transparent Film 4x4.75', hcpcs: 'A6257', cost: 3.20 },
+            { code: 704, description: 'Antimicrobial Dressing 4x5', hcpcs: 'A6251', cost: 15.80 },
+            { code: 705, description: 'Collagen Dressing 4x4', hcpcs: 'A6021', cost: 22.50 },
+            { code: 706, description: 'Silicone Foam Border 6x6', hcpcs: 'A6212', cost: 18.90 },
+            { code: 707, description: 'Gauze Pad Sterile 4x4', hcpcs: 'A6402', cost: 0.85 },
+            { code: 708, description: 'Calcium Alginate 4x4', hcpcs: 'A6196', cost: 14.20 },
+            { code: 709, description: 'Hydrogel Sheet 4x4', hcpcs: 'A6242', cost: 9.80 },
+            { code: 710, description: 'Composite Dressing 4x4', hcpcs: 'A6203', cost: 7.45 },
+            { code: 711, description: 'Zinc Paste Bandage 3x10', hcpcs: 'A6456', cost: 6.30 },
+            { code: 712, description: 'Foam Dressing with Border 6x6', hcpcs: 'A6212', cost: 11.95 },
+            { code: 713, description: 'Transparent Film 6x7', hcpcs: 'A6258', cost: 4.75 },
+            { code: 714, description: 'Alginate Rope 12 inch', hcpcs: 'A6199', cost: 18.50 }
+        ];
+
+        for (const supply of supplies) {
+            await pool.query(
+                'INSERT INTO supplies (code, description, hcpcs, cost, is_custom) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (code) DO NOTHING',
+                [supply.code, supply.description, supply.hcpcs, supply.cost, false]
+            );
+        }
+
+        // Create admin user
+        const hashedAdminPassword = await bcrypt.hash('admin123', 12);
+        await pool.query(`
+            INSERT INTO users (name, email, password, role, is_approved) VALUES 
+                ('System Administrator', 'admin@system.com', $1, 'admin', true)
+            ON CONFLICT (email) DO NOTHING
+        `, [hashedAdminPassword]);
+
+        // Create demo user
+        const hashedUserPassword = await bcrypt.hash('user123', 12);
+        await pool.query(`
+            INSERT INTO users (name, email, password, role, facility_id, is_approved) VALUES 
+                ('Demo User', 'user@demo.com', $1, 'user', 1, true)
+            ON CONFLICT (email) DO NOTHING
+        `, [hashedUserPassword]);
+
+        // Insert sample patients
+        await pool.query(`
+            INSERT INTO patients (name, month, mrn, facility_id) VALUES 
+                ('Smith, John', '2024-12', 'MRN12345', 1),
+                ('Johnson, Mary', '2024-12', 'MRN67890', 1),
+                ('Brown, Robert', '2024-12', 'MRN11111', 2),
+                ('Davis, Jennifer', '2024-12', 'MRN22222', 1)
+            ON CONFLICT (name, month, facility_id) DO NOTHING
+        `);
+
+        // Insert sample tracking data
+        await pool.query(`
+            INSERT INTO tracking (patient_id, supply_id, day_of_month, quantity, wound_dx) VALUES 
+                (1, 1, 1, 2, 'Pressure ulcer stage 2'),
+                (1, 1, 3, 1, 'Pressure ulcer stage 2'),
+                (1, 2, 2, 1, 'Diabetic foot ulcer'),
+                (1, 3, 5, 1, 'Surgical wound'),
+                (2, 1, 1, 1, 'Venous stasis ulcer'),
+                (2, 4, 2, 2, 'Skin tear'),
+                (2, 5, 4, 1, 'Infected wound')
+            ON CONFLICT (patient_id, supply_id, day_of_month) DO NOTHING
+        `);
+
+        console.log('✅ Database initialized successfully');
+    } catch (error) {
+        console.error('❌ Database initialization failed:', error);
+        throw error;
+    }
+}
+
 // ===== DEFAULT ROUTE =====
 
 // Serve main application
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 // ===== ERROR HANDLING =====
 
 // 404 handler
 app.use((req, res) => {
-    res.status(404).json({ error: 'Endpoint not found' });
+    if (req.url.startsWith('/api')) {
+        res.status(404).json({ error: 'API endpoint not found' });
+    } else {
+        res.sendFile(path.join(__dirname, 'index.html'));
+    }
 });
 
 // Global error handler
@@ -827,17 +1029,23 @@ app.use((err, req, res, next) => {
 
 // ===== START SERVER =====
 
-app.listen(PORT, async () => {
-    console.log(`🚀 Wound Care RT Supply Tracker Server running on port ${PORT}`);
-    
-    // Test database connection
+async function startServer() {
     try {
-        const result = await pool.query('SELECT NOW()');
-        console.log('✅ Database connected:', result.rows[0].now);
+        await initializeDatabase();
+        
+        app.listen(PORT, '0.0.0.0', () => {
+            console.log(`🚀 Wound Care RT Supply Tracker Server running on port ${PORT}`);
+            console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
+            console.log(`🔗 URL: ${process.env.NODE_ENV === 'production' ? 'https://your-app.herokuapp.com' : `http://localhost:${PORT}`}`);
+            console.log('🔑 Default Login Credentials:');
+            console.log('   👑 Admin: admin@system.com / admin123');
+            console.log('   👤 User:  user@demo.com / user123');
+        });
     } catch (error) {
-        console.error('❌ Database connection failed:', error.message);
+        console.error('❌ Failed to start server:', error);
+        process.exit(1);
     }
-});
+}
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
@@ -851,3 +1059,5 @@ process.on('SIGINT', async () => {
     await pool.end();
     process.exit(0);
 });
+
+startServer();
