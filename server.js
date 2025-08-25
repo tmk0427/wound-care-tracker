@@ -849,17 +849,18 @@ async function initializeDatabase() {
     try {
         console.log('🔧 Initializing database...');
 
-        // Create tables
+        // Create facilities table
         await pool.query(`
-            -- Create facilities table
             CREATE TABLE IF NOT EXISTS facilities (
                 id SERIAL PRIMARY KEY,
                 name VARCHAR(255) NOT NULL UNIQUE,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-            );
+            )
+        `);
 
-            -- Create supplies table
+        // Create supplies table
+        await pool.query(`
             CREATE TABLE IF NOT EXISTS supplies (
                 id SERIAL PRIMARY KEY,
                 code INTEGER NOT NULL UNIQUE,
@@ -869,9 +870,11 @@ async function initializeDatabase() {
                 is_custom BOOLEAN DEFAULT false,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-            );
+            )
+        `);
 
-            -- Create users table
+        // Create users table
+        await pool.query(`
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
                 name VARCHAR(255) NOT NULL,
@@ -882,9 +885,11 @@ async function initializeDatabase() {
                 is_approved BOOLEAN DEFAULT false,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-            );
+            )
+        `);
 
-            -- Create patients table
+        // Create patients table
+        await pool.query(`
             CREATE TABLE IF NOT EXISTS patients (
                 id SERIAL PRIMARY KEY,
                 name VARCHAR(255) NOT NULL,
@@ -894,9 +899,11 @@ async function initializeDatabase() {
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(name, month, facility_id)
-            );
+            )
+        `);
 
-            -- Create tracking table
+        // Create tracking table
+        await pool.query(`
             CREATE TABLE IF NOT EXISTS tracking (
                 id SERIAL PRIMARY KEY,
                 patient_id INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
@@ -907,28 +914,26 @@ async function initializeDatabase() {
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(patient_id, supply_id, day_of_month)
-            );
+            )
         `);
 
         // Create indexes
-        await pool.query(`
-            CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-            CREATE INDEX IF NOT EXISTS idx_users_facility ON users(facility_id);
-            CREATE INDEX IF NOT EXISTS idx_patients_facility ON patients(facility_id);
-            CREATE INDEX IF NOT EXISTS idx_patients_month ON patients(month);
-            CREATE INDEX IF NOT EXISTS idx_tracking_patient ON tracking(patient_id);
-            CREATE INDEX IF NOT EXISTS idx_tracking_supply ON tracking(supply_id);
-            CREATE INDEX IF NOT EXISTS idx_supplies_code ON supplies(code);
-        `);
+        await pool.query('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)');
+        await pool.query('CREATE INDEX IF NOT EXISTS idx_users_facility ON users(facility_id)');
+        await pool.query('CREATE INDEX IF NOT EXISTS idx_patients_facility ON patients(facility_id)');
+        await pool.query('CREATE INDEX IF NOT EXISTS idx_patients_month ON patients(month)');
+        await pool.query('CREATE INDEX IF NOT EXISTS idx_tracking_patient ON tracking(patient_id)');
+        await pool.query('CREATE INDEX IF NOT EXISTS idx_tracking_supply ON tracking(supply_id)');
+        await pool.query('CREATE INDEX IF NOT EXISTS idx_supplies_code ON supplies(code)');
 
-        // Insert default data
+        // Insert default facilities
         await pool.query(`
             INSERT INTO facilities (name) VALUES 
                 ('Main Hospital'),
                 ('Clinic North'),
                 ('Clinic South'),
                 ('Outpatient Center')
-            ON CONFLICT (name) DO NOTHING;
+            ON CONFLICT (name) DO NOTHING
         `);
 
         // Insert comprehensive supplies
@@ -951,50 +956,68 @@ async function initializeDatabase() {
         ];
 
         for (const supply of supplies) {
-            await pool.query(
-                'INSERT INTO supplies (code, description, hcpcs, cost, is_custom) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (code) DO NOTHING',
-                [supply.code, supply.description, supply.hcpcs, supply.cost, false]
-            );
+            try {
+                await pool.query(
+                    'INSERT INTO supplies (code, description, hcpcs, cost, is_custom) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (code) DO NOTHING',
+                    [supply.code, supply.description, supply.hcpcs, supply.cost, false]
+                );
+            } catch (err) {
+                console.log(`Supply ${supply.code} already exists, skipping...`);
+            }
         }
 
         // Create admin user
-        const hashedAdminPassword = await bcrypt.hash('admin123', 12);
-        await pool.query(`
-            INSERT INTO users (name, email, password, role, is_approved) VALUES 
-                ('System Administrator', 'admin@system.com', $1, 'admin', true)
-            ON CONFLICT (email) DO NOTHING
-        `, [hashedAdminPassword]);
+        try {
+            const hashedAdminPassword = await bcrypt.hash('admin123', 12);
+            await pool.query(
+                'INSERT INTO users (name, email, password, role, is_approved) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (email) DO NOTHING',
+                ['System Administrator', 'admin@system.com', hashedAdminPassword, 'admin', true]
+            );
+        } catch (err) {
+            console.log('Admin user already exists, skipping...');
+        }
 
         // Create demo user
-        const hashedUserPassword = await bcrypt.hash('user123', 12);
-        await pool.query(`
-            INSERT INTO users (name, email, password, role, facility_id, is_approved) VALUES 
-                ('Demo User', 'user@demo.com', $1, 'user', 1, true)
-            ON CONFLICT (email) DO NOTHING
-        `, [hashedUserPassword]);
+        try {
+            const hashedUserPassword = await bcrypt.hash('user123', 12);
+            await pool.query(
+                'INSERT INTO users (name, email, password, role, facility_id, is_approved) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (email) DO NOTHING',
+                ['Demo User', 'user@demo.com', hashedUserPassword, 'user', 1, true]
+            );
+        } catch (err) {
+            console.log('Demo user already exists, skipping...');
+        }
 
         // Insert sample patients
-        await pool.query(`
-            INSERT INTO patients (name, month, mrn, facility_id) VALUES 
-                ('Smith, John', '2024-12', 'MRN12345', 1),
-                ('Johnson, Mary', '2024-12', 'MRN67890', 1),
-                ('Brown, Robert', '2024-12', 'MRN11111', 2),
-                ('Davis, Jennifer', '2024-12', 'MRN22222', 1)
-            ON CONFLICT (name, month, facility_id) DO NOTHING
-        `);
+        try {
+            await pool.query(`
+                INSERT INTO patients (name, month, mrn, facility_id) VALUES 
+                    ('Smith, John', '2024-12', 'MRN12345', 1),
+                    ('Johnson, Mary', '2024-12', 'MRN67890', 1),
+                    ('Brown, Robert', '2024-12', 'MRN11111', 2),
+                    ('Davis, Jennifer', '2024-12', 'MRN22222', 1)
+                ON CONFLICT (name, month, facility_id) DO NOTHING
+            `);
+        } catch (err) {
+            console.log('Sample patients already exist, skipping...');
+        }
 
         // Insert sample tracking data
-        await pool.query(`
-            INSERT INTO tracking (patient_id, supply_id, day_of_month, quantity, wound_dx) VALUES 
-                (1, 1, 1, 2, 'Pressure ulcer stage 2'),
-                (1, 1, 3, 1, 'Pressure ulcer stage 2'),
-                (1, 2, 2, 1, 'Diabetic foot ulcer'),
-                (1, 3, 5, 1, 'Surgical wound'),
-                (2, 1, 1, 1, 'Venous stasis ulcer'),
-                (2, 4, 2, 2, 'Skin tear'),
-                (2, 5, 4, 1, 'Infected wound')
-            ON CONFLICT (patient_id, supply_id, day_of_month) DO NOTHING
-        `);
+        try {
+            await pool.query(`
+                INSERT INTO tracking (patient_id, supply_id, day_of_month, quantity, wound_dx) VALUES 
+                    (1, 1, 1, 2, 'Pressure ulcer stage 2'),
+                    (1, 1, 3, 1, 'Pressure ulcer stage 2'),
+                    (1, 2, 2, 1, 'Diabetic foot ulcer'),
+                    (1, 3, 5, 1, 'Surgical wound'),
+                    (2, 1, 1, 1, 'Venous stasis ulcer'),
+                    (2, 4, 2, 2, 'Skin tear'),
+                    (2, 5, 4, 1, 'Infected wound')
+                ON CONFLICT (patient_id, supply_id, day_of_month) DO NOTHING
+            `);
+        } catch (err) {
+            console.log('Sample tracking data already exists, skipping...');
+        }
 
         console.log('✅ Database initialized successfully');
     } catch (error) {
