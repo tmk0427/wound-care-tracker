@@ -2108,4 +2108,172 @@
         }
 
         async function generateFacilityBreakdownTemplate() {
-            const data = [['Facility Name', 'Total
+            const data = [['Facility Name', 'Total Patients', 'Total Supply Cost', 'Average Cost per Patient']];
+            const facilityData = await apiCall('/dashboard/summary');
+            const facilityStats = {};
+            
+            facilityData.forEach(item => {
+                const facility = item.facility_name || 'Unknown';
+                if (!facilityStats[facility]) {
+                    facilityStats[facility] = { patients: 0, cost: 0 };
+                }
+                facilityStats[facility].patients++;
+                facilityStats[facility].cost += parseFloat(item.total_cost || 0);
+            });
+            
+            Object.entries(facilityStats).forEach(([facility, stats]) => {
+                const avgCost = stats.patients > 0 ? (stats.cost / stats.patients).toFixed(2) : '0.00';
+                data.push([facility, stats.patients, ' + stats.cost.toFixed(2), ' + avgCost]);
+            });
+            
+            return data;
+        }
+
+        async function generateCostAnalysisTemplate() {
+            const data = [['Supply Item', 'Total Units Used', 'Unit Cost', 'Total Cost', 'Usage Frequency']];
+            const reportData = await apiCall('/reports/itemized-summary');
+            const supplyStats = {};
+            
+            reportData.forEach(item => {
+                const supply = item.item_description || 'Unknown';
+                if (!supplyStats[supply]) {
+                    supplyStats[supply] = { 
+                        units: 0, 
+                        cost: parseFloat(item.unit_cost || 0), 
+                        totalCost: 0, 
+                        frequency: 0 
+                    };
+                }
+                supplyStats[supply].units += parseInt(item.total_units || 0);
+                supplyStats[supply].totalCost += parseFloat(item.total_cost || 0);
+                supplyStats[supply].frequency++;
+            });
+            
+            Object.entries(supplyStats).forEach(([supply, stats]) => {
+                data.push([
+                    supply, 
+                    stats.units, 
+                    ' + stats.cost.toFixed(2), 
+                    ' + stats.totalCost.toFixed(2), 
+                    stats.frequency
+                ]);
+            });
+            
+            return data;
+        }
+
+        function extractTableData(table) {
+            const data = [];
+            const headers = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent.trim());
+            data.push(headers);
+            
+            const rows = table.querySelectorAll('tbody tr');
+            rows.forEach(row => {
+                const cells = Array.from(row.querySelectorAll('td')).map(td => td.textContent.trim());
+                data.push(cells);
+            });
+            
+            return data;
+        }
+
+        function exportToCSV(data, filename) {
+            const csvContent = data.map(row => 
+                row.map(cell => {
+                    if (typeof cell === 'string' && (cell.includes(',') || cell.includes('"') || cell.includes('\n'))) {
+                        return '"' + cell.replace(/"/g, '""') + '"';
+                    }
+                    return cell;
+                }).join(',')
+            ).join('\n');
+            
+            const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', filename + '.csv');
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        function exportToExcel(data, filename, sheetName) {
+            let excelContent = '<table>';
+            data.forEach((row, index) => {
+                excelContent += '<tr>';
+                row.forEach(cell => {
+                    const tag = index === 0 ? 'th' : 'td';
+                    excelContent += '<' + tag + '>' + (cell || '') + '</' + tag + '>';
+                });
+                excelContent += '</tr>';
+            });
+            excelContent += '</table>';
+            
+            const blob = new Blob([excelContent], { type: 'application/vnd.ms-excel' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', filename + '.xls');
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        function showExportProgress(message) {
+            const progress = document.getElementById('exportProgress') || document.getElementById('reportProgress');
+            if (progress) {
+                progress.style.display = 'block';
+                const span = progress.querySelector('span');
+                if (span) span.textContent = message;
+            }
+        }
+
+        function hideExportProgress() {
+            const progress = document.getElementById('exportProgress') || document.getElementById('reportProgress');
+            if (progress) {
+                progress.style.display = 'none';
+            }
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast' + (type === 'error' ? ' error' : '');
+            toast.classList.add('show');
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 4000);
+        }
+
+        // Check for existing auth token on page load
+        window.addEventListener('DOMContentLoaded', async () => {
+            const token = localStorage.getItem('authToken');
+            if (token) {
+                try {
+                    const response = await apiCall('/auth/verify');
+                    currentUser = response.user;
+                    showMainApp();
+                } catch (error) {
+                    console.error('Token verification failed:', error);
+                    localStorage.removeItem('authToken');
+                }
+            }
+        });
+
+        // Handle enter key in login/register forms
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                if (document.getElementById('loginForm').style.display !== 'none') {
+                    login();
+                } else if (document.getElementById('registerForm').style.display !== 'none') {
+                    register();
+                }
+            }
+        });
+    </script>
+</body>
+</html>
