@@ -25,9 +25,9 @@
         .header-content { max-width: 1200px; margin: 0 auto; padding: 0 20px; display: flex; justify-content: space-between; align-items: center; }
         .logo { font-size: 20px; font-weight: bold; color: #667eea; }
         .user-info { display: flex; align-items: center; gap: 15px; }
-        .nav { background: rgba(255, 255, 255, 0.9); padding: 10px 0; margin-bottom: 20px; }
-        .nav-content { max-width: 1200px; margin: 0 auto; padding: 0 20px; display: flex; gap: 20px; }
-        .nav-btn { padding: 10px 20px; background: transparent; border: 2px solid #667eea; color: #667eea; border-radius: 25px; cursor: pointer; font-weight: 500; transition: all 0.3s; }
+        .nav { background: rgba(255, 255, 255, 0.9); padding: 10px 0; margin-bottom: 20px; position: sticky; top: 70px; z-index: 999; border-bottom: 2px solid #e2e8f0; }
+        .nav-content { max-width: 1200px; margin: 0 auto; padding: 0 20px; display: flex; gap: 20px; overflow-x: auto; }
+        .nav-btn { padding: 10px 20px; background: transparent; border: 2px solid #667eea; color: #667eea; border-radius: 25px; cursor: pointer; font-weight: 500; transition: all 0.3s; white-space: nowrap; min-width: fit-content; }
         .nav-btn:hover, .nav-btn.active { background: #667eea; color: white; }
         .container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
         .section { background: rgba(255, 255, 255, 0.95); border-radius: 15px; padding: 30px; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); display: none; }
@@ -62,11 +62,23 @@
         .day-input:hover { border-color: #a0aec0; }
         .supply-row { background: #f8fafc; padding: 0; border-radius: 10px; margin-bottom: 20px; border: 2px solid #e2e8f0; overflow: hidden; transition: all 0.3s; }
         .supply-row:hover { border-color: #667eea; transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.1); }
+        .supply-row.hidden { display: none !important; }
         .supply-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px; margin: 0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
-        .filter-container { display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; }
+        .filter-container { display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; align-items: end; }
         .filter-group { display: flex; flex-direction: column; gap: 5px; }
         .filter-group label { font-size: 14px; color: #4a5568; font-weight: 500; }
         .filter-group select, .filter-group input { padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; }
+        .search-container { display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; align-items: end; }
+        .search-group { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 200px; }
+        .search-group label { font-size: 14px; color: #4a5568; font-weight: 500; }
+        .search-input { padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 16px; transition: border-color 0.3s; min-width: 200px; }
+        .search-input:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1); }
+        .search-input::placeholder { color: #a0aec0; }
+        .clear-search-btn { padding: 10px 20px; background: #e2e8f0; color: #4a5568; border: none; border-radius: 8px; cursor: pointer; font-weight: 500; transition: all 0.3s; }
+        .clear-search-btn:hover { background: #cbd5e0; }
+        .search-results-info { margin-bottom: 15px; padding: 10px; background: #f0f9ff; border-left: 4px solid #3b82f6; border-radius: 6px; font-size: 14px; color: #1e40af; }
+        .no-results { text-align: center; padding: 40px; color: #666; background: #f8fafc; border: 2px dashed #e2e8f0; border-radius: 12px; margin: 20px 0; }
+        .no-results h4 { color: #4a5568; margin-bottom: 10px; }
         .loading { text-align: center; padding: 40px; color: #666; }
         .success-message { color: #38a169; background: #f0fff4; padding: 10px; border-radius: 6px; margin-bottom: 15px; display: none; }
         .toast { position: fixed; bottom: 20px; right: 20px; background: #38a169; color: white; padding: 15px 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 3000; transform: translateX(400px); transition: transform 0.3s ease; max-width: 300px; }
@@ -77,13 +89,19 @@
         @keyframes spin { to { transform: rotate(360deg); } }
         .admin-only { display: none; }
         .admin-only.show-admin { display: block; }
+        .patient-search-container { margin-bottom: 20px; }
+        .patient-search-input { width: 100%; max-width: 400px; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 16px; transition: border-color 0.3s; }
+        .patient-search-input:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1); }
+        .patient-search-input::placeholder { color: #a0aec0; }
         @media (max-width: 768px) {
             .header-content { flex-direction: column; gap: 15px; }
-            .nav-content { flex-direction: column; align-items: center; }
+            .nav-content { justify-content: flex-start; }
+            .nav { top: 110px; }
             .stats-grid { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
-            .filter-container { flex-direction: column; }
+            .filter-container, .search-container { flex-direction: column; }
             .modal-content { margin: 20px; width: auto; }
             .section { padding: 20px; }
+            .search-group { min-width: auto; }
         }
     </style>
 </head>
@@ -179,6 +197,9 @@
 
             <div id="patientsSection" class="section">
                 <h2>👥 Patient Management</h2>
+                <div class="patient-search-container">
+                    <input type="text" id="patientSearchInput" class="patient-search-input" placeholder="🔍 Search patients by name, MRN, or facility..." oninput="searchPatients()" />
+                </div>
                 <div class="filter-container">
                     <div class="filter-group">
                         <label>Facility</label>
@@ -189,6 +210,7 @@
                         <select id="patientsMonthFilter" onchange="loadPatientsTable()"><option value="">All Months</option></select>
                     </div>
                 </div>
+                <div id="patientSearchResults" class="search-results-info" style="display: none;"></div>
                 <div class="card">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                         <h3>Patient List</h3>
@@ -199,6 +221,10 @@
                             <thead><tr><th>Name</th><th>MRN</th><th>Month</th><th>Facility</th><th>Actions</th></tr></thead>
                             <tbody></tbody>
                         </table>
+                    </div>
+                    <div id="noPatientResults" class="no-results" style="display: none;">
+                        <h4>No patients found</h4>
+                        <p>Try adjusting your search terms or filters</p>
                     </div>
                 </div>
             </div>
@@ -222,6 +248,19 @@
                         <button class="btn btn-small" onclick="showAddMonthModal()">+ Add New Month</button>
                     </div>
                 </div>
+                
+                <!-- Supply Search Section -->
+                <div id="supplySearchSection" style="display: none;">
+                    <div class="search-container">
+                        <div class="search-group">
+                            <label for="supplySearchInput">🔍 Search Supplies</label>
+                            <input type="text" id="supplySearchInput" class="search-input" placeholder="Search by AR code, description, or HCPCS..." oninput="searchSupplies()" />
+                        </div>
+                        <button class="clear-search-btn" onclick="clearSupplySearch()">Clear Search</button>
+                    </div>
+                    <div id="supplySearchResults" class="search-results-info" style="display: none;"></div>
+                </div>
+                
                 <div id="trackingContent" class="loading">Select filters and patient to begin tracking supplies</div>
             </div>
 
@@ -497,6 +536,8 @@
         let facilities = [];
         let patients = [];
         let availableMonths = [];
+        let filteredPatients = [];
+        let currentSupplySearch = '';
 
         function generateAvailableMonths() {
             const months = [];
@@ -692,10 +733,96 @@
         async function loadPatients() {
             try {
                 patients = await apiCall('/patients');
+                filteredPatients = [...patients];
             } catch (error) {
                 console.error('Failed to load patients:', error);
                 patients = [];
+                filteredPatients = [];
             }
+        }
+
+        // Patient Search Function
+        function searchPatients() {
+            const searchTerm = document.getElementById('patientSearchInput').value.toLowerCase().trim();
+            const resultsInfo = document.getElementById('patientSearchResults');
+            const noResultsDiv = document.getElementById('noPatientResults');
+            
+            if (!searchTerm) {
+                filteredPatients = [...patients];
+                resultsInfo.style.display = 'none';
+                noResultsDiv.style.display = 'none';
+                loadPatientsTable();
+                return;
+            }
+            
+            filteredPatients = patients.filter(patient => {
+                return (
+                    patient.name.toLowerCase().includes(searchTerm) ||
+                    (patient.mrn && patient.mrn.toLowerCase().includes(searchTerm)) ||
+                    (patient.facility_name && patient.facility_name.toLowerCase().includes(searchTerm))
+                );
+            });
+            
+            // Show search results info
+            if (filteredPatients.length > 0) {
+                resultsInfo.textContent = `Found ${filteredPatients.length} patient(s) matching "${searchTerm}"`;
+                resultsInfo.style.display = 'block';
+                noResultsDiv.style.display = 'none';
+            } else {
+                resultsInfo.style.display = 'none';
+                noResultsDiv.style.display = 'block';
+            }
+            
+            loadPatientsTable();
+        }
+
+        // Supply Search Function
+        function searchSupplies() {
+            const searchTerm = document.getElementById('supplySearchInput').value.toLowerCase().trim();
+            const resultsInfo = document.getElementById('supplySearchResults');
+            currentSupplySearch = searchTerm;
+            
+            if (!searchTerm) {
+                resultsInfo.style.display = 'none';
+                document.querySelectorAll('.supply-row').forEach(row => {
+                    row.classList.remove('hidden');
+                });
+                return;
+            }
+            
+            let visibleCount = 0;
+            document.querySelectorAll('.supply-row').forEach(row => {
+                const headerText = row.querySelector('.supply-header').textContent.toLowerCase();
+                const isMatch = (
+                    headerText.includes(searchTerm) ||
+                    searchTerm.match(/^\d+$/) && headerText.includes('ar ' + searchTerm) ||
+                    headerText.includes('hcpcs: ' + searchTerm.toUpperCase())
+                );
+                
+                if (isMatch) {
+                    row.classList.remove('hidden');
+                    visibleCount++;
+                } else {
+                    row.classList.add('hidden');
+                }
+            });
+            
+            if (visibleCount > 0) {
+                resultsInfo.textContent = `Found ${visibleCount} supply item(s) matching "${searchTerm}"`;
+                resultsInfo.style.display = 'block';
+            } else {
+                resultsInfo.textContent = `No supplies found matching "${searchTerm}"`;
+                resultsInfo.style.display = 'block';
+            }
+        }
+
+        function clearSupplySearch() {
+            document.getElementById('supplySearchInput').value = '';
+            document.getElementById('supplySearchResults').style.display = 'none';
+            currentSupplySearch = '';
+            document.querySelectorAll('.supply-row').forEach(row => {
+                row.classList.remove('hidden');
+            });
         }
 
         function populateFilters() {
@@ -761,15 +888,24 @@
             try {
                 const facilityFilter = document.getElementById('patientsFacilityFilter') ? document.getElementById('patientsFacilityFilter').value : '';
                 const monthFilter = document.getElementById('patientsMonthFilter') ? document.getElementById('patientsMonthFilter').value : '';
-                let filteredPatients = [...patients];
+                let displayPatients = [...filteredPatients];
+                
                 if (facilityFilter) {
-                    filteredPatients = filteredPatients.filter(p => p.facility_id == facilityFilter);
+                    displayPatients = displayPatients.filter(p => p.facility_id == facilityFilter);
                 }
                 if (monthFilter) {
-                    filteredPatients = filteredPatients.filter(p => p.month === monthFilter);
+                    displayPatients = displayPatients.filter(p => p.month === monthFilter);
                 }
                 const tbody = document.querySelector('#patientsTable tbody');
-                tbody.innerHTML = filteredPatients.map(patient => '<tr><td>' + patient.name + '</td><td>' + (patient.mrn || 'N/A') + '</td><td>' + patient.month + '</td><td>' + (patient.facility_name || 'N/A') + '</td><td><button class="btn btn-small btn-danger" onclick="deletePatient(' + patient.id + ')">Delete</button></td></tr>').join('');
+                tbody.innerHTML = displayPatients.map(patient => '<tr><td>' + patient.name + '</td><td>' + (patient.mrn || 'N/A') + '</td><td>' + patient.month + '</td><td>' + (patient.facility_name || 'N/A') + '</td><td><button class="btn btn-small btn-danger" onclick="deletePatient(' + patient.id + ')">Delete</button></td></tr>').join('');
+                
+                // Show/hide no results message
+                const noResultsDiv = document.getElementById('noPatientResults');
+                if (displayPatients.length === 0 && (document.getElementById('patientSearchInput').value.trim() || facilityFilter || monthFilter)) {
+                    noResultsDiv.style.display = 'block';
+                } else {
+                    noResultsDiv.style.display = 'none';
+                }
             } catch (error) {
                 console.error('Failed to load patients table:', error);
             }
@@ -794,6 +930,7 @@
                 select.appendChild(option);
             });
             document.getElementById('trackingContent').innerHTML = '<div class="loading">Select filters and patient to begin tracking supplies</div>';
+            document.getElementById('supplySearchSection').style.display = 'none';
         }
 
         async function loadPatientsForTracking() {
@@ -803,16 +940,23 @@
         async function loadPatientTracking() {
             const patientId = document.getElementById('trackingPatientSelect').value;
             const contentDiv = document.getElementById('trackingContent');
+            const searchSection = document.getElementById('supplySearchSection');
+            
             if (!patientId) {
                 contentDiv.innerHTML = '<div class="loading">Select filters and patient to begin tracking supplies</div>';
+                searchSection.style.display = 'none';
                 return;
             }
+            
             contentDiv.innerHTML = '<div class="loading">Loading patient tracking data...</div>';
+            searchSection.style.display = 'block';
+            
             try {
                 const trackingData = await apiCall('/tracking/' + patientId);
                 const patient = patients.find(p => p.id === parseInt(patientId));
                 if (!patient) {
                     contentDiv.innerHTML = '<div class="error">Patient not found</div>';
+                    searchSection.style.display = 'none';
                     return;
                 }
                 const trackingBySupply = {};
@@ -828,7 +972,7 @@
                 const parts = patient.month.split('-');
                 const monthText = new Date(parts[0], parts[1] - 1, 1).toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
                 let html = '<div class="card"><h3>🏥 Supply Tracking for ' + patient.name + '</h3><div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 15px 0;"><div><strong>Month:</strong> ' + monthText + '</div><div><strong>Facility:</strong> ' + (patient.facility_name || 'N/A') + '</div><div><strong>MRN:</strong> ' + (patient.mrn || 'N/A') + '</div><div><strong>Patient ID:</strong> ' + patient.id + '</div></div></div>';
-                html += '<div class="card"><h4>📅 Daily Tracking Grid</h4><p style="margin-bottom: 20px; color: #666;">Enter quantities used for each day of the month. Days are numbered 1-31.</p>';
+                html += '<div class="card"><h4>📅 Daily Tracking Grid</h4><p style="margin-bottom: 20px; color: #666;">Enter quantities used for each day of the month. Days are numbered 1-31. Use the search above to quickly find specific supplies.</p>';
                 const sortedSupplies = supplies.sort((a, b) => a.code - b.code);
                 sortedSupplies.forEach(supply => {
                     const tracking = trackingBySupply[supply.id] || { days: {}, wound_dx: '' };
@@ -852,9 +996,15 @@
                 }, 0);
                 html += '<div class="card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;"><h3>📈 Summary for ' + patient.name + ' - ' + monthText + '</h3><div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-top: 15px;"><div style="text-align: center;"><div style="font-size: 28px; font-weight: bold;">' + grandTotalUnits + '</div><div style="opacity: 0.9;">Total Supply Units</div></div><div style="text-align: center;"><div style="font-size: 28px; font-weight: bold;">$' + grandTotalCost.toFixed(2) + '</div><div style="opacity: 0.9;">Total Supply Cost</div></div><div style="text-align: center;"><div style="font-size: 28px; font-weight: bold;">' + Object.keys(trackingBySupply).length + '</div><div style="opacity: 0.9;">Active Supply Items</div></div></div></div>';
                 contentDiv.innerHTML = html;
+                
+                // Reapply search filter if active
+                if (currentSupplySearch) {
+                    searchSupplies();
+                }
             } catch (error) {
                 console.error('Failed to load patient tracking:', error);
                 contentDiv.innerHTML = '<div class="card" style="border: 2px solid #e53e3e; background: #fef2f2;"><h3 style="color: #e53e3e;">❌ Error Loading Tracking Data</h3><p>Failed to load tracking data for this patient. Please try again.</p><p style="font-size: 14px; color: #666; margin-top: 10px;">Error: ' + error.message + '</p></div>';
+                searchSection.style.display = 'none';
             }
         }
 
@@ -934,7 +1084,7 @@
                 let totalUnits = 0;
                 let totalCost = 0;
                 let activeSupplies = 0;
-                document.querySelectorAll('.supply-row').forEach(row => {
+                document.querySelectorAll('.supply-row:not(.hidden)').forEach(row => {
                     const inputs = row.querySelectorAll('input[type="number"]');
                     let supplyUnits = 0;
                     inputs.forEach(input => {
