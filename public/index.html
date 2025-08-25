@@ -556,21 +556,40 @@
         let currentSupplySearch = '';
 
         function generateAvailableMonths() {
-            const months = [];
-            const startDate = new Date('2024-08-01');
-            const currentDate = new Date();
-            const endDate = new Date(currentDate.getFullYear() + 2, currentDate.getMonth() + 24, 1);
-            let iterDate = new Date(startDate);
-            while (iterDate <= endDate) {
-                const yearMonth = iterDate.getFullYear() + '-' + String(iterDate.getMonth() + 1).padStart(2, '0');
-                const displayText = iterDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
-                months.push({ value: yearMonth, text: displayText });
-                iterDate.setMonth(iterDate.getMonth() + 1);
-            }
-            months.sort((a, b) => a.value.localeCompare(b.value));
-            availableMonths = months;
-            return months;
-        }
+    const months = [];
+    
+    // Start from January 2024 to ensure we don't miss any months
+    const startDate = new Date(2024, 0, 1); // January 1, 2024
+    const currentDate = new Date();
+    
+    // Generate months up to 2 years in the future
+    const endDate = new Date(currentDate.getFullYear() + 2, 11, 31); // December of 2 years from now
+    
+    let iterDate = new Date(startDate);
+    
+    while (iterDate <= endDate) {
+        const year = iterDate.getFullYear();
+        const month = iterDate.getMonth() + 1; // getMonth() returns 0-11, we want 1-12
+        const yearMonth = year + '-' + String(month).padStart(2, '0');
+        const displayText = iterDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+        
+        months.push({ 
+            value: yearMonth, 
+            text: displayText 
+        });
+        
+        // Move to next month
+        iterDate.setMonth(iterDate.getMonth() + 1);
+    }
+    
+    // Sort chronologically
+    months.sort((a, b) => a.value.localeCompare(b.value));
+    
+    availableMonths = months;
+    console.log('Generated months:', months.map(m => m.value)); // Debug log
+    
+    return months;
+}
 
         async function apiCall(endpoint, options = {}) {
             const token = localStorage.getItem('authToken');
@@ -842,43 +861,70 @@
         }
 
         function populateFilters() {
-            if (availableMonths.length === 0) {
-                generateAvailableMonths();
-            }
-            const facilitySelects = ['dashboardFacilityFilter', 'reportFacilityFilter', 'newPatientFacility', 'patientsFacilityFilter', 'trackingFacilityFilter', 'editUserFacility'];
-            facilitySelects.forEach(selectId => {
-                const select = document.getElementById(selectId);
-                if (select) {
-                    const isFormField = selectId.includes('new') || selectId.includes('edit');
-                    select.innerHTML = isFormField ? (selectId.includes('editUser') ? '<option value="">No facility assigned</option>' : '<option value="">Select facility...</option>') : '<option value="">All Facilities</option>';
-                    facilities.forEach(facility => {
-                        const option = document.createElement('option');
-                        option.value = facility.id;
-                        option.textContent = facility.name;
-                        select.appendChild(option);
-                    });
-                }
+    if (availableMonths.length === 0) {
+        generateAvailableMonths();
+    }
+    
+    // All facility selects
+    const facilitySelects = [
+        'dashboardFacilityFilter', 
+        'reportFacilityFilter', 
+        'newPatientFacility', 
+        'patientsFacilityFilter', 
+        'trackingFacilityFilter', 
+        'editUserFacility'
+    ];
+    
+    facilitySelects.forEach(selectId => {
+        const select = document.getElementById(selectId);
+        if (select) {
+            const isFormField = selectId.includes('new') || selectId.includes('edit');
+            select.innerHTML = isFormField ? 
+                (selectId.includes('editUser') ? '<option value="">No facility assigned</option>' : '<option value="">Select facility...</option>') : 
+                '<option value="">All Facilities</option>';
+            
+            facilities.forEach(facility => {
+                const option = document.createElement('option');
+                option.value = facility.id;
+                option.textContent = facility.name;
+                select.appendChild(option);
             });
-            const monthSelects = ['dashboardMonthFilter', 'reportMonthFilter', 'patientsMonthFilter', 'trackingMonthFilter'];
-            monthSelects.forEach(selectId => {
-                const select = document.getElementById(selectId);
-                if (select) {
-                    select.innerHTML = '<option value="">All Months</option>';
-                    availableMonths.forEach(month => {
-                        const option = document.createElement('option');
-                        option.value = month.value;
-                        option.textContent = month.text;
-                        select.appendChild(option);
-                    });
-                }
-            });
-            const today = new Date();
-            const currentMonth = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
-            const newPatientMonth = document.getElementById('newPatientMonth');
-            if (newPatientMonth && !newPatientMonth.value) {
-                newPatientMonth.value = currentMonth;
-            }
         }
+    });
+    
+    // All month selects - FIXED to ensure all get populated
+    const monthSelects = [
+        'dashboardMonthFilter', 
+        'reportMonthFilter', 
+        'patientsMonthFilter', 
+        'trackingMonthFilter'
+    ];
+    
+    monthSelects.forEach(selectId => {
+        const select = document.getElementById(selectId);
+        if (select) {
+            select.innerHTML = '<option value="">All Months</option>';
+            
+            // Add all available months
+            availableMonths.forEach(month => {
+                const option = document.createElement('option');
+                option.value = month.value;
+                option.textContent = month.text;
+                select.appendChild(option);
+            });
+            
+            console.log(`Populated ${selectId} with ${availableMonths.length} months`); // Debug log
+        }
+    });
+    
+    // Set default month for new patient form
+    const today = new Date();
+    const currentMonth = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
+    const newPatientMonth = document.getElementById('newPatientMonth');
+    if (newPatientMonth && !newPatientMonth.value) {
+        newPatientMonth.value = currentMonth;
+    }
+}
 
         async function loadDashboard() {
             try {
