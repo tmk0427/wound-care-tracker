@@ -10,7 +10,7 @@ async function initializeDatabase() {
     const client = await pool.connect();
     
     try {
-        console.log('📄 Starting database initialization...');
+        console.log('🔄 Starting database initialization...');
 
         // Create Users table
         await client.query(`
@@ -101,7 +101,7 @@ async function initializeDatabase() {
         const suppliesCount = await client.query('SELECT COUNT(*) FROM supplies');
         
         if (parseInt(suppliesCount.rows[0].count) === 0) {
-            console.log('📄 Adding default supplies...');
+            console.log('🔄 Adding default supplies...');
             
             const defaultSupplies = [
                 { code: 700, description: 'Alginate Dressing 2"x2"', hcpcs: 'A6196', cost: 2.50 },
@@ -136,7 +136,7 @@ async function initializeDatabase() {
         const adminCheck = await client.query('SELECT COUNT(*) FROM users WHERE email = $1', ['admin@system.com']);
         
         if (parseInt(adminCheck.rows[0].count) === 0) {
-            console.log('📄 Creating default admin user...');
+            console.log('🔄 Creating default admin user...');
             const bcrypt = require('bcryptjs');
             const hashedPassword = await bcrypt.hash('admin123', 10);
             
