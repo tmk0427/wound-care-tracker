@@ -787,6 +787,7 @@ app.get('/api/reports/itemized-summary', authenticateToken, async (req, res) => 
                 SELECT 
                     p.name as patient_name,
                     p.mrn,
+                    p.month,
                     f.name as facility_name,
                     s.code as ar_code,
                     s.description as item_description,
@@ -822,7 +823,7 @@ app.get('/api/reports/itemized-summary', authenticateToken, async (req, res) => 
                 params.push(month);
             }
             
-            query += ' GROUP BY p.id, s.id, p.name, p.mrn, f.name, s.code, s.description, s.hcpcs, s.cost, t.wound_dx ORDER BY p.name, s.code';
+            query += ' GROUP BY p.id, s.id, p.name, p.mrn, p.month, f.name, s.code, s.description, s.hcpcs, s.cost, t.wound_dx ORDER BY p.name, s.code';
             
             const result = await safeQuery(query, params);
             res.json(result.rows);
@@ -1000,4 +1001,5 @@ app.listen(PORT, () => {
 });
 
 module.exports = app;
+
 
