@@ -21,15 +21,17 @@
         .error-message { color: #e53e3e; margin-top: 10px; font-size: 14px; display: none; }
         .toggle-auth { margin-top: 20px; color: #667eea; cursor: pointer; text-decoration: underline; }
         .main-app { display: none; min-height: 100vh; }
-        .header { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); padding: 15px 0; box-shadow: 0 2px 20px rgba(0,0,0,0.1); position: sticky; top: 0; z-index: 1000; }
-        .header-content { max-width: 1200px; margin: 0 auto; padding: 0 20px; display: flex; justify-content: space-between; align-items: center; }
+        .header { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); padding: 15px 0; box-shadow: 0 2px 20px rgba(0,0,0,0.1); position: sticky; top: 0; z-index: 1000; height: 70px; }
+        .header-content { max-width: 1200px; margin: 0 auto; padding: 0 20px; display: flex; justify-content: space-between; align-items: center; height: 100%; }
         .logo { font-size: 20px; font-weight: bold; color: #667eea; }
         .user-info { display: flex; align-items: center; gap: 15px; }
-        .nav { background: rgba(255, 255, 255, 0.9); padding: 10px 0; margin-bottom: 20px; position: sticky; top: 70px; z-index: 999; border-bottom: 2px solid #e2e8f0; }
-        .nav-content { max-width: 1200px; margin: 0 auto; padding: 0 20px; display: flex; gap: 20px; overflow-x: auto; }
+        .nav { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); padding: 10px 0; margin-bottom: 20px; position: sticky; top: 70px; z-index: 999; border-bottom: 2px solid #e2e8f0; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .nav { background: rgba(255, 255, 255, 0.98); backdrop-filter: blur(15px); padding: 12px 0; margin-bottom: 20px; position: sticky; top: 70px; z-index: 999; border-bottom: 2px solid #e2e8f0; box-shadow: 0 2px 12px rgba(0,0,0,0.08); min-height: 55px; }
+        .nav-content { max-width: 1200px; margin: 0 auto; padding: 0 20px; display: flex; gap: 20px; overflow-x: auto; align-items: center; }
         .nav-btn { padding: 10px 20px; background: transparent; border: 2px solid #667eea; color: #667eea; border-radius: 25px; cursor: pointer; font-weight: 500; transition: all 0.3s; white-space: nowrap; min-width: fit-content; }
         .nav-btn:hover, .nav-btn.active { background: #667eea; color: white; }
         .container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+        .sticky-buffer { margin-top: 20px; }
         .section { background: rgba(255, 255, 255, 0.95); border-radius: 15px; padding: 30px; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); display: none; }
         .section.active { display: block; }
         .section h2 { color: #667eea; margin-bottom: 25px; font-size: 28px; }
@@ -87,16 +89,24 @@
         .export-progress { display: none; text-align: center; padding: 20px; background: #f0f9ff; border-radius: 8px; margin: 10px 0; border: 2px solid #3b82f6; }
         .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid #e5e7eb; border-radius: 50%; border-top-color: #3b82f6; animation: spin 1s ease-in-out infinite; margin-right: 10px; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        .admin-only { display: none; }
-        .admin-only.show-admin { display: block; }
+        .edit-input { width: 100%; padding: 4px 8px; border: 2px solid #667eea; border-radius: 4px; font-size: 14px; background: #f8fafc; }
+        .edit-input:focus { outline: none; border-color: #4c51bf; box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2); }
+        .edit-actions { display: flex; gap: 5px; align-items: center; }
+        .btn-mini { padding: 4px 8px; font-size: 12px; border-radius: 4px; margin-right: 4px; min-width: 50px; }
+        .editing-row { background-color: #f0f9ff !important; }
+        .editing-row:hover { background-color: #e0f2fe !important; }
         .patient-search-container { margin-bottom: 20px; }
         .patient-search-input { width: 100%; max-width: 400px; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 16px; transition: border-color 0.3s; }
         .patient-search-input:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1); }
-        .patient-search-input::placeholder { color: #a0aec0; }
+        .admin-only { display: none; }
+        .admin-only.show-admin { display: block; }
         @media (max-width: 768px) {
-            .header-content { flex-direction: column; gap: 15px; }
+            .header { height: auto; min-height: 80px; }
+            .header-content { flex-direction: column; gap: 15px; padding: 10px 20px; }
             .nav-content { justify-content: flex-start; }
-            .nav { top: 110px; }
+            .nav { top: 80px; min-height: 60px; padding: 15px 0; }
+            .patient-search-container, .search-container { top: 140px; }
+            .search-results-info[style*="position: sticky"] { top: 220px !important; }
             .stats-grid { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
             .filter-container, .search-container { flex-direction: column; }
             .modal-content { margin: 20px; width: auto; }
@@ -210,21 +220,23 @@
                         <select id="patientsMonthFilter" onchange="loadPatientsTable()"><option value="">All Months</option></select>
                     </div>
                 </div>
-                <div id="patientSearchResults" class="search-results-info" style="display: none;"></div>
-                <div class="card">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                        <h3>Patient List</h3>
-                        <button class="btn btn-small" onclick="showAddPatientModal()">+ Add Patient</button>
-                    </div>
-                    <div class="table-container">
-                        <table id="patientsTable">
-                            <thead><tr><th>Name</th><th>MRN</th><th>Month</th><th>Facility</th><th>Actions</th></tr></thead>
-                            <tbody></tbody>
-                        </table>
-                    </div>
-                    <div id="noPatientResults" class="no-results" style="display: none;">
-                        <h4>No patients found</h4>
-                        <p>Try adjusting your search terms or filters</p>
+                <div id="patientSearchResults" class="search-results-info" style="display: none; position: sticky; top: 205px; z-index: 895; background: rgba(240, 249, 255, 0.95); backdrop-filter: blur(10px); margin: 0; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
+                <div class="sticky-buffer">
+                    <div class="card">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h3>Patient List</h3>
+                            <button class="btn btn-small" onclick="showAddPatientModal()">+ Add Patient</button>
+                        </div>
+                        <div class="table-container">
+                            <table id="patientsTable">
+                                <thead><tr><th>Name</th><th>MRN</th><th>Month</th><th>Facility</th><th>Actions</th></tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                        <div id="noPatientResults" class="no-results" style="display: none;">
+                            <h4>No patients found</h4>
+                            <p>Try adjusting your search terms or filters</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -258,10 +270,12 @@
                         </div>
                         <button class="clear-search-btn" onclick="clearSupplySearch()">Clear Search</button>
                     </div>
-                    <div id="supplySearchResults" class="search-results-info" style="display: none;"></div>
+                    <div id="supplySearchResults" class="search-results-info" style="display: none; position: sticky; top: 205px; z-index: 895; background: rgba(240, 249, 255, 0.95); backdrop-filter: blur(10px); margin: 0; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
                 </div>
                 
-                <div id="trackingContent" class="loading">Select filters and patient to begin tracking supplies</div>
+                <div class="sticky-buffer">
+                    <div id="trackingContent" class="loading">Select filters and patient to begin tracking supplies</div>
+                </div>
             </div>
 
             <div id="reportsSection" class="section">
@@ -897,7 +911,18 @@
                     displayPatients = displayPatients.filter(p => p.month === monthFilter);
                 }
                 const tbody = document.querySelector('#patientsTable tbody');
-                tbody.innerHTML = displayPatients.map(patient => '<tr><td>' + patient.name + '</td><td>' + (patient.mrn || 'N/A') + '</td><td>' + patient.month + '</td><td>' + (patient.facility_name || 'N/A') + '</td><td><button class="btn btn-small btn-danger" onclick="deletePatient(' + patient.id + ')">Delete</button></td></tr>').join('');
+                tbody.innerHTML = displayPatients.map(patient => 
+                    '<tr id="patient-row-' + patient.id + '">' +
+                    '<td class="patient-name" data-patient-id="' + patient.id + '">' + patient.name + '</td>' +
+                    '<td class="patient-mrn" data-patient-id="' + patient.id + '">' + (patient.mrn || 'N/A') + '</td>' +
+                    '<td>' + patient.month + '</td>' +
+                    '<td>' + (patient.facility_name || 'N/A') + '</td>' +
+                    '<td>' +
+                    '<button class="btn btn-small btn-secondary" onclick="editPatient(' + patient.id + ')">Edit</button>' +
+                    '<button class="btn btn-small btn-danger" onclick="deletePatient(' + patient.id + ')">Delete</button>' +
+                    '</td>' +
+                    '</tr>'
+                ).join('');
                 
                 // Show/hide no results message
                 const noResultsDiv = document.getElementById('noPatientResults');
@@ -1254,6 +1279,103 @@
             } catch (error) {
                 alert('Failed to delete patient: ' + error.message);
             }
+        }
+
+        function editPatient(patientId) {
+            const row = document.getElementById('patient-row-' + patientId);
+            const nameCell = row.querySelector('.patient-name');
+            const mrnCell = row.querySelector('.patient-mrn');
+            const actionsCell = row.querySelector('td:last-child');
+
+            // Get current values
+            const currentName = nameCell.textContent.trim();
+            const currentMrn = mrnCell.textContent.trim() === 'N/A' ? '' : mrnCell.textContent.trim();
+
+            // Replace with input fields
+            nameCell.innerHTML = '<input type="text" class="edit-input" id="edit-name-' + patientId + '" value="' + currentName + '" placeholder="Patient Name">';
+            mrnCell.innerHTML = '<input type="text" class="edit-input" id="edit-mrn-' + patientId + '" value="' + currentMrn + '" placeholder="MRN">';
+
+            // Replace action buttons
+            actionsCell.innerHTML = 
+                '<div class="edit-actions">' +
+                '<button class="btn btn-mini btn-success" onclick="savePatientEdit(' + patientId + ')">Save</button>' +
+                '<button class="btn btn-mini btn-secondary" onclick="cancelPatientEdit(' + patientId + ')">Cancel</button>' +
+                '</div>';
+
+            // Add editing class to row
+            row.classList.add('editing-row');
+
+            // Focus on name input
+            document.getElementById('edit-name-' + patientId).focus();
+
+            // Add enter key handler
+            const nameInput = document.getElementById('edit-name-' + patientId);
+            const mrnInput = document.getElementById('edit-mrn-' + patientId);
+            
+            const handleEnter = (e) => {
+                if (e.key === 'Enter') {
+                    savePatientEdit(patientId);
+                }
+                if (e.key === 'Escape') {
+                    cancelPatientEdit(patientId);
+                }
+            };
+            
+            nameInput.addEventListener('keydown', handleEnter);
+            mrnInput.addEventListener('keydown', handleEnter);
+        }
+
+        async function savePatientEdit(patientId) {
+            const nameInput = document.getElementById('edit-name-' + patientId);
+            const mrnInput = document.getElementById('edit-mrn-' + patientId);
+            
+            const newName = nameInput.value.trim();
+            const newMrn = mrnInput.value.trim();
+
+            if (!newName) {
+                alert('Patient name is required');
+                nameInput.focus();
+                return;
+            }
+
+            try {
+                // Show loading state
+                const actionsCell = document.querySelector('#patient-row-' + patientId + ' td:last-child');
+                actionsCell.innerHTML = '<div class="edit-actions"><span style="color: #667eea;">Saving...</span></div>';
+
+                // Call API to update patient
+                await apiCall('/patients/' + patientId, {
+                    method: 'PUT',
+                    body: { name: newName, mrn: newMrn || null }
+                });
+
+                // Update local data
+                const patientIndex = patients.findIndex(p => p.id === patientId);
+                if (patientIndex !== -1) {
+                    patients[patientIndex].name = newName;
+                    patients[patientIndex].mrn = newMrn || null;
+                }
+
+                const filteredIndex = filteredPatients.findIndex(p => p.id === patientId);
+                if (filteredIndex !== -1) {
+                    filteredPatients[filteredIndex].name = newName;
+                    filteredPatients[filteredIndex].mrn = newMrn || null;
+                }
+
+                // Reload the table
+                loadPatientsTable();
+                
+                showToast('Patient updated successfully!', 'success');
+            } catch (error) {
+                console.error('Failed to update patient:', error);
+                showToast('Failed to update patient: ' + error.message, 'error');
+                // Reload table to revert changes
+                loadPatientsTable();
+            }
+        }
+
+        function cancelPatientEdit(patientId) {
+            loadPatientsTable(); // Simply reload the table to cancel editing
         }
 
         async function addSupply() {
