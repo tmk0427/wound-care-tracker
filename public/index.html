@@ -19,6 +19,9 @@
         .btn { width: 100%; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: transform 0.2s; }
         .btn:hover { transform: translateY(-2px); }
         .btn:disabled { opacity: 0.6; transform: none; }
+        .btn-small { padding: 8px 16px; font-size: 14px; border-radius: 6px; margin-right: 8px; width: auto; }
+        .btn-secondary { background: #e2e8f0; color: #4a5568; }
+        .btn-danger { background: #e53e3e; }
         .error-message { color: #e53e3e; margin-top: 10px; font-size: 14px; display: none; }
         .toggle-auth { margin-top: 20px; color: #667eea; cursor: pointer; text-decoration: underline; }
         .main-app { display: none; min-height: 100vh; }
@@ -31,14 +34,10 @@
         .nav-btn { padding: 10px 20px; background: transparent; border: 2px solid #667eea; color: #667eea; border-radius: 25px; cursor: pointer; font-weight: 500; transition: all 0.3s; white-space: nowrap; min-width: fit-content; }
         .nav-btn:hover, .nav-btn.active { background: #667eea; color: white; }
         .container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
-        .sticky-buffer { margin-top: 20px; }
         .section { background: rgba(255, 255, 255, 0.95); border-radius: 15px; padding: 30px; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); display: none; }
         .section.active { display: block; }
         .section h2 { color: #667eea; margin-bottom: 25px; font-size: 28px; }
-        .grid { display: grid; gap: 20px; }
-        .grid-2 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
-        .grid-3 { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
-        .card { background: #f8fafc; border: 2px solid #e2e8f0; border-radius: 12px; padding: 25px; transition: all 0.3s; }
+        .card { background: #f8fafc; border: 2px solid #e2e8f0; border-radius: 12px; padding: 25px; transition: all 0.3s; margin-bottom: 20px; }
         .card:hover { border-color: #667eea; transform: translateY(-2px); }
         .card h3 { color: #4a5568; margin-bottom: 15px; font-size: 18px; }
         .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
@@ -50,19 +49,17 @@
         th, td { padding: 15px; text-align: left; border-bottom: 1px solid #e2e8f0; }
         th { background: #f8fafc; font-weight: 600; color: #4a5568; }
         tr:hover { background: #f1f5f9; }
-        .btn-small { padding: 8px 16px; font-size: 14px; border-radius: 6px; margin-right: 8px; }
-        .btn-secondary { background: #e2e8f0; color: #4a5568; }
-        .btn-danger { background: #e53e3e; }
-        .btn-success { background: #38a169; }
-        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 2000; }
-        .modal-content { background: white; padding: 30px; border-radius: 15px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto; }
-        .modal h3 { color: #667eea; margin-bottom: 20px; }
         .loading { text-align: center; padding: 40px; color: #666; }
+        .no-data { text-align: center; padding: 40px; color: #666; background: #f8fafc; border: 2px dashed #e2e8f0; border-radius: 12px; }
         .toast { position: fixed; bottom: 20px; right: 20px; background: #38a169; color: white; padding: 15px 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 3000; transform: translateX(400px); transition: transform 0.3s ease; max-width: 300px; }
         .toast.show { transform: translateX(0); }
         .toast.error { background: #e53e3e; }
         .admin-only { display: none; }
         .admin-only.show-admin { display: block; }
+        .filter-container { display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; align-items: end; }
+        .filter-group { display: flex; flex-direction: column; gap: 5px; }
+        .filter-group label { font-size: 14px; color: #4a5568; font-weight: 500; }
+        .filter-group select { padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; }
     </style>
 </head>
 <body>
@@ -122,6 +119,7 @@
             <div class="nav-content">
                 <button class="nav-btn active" onclick="showSection('dashboard')">Dashboard</button>
                 <button class="nav-btn" onclick="showSection('patients')">Patients</button>
+                <button class="nav-btn admin-only" onclick="showSection('facilities')">Facilities</button>
                 <button class="nav-btn admin-only" onclick="showSection('users')">Manage Users</button>
             </div>
         </div>
@@ -129,17 +127,63 @@
         <div class="container">
             <div id="dashboardSection" class="section active">
                 <h2>📊 Dashboard Overview</h2>
-                <div class="loading">Loading dashboard data...</div>
+                <div class="stats-grid" id="statsGrid">
+                    <div class="stat-card">
+                        <div class="stat-number" id="totalPatients">0</div>
+                        <div class="stat-label">Total Patients</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="totalFacilities">0</div>
+                        <div class="stat-label">Facilities</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="totalSupplies">0</div>
+                        <div class="stat-label">Supply Items</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="totalUsers">0</div>
+                        <div class="stat-label">Users</div>
+                    </div>
+                </div>
+                <div id="dashboardContent" class="loading">Loading dashboard data...</div>
             </div>
 
             <div id="patientsSection" class="section">
                 <h2>👥 Patient Management</h2>
-                <div class="loading">Loading patients...</div>
+                <div class="filter-container">
+                    <div class="filter-group">
+                        <label>Facility</label>
+                        <select id="patientFacilityFilter" onchange="loadPatients()">
+                            <option value="">All Facilities</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Month</label>
+                        <select id="patientMonthFilter" onchange="loadPatients()">
+                            <option value="">All Months</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>Patient List</h3>
+                    <div id="patientsContent" class="loading">Loading patients...</div>
+                </div>
+            </div>
+
+            <div id="facilitiesSection" class="section">
+                <h2>🏢 Facility Management</h2>
+                <div class="card">
+                    <h3>Healthcare Facilities</h3>
+                    <div id="facilitiesContent" class="loading">Loading facilities...</div>
+                </div>
             </div>
 
             <div id="usersSection" class="section">
                 <h2>👤 User Management</h2>
-                <div class="loading">Loading users...</div>
+                <div class="card">
+                    <h3>System Users</h3>
+                    <div id="usersContent" class="loading">Loading users...</div>
+                </div>
             </div>
         </div>
     </div>
@@ -149,6 +193,8 @@
     <script>
         let currentUser = null;
         let currentSection = 'dashboard';
+        let patients = [];
+        let facilities = [];
 
         async function apiCall(endpoint, options = {}) {
             const token = localStorage.getItem('authToken');
@@ -289,11 +335,209 @@
 
         async function initializeApp() {
             try {
-                // Load initial data
-                console.log('Initializing app for user:', currentUser);
+                await loadFacilities();
+                await loadDashboard();
+                populateFilters();
             } catch (error) {
                 console.error('Failed to initialize app:', error);
             }
+        }
+
+        async function loadFacilities() {
+            try {
+                facilities = await apiCall('/facilities');
+            } catch (error) {
+                console.error('Failed to load facilities:', error);
+                facilities = [];
+            }
+        }
+
+        async function loadPatients() {
+            try {
+                patients = await apiCall('/patients');
+                displayPatients();
+            } catch (error) {
+                console.error('Failed to load patients:', error);
+                document.getElementById('patientsContent').innerHTML = '<div class="no-data">Failed to load patients</div>';
+            }
+        }
+
+        function displayPatients() {
+            const facilityFilter = document.getElementById('patientFacilityFilter').value;
+            const monthFilter = document.getElementById('patientMonthFilter').value;
+            
+            let filteredPatients = [...patients];
+            
+            if (facilityFilter) {
+                filteredPatients = filteredPatients.filter(p => p.facility_id == facilityFilter);
+            }
+            if (monthFilter) {
+                filteredPatients = filteredPatients.filter(p => p.month === monthFilter);
+            }
+            
+            const content = document.getElementById('patientsContent');
+            
+            if (filteredPatients.length === 0) {
+                content.innerHTML = '<div class="no-data">No patients found</div>';
+                return;
+            }
+            
+            const table = `
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>MRN</th>
+                                <th>Month</th>
+                                <th>Facility</th>
+                                <th>Created</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${filteredPatients.map(patient => `
+                                <tr>
+                                    <td>${patient.name}</td>
+                                    <td>${patient.mrn || 'N/A'}</td>
+                                    <td>${patient.month}</td>
+                                    <td>${patient.facility_name || 'N/A'}</td>
+                                    <td>${new Date(patient.created_at).toLocaleDateString()}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            
+            content.innerHTML = table;
+        }
+
+        async function loadDashboard() {
+            try {
+                const counts = await Promise.all([
+                    apiCall('/patients'),
+                    apiCall('/facilities'),
+                    apiCall('/supplies'),
+                    currentUser.role === 'admin' ? apiCall('/users') : Promise.resolve([])
+                ]);
+                
+                document.getElementById('totalPatients').textContent = counts[0].length;
+                document.getElementById('totalFacilities').textContent = counts[1].length;
+                document.getElementById('totalSupplies').textContent = counts[2].length;
+                document.getElementById('totalUsers').textContent = counts[3].length;
+                
+                document.getElementById('dashboardContent').innerHTML = '<div class="card"><h3>System Status</h3><p>All systems operational. Data loaded successfully.</p></div>';
+            } catch (error) {
+                console.error('Failed to load dashboard:', error);
+                document.getElementById('dashboardContent').innerHTML = '<div class="no-data">Failed to load dashboard data</div>';
+            }
+        }
+
+        async function loadFacilitiesTable() {
+            try {
+                const facilitiesData = await apiCall('/facilities');
+                const content = document.getElementById('facilitiesContent');
+                
+                if (facilitiesData.length === 0) {
+                    content.innerHTML = '<div class="no-data">No facilities found</div>';
+                    return;
+                }
+                
+                const table = `
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Created</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${facilitiesData.map(facility => `
+                                    <tr>
+                                        <td>${facility.name}</td>
+                                        <td>${new Date(facility.created_at).toLocaleDateString()}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                
+                content.innerHTML = table;
+            } catch (error) {
+                console.error('Failed to load facilities:', error);
+                document.getElementById('facilitiesContent').innerHTML = '<div class="no-data">Failed to load facilities</div>';
+            }
+        }
+
+        async function loadUsersTable() {
+            if (currentUser.role !== 'admin') return;
+            
+            try {
+                const users = await apiCall('/users');
+                const content = document.getElementById('usersContent');
+                
+                if (users.length === 0) {
+                    content.innerHTML = '<div class="no-data">No users found</div>';
+                    return;
+                }
+                
+                const table = `
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Role</th>
+                                    <th>Facility</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${users.map(user => `
+                                    <tr>
+                                        <td>${user.name}</td>
+                                        <td>${user.email}</td>
+                                        <td>${user.role}</td>
+                                        <td>${user.facility_name || 'N/A'}</td>
+                                        <td style="color: ${user.is_approved ? '#38a169' : '#e53e3e'}">
+                                            ${user.is_approved ? 'Approved' : 'Pending'}
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                
+                content.innerHTML = table;
+            } catch (error) {
+                console.error('Failed to load users:', error);
+                document.getElementById('usersContent').innerHTML = '<div class="no-data">Failed to load users</div>';
+            }
+        }
+
+        function populateFilters() {
+            const facilitySelect = document.getElementById('patientFacilityFilter');
+            facilitySelect.innerHTML = '<option value="">All Facilities</option>';
+            facilities.forEach(facility => {
+                const option = document.createElement('option');
+                option.value = facility.id;
+                option.textContent = facility.name;
+                facilitySelect.appendChild(option);
+            });
+            
+            const monthSelect = document.getElementById('patientMonthFilter');
+            monthSelect.innerHTML = '<option value="">All Months</option>';
+            const uniqueMonths = [...new Set(patients.map(p => p.month))].sort();
+            uniqueMonths.forEach(month => {
+                const option = document.createElement('option');
+                option.value = month;
+                option.textContent = new Date(month + '-01').toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+                monthSelect.appendChild(option);
+            });
         }
 
         function showSection(sectionName) {
@@ -304,6 +548,21 @@
             document.querySelectorAll('.section').forEach(section => section.classList.remove('active'));
             document.getElementById(sectionName + 'Section').classList.add('active');
             currentSection = sectionName;
+            
+            switch(sectionName) {
+                case 'dashboard':
+                    loadDashboard();
+                    break;
+                case 'patients':
+                    loadPatients();
+                    break;
+                case 'facilities':
+                    loadFacilitiesTable();
+                    break;
+                case 'users':
+                    loadUsersTable();
+                    break;
+            }
         }
 
         function showError(elementId, message) {
