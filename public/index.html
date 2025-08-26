@@ -1504,40 +1504,84 @@
                 return;
             }
             
-            const tableRows = [];
-            filteredPatients.forEach(patient => {
-                const row = document.createElement('tr');
-                row.innerHTML = 
-                    '<td>' + (patient.name || '') + '</td>' +
-                    '<td>' + (patient.mrn || 'N/A') + '</td>' +
-                    '<td>' + formatMonth(patient.month) + '</td>' +
-                    '<td>' + (patient.facility_name || 'N/A') + '</td>' +
-                    '<td>' + new Date(patient.created_at).toLocaleDateString() + '</td>' +
-                    '<td><div class="table-actions">' +
-                    '<button class="btn btn-small btn-secondary btn-icon" onclick="editPatient(' + patient.id + ')" title="Edit Patient">✏️</button>' +
-                    '<button class="btn btn-small btn-danger btn-icon" onclick="deletePatient(' + patient.id + ')" title="Delete Patient">🗑️</button>' +
-                    '</div></td>';
-                tableRows.push(row.outerHTML);
-            });
-            
             const table = document.createElement('div');
             table.className = 'table-container';
-            table.innerHTML = 
-                '<table>' +
-                '<thead>' +
-                '<tr>' +
-                '<th>Name</th>' +
-                '<th>MRN</th>' +
-                '<th>Month</th>' +
-                '<th>Facility</th>' +
-                '<th>Created</th>' +
-                '<th>Actions</th>' +
-                '</tr>' +
-                '</thead>' +
-                '<tbody>' +
-                tableRows.join('') +
-                '</tbody>' +
-                '</table>';
+            
+            const tableElement = document.createElement('table');
+            
+            // Create header
+            const thead = document.createElement('thead');
+            const headerRow = document.createElement('tr');
+            ['Name', 'MRN', 'Month', 'Facility', 'Created', 'Actions'].forEach(text => {
+                const th = document.createElement('th');
+                th.textContent = text;
+                headerRow.appendChild(th);
+            });
+            thead.appendChild(headerRow);
+            
+            // Create body
+            const tbody = document.createElement('tbody');
+            
+            filteredPatients.forEach(patient => {
+                const row = document.createElement('tr');
+                
+                // Name cell (editable)
+                const nameCell = document.createElement('td');
+                nameCell.className = 'editable-cell';
+                nameCell.textContent = patient.name || '';
+                nameCell.onclick = () => editInlineField(nameCell, 'patient', patient.id, 'name', patient.name);
+                row.appendChild(nameCell);
+                
+                // MRN cell (editable) 
+                const mrnCell = document.createElement('td');
+                mrnCell.className = 'editable-cell';
+                mrnCell.textContent = patient.mrn || 'N/A';
+                mrnCell.onclick = () => editInlineField(mrnCell, 'patient', patient.id, 'mrn', patient.mrn || '');
+                row.appendChild(mrnCell);
+                
+                // Month cell
+                const monthCell = document.createElement('td');
+                monthCell.textContent = formatMonth(patient.month);
+                row.appendChild(monthCell);
+                
+                // Facility cell
+                const facilityCell = document.createElement('td');
+                facilityCell.textContent = patient.facility_name || 'N/A';
+                row.appendChild(facilityCell);
+                
+                // Created cell
+                const createdCell = document.createElement('td');
+                createdCell.textContent = new Date(patient.created_at).toLocaleDateString();
+                row.appendChild(createdCell);
+                
+                // Actions cell
+                const actionsCell = document.createElement('td');
+                const actionsDiv = document.createElement('div');
+                actionsDiv.className = 'table-actions';
+                
+                const editBtn = document.createElement('button');
+                editBtn.className = 'btn btn-small btn-secondary btn-icon';
+                editBtn.textContent = '✏️';
+                editBtn.title = 'Edit Patient';
+                editBtn.onclick = () => editPatient(patient.id);
+                
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'btn btn-small btn-danger btn-icon';
+                deleteBtn.textContent = '🗑️';
+                deleteBtn.title = 'Delete Patient';
+                deleteBtn.onclick = () => deletePatient(patient.id);
+                
+                actionsDiv.appendChild(editBtn);
+                actionsDiv.appendChild(deleteBtn);
+                actionsCell.appendChild(actionsDiv);
+                row.appendChild(actionsCell);
+                
+                tbody.appendChild(row);
+            });
+            
+            tableElement.appendChild(thead);
+            tableElement.appendChild(tbody);
+            table.appendChild(tableElement);
             
             content.innerHTML = '';
             content.appendChild(table);
