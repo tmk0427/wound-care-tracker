@@ -22,6 +22,7 @@
         .btn-small { padding: 8px 16px; font-size: 14px; border-radius: 6px; margin-right: 8px; width: auto; }
         .btn-secondary { background: #e2e8f0; color: #4a5568; }
         .btn-danger { background: #e53e3e; }
+        .btn-success { background: #38a169; }
         .error-message { color: #e53e3e; margin-top: 10px; font-size: 14px; display: none; }
         .toggle-auth { margin-top: 20px; color: #667eea; cursor: pointer; text-decoration: underline; }
         .main-app { display: none; min-height: 100vh; }
@@ -60,12 +61,40 @@
         .filter-group { display: flex; flex-direction: column; gap: 5px; }
         .filter-group label { font-size: 14px; color: #4a5568; font-weight: 500; }
         .filter-group select { padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; }
+        
+        /* Modal Styles */
+        .modal { display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); backdrop-filter: blur(5px); }
+        .modal-content { background-color: #fefefe; margin: 5% auto; padding: 30px; border: none; width: 90%; max-width: 500px; border-radius: 15px; box-shadow: 0 20px 40px rgba(0,0,0,0.2); position: relative; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
+        .modal-header h2 { color: #667eea; margin: 0; font-size: 24px; }
+        .close { color: #aaa; font-size: 32px; font-weight: bold; cursor: pointer; line-height: 1; }
+        .close:hover, .close:focus { color: #667eea; }
+        .form-row { display: flex; gap: 15px; margin-bottom: 15px; }
+        .form-row .form-group { flex: 1; margin-bottom: 0; }
+        .action-buttons { display: flex; gap: 10px; justify-content: flex-end; margin-top: 25px; }
+        .action-buttons .btn { width: auto; min-width: 100px; }
+        
+        /* Patient Management Enhancements */
+        .patients-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .patients-header h3 { margin: 0; }
+        .table-actions { display: flex; gap: 8px; }
+        .btn-icon { padding: 6px 10px; font-size: 12px; min-width: auto; }
+        .table-container table { margin-top: 0; }
+        
+        /* Enhanced Responsive Design */
+        @media (max-width: 768px) {
+            .form-row { flex-direction: column; }
+            .action-buttons { flex-direction: column; }
+            .patients-header { flex-direction: column; gap: 15px; align-items: stretch; }
+            .filter-container { flex-direction: column; }
+            .table-actions { justify-content: center; }
+        }
     </style>
 </head>
 <body>
     <div id="authContainer" class="login-container">
         <div class="login-card">
-            <h1>🏥 Wound Care RT Supply Tracker</h1>
+            <h1>Wound Care RT Supply Tracker</h1>
             <p>Healthcare Supply Management System</p>
             <div id="loginForm">
                 <div class="form-group">
@@ -107,7 +136,7 @@
     <div id="mainApp" class="main-app">
         <div class="header">
             <div class="header-content">
-                <div class="logo">🏥 Wound Care RT Supply Tracker</div>
+                <div class="logo">Wound Care RT Supply Tracker</div>
                 <div class="user-info">
                     <span id="userWelcome">Welcome, User</span>
                     <button class="btn btn-small" onclick="logout()">Logout</button>
@@ -126,7 +155,7 @@
 
         <div class="container">
             <div id="dashboardSection" class="section active">
-                <h2>📊 Dashboard Overview</h2>
+                <h2>Dashboard Overview</h2>
                 <div class="stats-grid" id="statsGrid">
                     <div class="stat-card">
                         <div class="stat-number" id="totalPatients">0</div>
@@ -149,7 +178,7 @@
             </div>
 
             <div id="patientsSection" class="section">
-                <h2>👥 Patient Management</h2>
+                <h2>Patient Management</h2>
                 <div class="filter-container">
                     <div class="filter-group">
                         <label>Facility</label>
@@ -165,13 +194,18 @@
                     </div>
                 </div>
                 <div class="card">
-                    <h3>Patient List</h3>
+                    <div class="patients-header">
+                        <h3>Patient List</h3>
+                        <button class="btn btn-success btn-small" onclick="openAddPatientModal()">
+                            + Add Patient
+                        </button>
+                    </div>
                     <div id="patientsContent" class="loading">Loading patients...</div>
                 </div>
             </div>
 
             <div id="facilitiesSection" class="section">
-                <h2>🏢 Facility Management</h2>
+                <h2>Facility Management</h2>
                 <div class="card">
                     <h3>Healthcare Facilities</h3>
                     <div id="facilitiesContent" class="loading">Loading facilities...</div>
@@ -179,11 +213,61 @@
             </div>
 
             <div id="usersSection" class="section">
-                <h2>👤 User Management</h2>
+                <h2>User Management</h2>
                 <div class="card">
                     <h3>System Users</h3>
                     <div id="usersContent" class="loading">Loading users...</div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Patient Modal -->
+    <div id="patientModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="patientModalTitle">Add New Patient</h2>
+                <span class="close" onclick="closePatientModal()">&times;</span>
+            </div>
+            <div class="form-group">
+                <label for="patientName">Patient Name *</label>
+                <input type="text" id="patientName" placeholder="Enter patient name" required>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="patientMrn">MRN</label>
+                    <input type="text" id="patientMrn" placeholder="Medical Record Number (optional)">
+                </div>
+                <div class="form-group">
+                    <label for="patientMonth">Month *</label>
+                    <input type="month" id="patientMonth" required>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="patientFacility">Facility *</label>
+                <select id="patientFacility" required>
+                    <option value="">Select a facility</option>
+                </select>
+            </div>
+            <div id="patientModalError" class="error-message"></div>
+            <div class="action-buttons">
+                <button class="btn btn-secondary" onclick="closePatientModal()">Cancel</button>
+                <button class="btn" onclick="savePatient()" id="savePatientBtn">Save Patient</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirmModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Confirm Action</h2>
+                <span class="close" onclick="closeConfirmModal()">&times;</span>
+            </div>
+            <p id="confirmMessage">Are you sure you want to proceed?</p>
+            <div class="action-buttons">
+                <button class="btn btn-secondary" onclick="closeConfirmModal()">Cancel</button>
+                <button class="btn btn-danger" onclick="confirmAction()" id="confirmBtn">Confirm</button>
             </div>
         </div>
     </div>
@@ -195,6 +279,8 @@
         let currentSection = 'dashboard';
         let patients = [];
         let facilities = [];
+        let editingPatient = null;
+        let confirmCallback = null;
 
         async function apiCall(endpoint, options = {}) {
             const token = localStorage.getItem('authToken');
@@ -221,6 +307,7 @@
             }
         }
 
+        // Authentication Functions
         async function login() {
             const email = document.getElementById('loginEmail').value.trim();
             const password = document.getElementById('loginPassword').value.trim();
@@ -275,7 +362,7 @@
                     method: 'POST',
                     body: { name, email, password, facilityId: parseInt(facilityId) }
                 });
-                alert('Registration successful! Please wait for admin approval before logging in.');
+                showToast('Registration successful! Please wait for admin approval.');
                 toggleAuthMode();
             } catch (error) {
                 showError('registerError', error.message || 'Registration failed');
@@ -343,13 +430,29 @@
             }
         }
 
+        // Data Loading Functions
         async function loadFacilities() {
             try {
                 facilities = await apiCall('/facilities');
+                populatePatientFacilitySelects();
             } catch (error) {
                 console.error('Failed to load facilities:', error);
                 facilities = [];
             }
+        }
+
+        function populatePatientFacilitySelects() {
+            const selects = ['patientFacility'];
+            selects.forEach(selectId => {
+                const select = document.getElementById(selectId);
+                select.innerHTML = '<option value="">Select a facility</option>';
+                facilities.forEach(facility => {
+                    const option = document.createElement('option');
+                    option.value = facility.id;
+                    option.textContent = facility.name;
+                    select.appendChild(option);
+                });
+            });
         }
 
         async function loadPatients() {
@@ -392,6 +495,7 @@
                                 <th>Month</th>
                                 <th>Facility</th>
                                 <th>Created</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -399,9 +503,21 @@
                                 <tr>
                                     <td>${patient.name}</td>
                                     <td>${patient.mrn || 'N/A'}</td>
-                                    <td>${patient.month}</td>
+                                    <td>${formatMonth(patient.month)}</td>
                                     <td>${patient.facility_name || 'N/A'}</td>
                                     <td>${new Date(patient.created_at).toLocaleDateString()}</td>
+                                    <td>
+                                        <div class="table-actions">
+                                            <button class="btn btn-small btn-secondary btn-icon" 
+                                                    onclick="editPatient(${patient.id})" title="Edit Patient">
+                                                ✏️
+                                            </button>
+                                            <button class="btn btn-small btn-danger btn-icon" 
+                                                    onclick="deletePatient(${patient.id})" title="Delete Patient">
+                                                🗑️
+                                            </button>
+                                        </div>
+                                    </td>
                                 </tr>
                             `).join('')}
                         </tbody>
@@ -410,6 +526,12 @@
             `;
             
             content.innerHTML = table;
+        }
+
+        function formatMonth(monthString) {
+            if (!monthString) return 'N/A';
+            const date = new Date(monthString + '-01');
+            return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
         }
 
         async function loadDashboard() {
@@ -535,11 +657,135 @@
             uniqueMonths.forEach(month => {
                 const option = document.createElement('option');
                 option.value = month;
-                option.textContent = new Date(month + '-01').toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+                option.textContent = formatMonth(month);
                 monthSelect.appendChild(option);
             });
         }
 
+        // Patient Modal Functions
+        function openAddPatientModal() {
+            editingPatient = null;
+            document.getElementById('patientModalTitle').textContent = 'Add New Patient';
+            document.getElementById('patientName').value = '';
+            document.getElementById('patientMrn').value = '';
+            document.getElementById('patientMonth').value = '';
+            document.getElementById('patientFacility').value = '';
+            document.getElementById('patientModalError').style.display = 'none';
+            document.getElementById('savePatientBtn').textContent = 'Save Patient';
+            document.getElementById('patientModal').style.display = 'block';
+        }
+
+        function editPatient(patientId) {
+            const patient = patients.find(p => p.id === patientId);
+            if (!patient) return;
+
+            editingPatient = patient;
+            document.getElementById('patientModalTitle').textContent = 'Edit Patient';
+            document.getElementById('patientName').value = patient.name || '';
+            document.getElementById('patientMrn').value = patient.mrn || '';
+            document.getElementById('patientMonth').value = patient.month || '';
+            document.getElementById('patientFacility').value = patient.facility_id || '';
+            document.getElementById('patientModalError').style.display = 'none';
+            document.getElementById('savePatientBtn').textContent = 'Update Patient';
+            document.getElementById('patientModal').style.display = 'block';
+        }
+
+        function closePatientModal() {
+            document.getElementById('patientModal').style.display = 'none';
+            editingPatient = null;
+        }
+
+        async function savePatient() {
+            const name = document.getElementById('patientName').value.trim();
+            const mrn = document.getElementById('patientMrn').value.trim();
+            const month = document.getElementById('patientMonth').value;
+            const facilityId = document.getElementById('patientFacility').value;
+            const saveBtn = document.getElementById('savePatientBtn');
+            const modalError = document.getElementById('patientModalError');
+            
+            if (!name || !month || !facilityId) {
+                showError('patientModalError', 'Please fill in all required fields');
+                return;
+            }
+            
+            saveBtn.disabled = true;
+            saveBtn.textContent = editingPatient ? 'Updating...' : 'Saving...';
+            modalError.style.display = 'none';
+            
+            try {
+                const patientData = {
+                    name,
+                    mrn: mrn || null,
+                    month,
+                    facilityId: parseInt(facilityId)
+                };
+
+                if (editingPatient) {
+                    await apiCall(`/patients/${editingPatient.id}`, {
+                        method: 'PUT',
+                        body: patientData
+                    });
+                    showToast('Patient updated successfully');
+                } else {
+                    await apiCall('/patients', {
+                        method: 'POST',
+                        body: patientData
+                    });
+                    showToast('Patient added successfully');
+                }
+                
+                closePatientModal();
+                await loadPatients();
+                await loadDashboard();
+                
+            } catch (error) {
+                showError('patientModalError', error.message || 'Failed to save patient');
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.textContent = editingPatient ? 'Update Patient' : 'Save Patient';
+            }
+        }
+
+        function deletePatient(patientId) {
+            const patient = patients.find(p => p.id === patientId);
+            if (!patient) return;
+
+            showConfirmDialog(
+                `Delete Patient "${patient.name}"?`,
+                'This action cannot be undone. All tracking data for this patient will also be deleted.',
+                async () => {
+                    try {
+                        await apiCall(`/patients/${patientId}`, { method: 'DELETE' });
+                        showToast('Patient deleted successfully');
+                        await loadPatients();
+                        await loadDashboard();
+                    } catch (error) {
+                        showToast(error.message || 'Failed to delete patient', 'error');
+                    }
+                }
+            );
+        }
+
+        // Confirmation Dialog Functions
+        function showConfirmDialog(title, message, callback) {
+            document.getElementById('confirmMessage').innerHTML = `<strong>${title}</strong><br><br>${message}`;
+            confirmCallback = callback;
+            document.getElementById('confirmModal').style.display = 'block';
+        }
+
+        function closeConfirmModal() {
+            document.getElementById('confirmModal').style.display = 'none';
+            confirmCallback = null;
+        }
+
+        function confirmAction() {
+            if (confirmCallback) {
+                confirmCallback();
+            }
+            closeConfirmModal();
+        }
+
+        // Navigation Functions
         function showSection(sectionName) {
             document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
             if (event && event.target) {
@@ -565,6 +811,7 @@
             }
         }
 
+        // Utility Functions
         function showError(elementId, message) {
             const errorElement = document.getElementById(elementId);
             errorElement.textContent = message;
@@ -582,7 +829,7 @@
             }, 4000);
         }
 
-        // Check for existing auth token on page load
+        // Event Listeners
         window.addEventListener('DOMContentLoaded', async () => {
             const token = localStorage.getItem('authToken');
             if (token) {
@@ -597,16 +844,34 @@
             }
         });
 
-        // Handle enter key in login/register forms
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 if (document.getElementById('loginForm').style.display !== 'none') {
                     login();
                 } else if (document.getElementById('registerForm').style.display !== 'none') {
                     register();
+                } else if (document.getElementById('patientModal').style.display === 'block') {
+                    savePatient();
                 }
             }
+            if (e.key === 'Escape') {
+                closePatientModal();
+                closeConfirmModal();
+            }
         });
+
+        // Close modals when clicking outside
+        window.onclick = function(event) {
+            const patientModal = document.getElementById('patientModal');
+            const confirmModal = document.getElementById('confirmModal');
+            
+            if (event.target === patientModal) {
+                closePatientModal();
+            }
+            if (event.target === confirmModal) {
+                closeConfirmModal();
+            }
+        }
     </script>
 </body>
 </html>
