@@ -1936,8 +1936,8 @@
                         <tbody>
                             ${filteredPatients.map(patient => `
                                 <tr>
-                                    <td class="editable-cell" onclick="editInline(this, 'patient', ${patient.id}, 'name', '${patient.name}')">${patient.name}</td>
-                                    <td class="editable-cell" onclick="editInline(this, 'patient', ${patient.id}, 'mrn', '${patient.mrn || ''}')">${patient.mrn || 'N/A'}</td>
+                                    <td class="editable-cell" onclick="editInline(this, 'patient', ${patient.id}, 'name', ${JSON.stringify(patient.name)})">${patient.name}</td>
+                                    <td class="editable-cell" onclick="editInline(this, 'patient', ${patient.id}, 'mrn', ${JSON.stringify(patient.mrn || '')})">${patient.mrn || 'N/A'}</td>
                                     <td>${formatMonth(patient.month)}</td>
                                     <td>${patient.facility_name || 'N/A'}</td>
                                     <td>${new Date(patient.created_at).toLocaleDateString()}</td>
