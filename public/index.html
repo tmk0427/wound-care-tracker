@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Wound Care RT Supply Tracker</title>
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNiIgZmlsbD0iIzY2N0VFQSIvPgo8cGF0aCBkPSJNMTYgOEMxOC4yMDkxIDggMjAgOS43OTA5MSAyMCAxMlYyMEMxOS4xIDIwIDE4LjQgMTkuMyAxOC40IDE4LjRWMTJDMTguNCA5LjYgMTguNCA5LjYgMTYgOS42QzEzLjYgOS42IDEzLjYgOS42IDEzLjYgMTJWMTguNEMxMy42IDE5LjMgMTIuOSAyMCAxMiAyMFYxMkMxMiA5Ljc5MDkxIDEzLjc5MDkgOCAxNiA4WiIgZmlsbD0id2hpdGUiLz4KPHN2ZyBoZWlnaHQ9IjE2IiB3aWR0aD0iMTYiIHg9IjgiIHk9IjE2Ij4KPGNpcmNsZSBjeD0iOCIgY3k9IjgiIHI9IjYiIGZpbGw9IndoaXRlIiBzdHJva2U9IiM2NjdFRUEiIHN0cm9rZS13aWR0aD0iMiIvPgo8cGF0aCBkPSJNNSA4SDExTTggNVYxMSIgc3Ryb2tlPSIjNjY3RUVBIIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPgo8L3N2Zz4K">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; color: #333; }
@@ -61,8 +60,11 @@
         .filter-group { display: flex; flex-direction: column; gap: 5px; }
         .filter-group label { font-size: 14px; color: #4a5568; font-weight: 500; }
         .filter-group select { padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; }
-        
-        /* Modal Styles */
+        .filter-group input { padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; }
+        .patients-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .patients-header h3 { margin: 0; }
+        .table-actions { display: flex; gap: 8px; }
+        .btn-icon { padding: 6px 10px; font-size: 12px; min-width: auto; }
         .modal { display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); backdrop-filter: blur(5px); }
         .modal-content { background-color: #fefefe; margin: 5% auto; padding: 30px; border: none; width: 90%; max-width: 500px; border-radius: 15px; box-shadow: 0 20px 40px rgba(0,0,0,0.2); position: relative; }
         .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
@@ -73,67 +75,6 @@
         .form-row .form-group { flex: 1; margin-bottom: 0; }
         .action-buttons { display: flex; gap: 10px; justify-content: flex-end; margin-top: 25px; }
         .action-buttons .btn { width: auto; min-width: 100px; }
-        
-        /* Patient Management Enhancements */
-        .patients-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .patients-header h3 { margin: 0; }
-        .table-actions { display: flex; gap: 8px; }
-        .btn-icon { padding: 6px 10px; font-size: 12px; min-width: auto; }
-        .table-container table { margin-top: 0; }
-        
-        /* Enhanced Responsive Design */
-        @media (max-width: 768px) {
-            .form-row { flex-direction: column; }
-            .action-buttons { flex-direction: column; }
-            .patients-header { flex-direction: column; gap: 15px; align-items: stretch; }
-            .filter-container { flex-direction: column; }
-            .table-actions { justify-content: center; }
-        }
-
-        /* Tracking Grid Styles */
-        .tracking-grid { margin-top: 20px; overflow-x: auto; }
-        .tracking-table { width: 100%; border-collapse: collapse; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
-        .tracking-table th, .tracking-table td { padding: 8px; text-align: center; border: 1px solid #e2e8f0; min-width: 40px; }
-        .tracking-table th { background: #f8fafc; font-weight: 600; color: #4a5568; position: sticky; left: 0; z-index: 10; }
-        .tracking-table th.supply-header { position: sticky; top: 0; z-index: 11; }
-        .tracking-table td.supply-name { background: #f8fafc; font-weight: 500; position: sticky; left: 0; z-index: 10; min-width: 200px; text-align: left; padding: 12px; }
-        .tracking-input { width: 50px; padding: 4px; border: 1px solid #e2e8f0; border-radius: 4px; text-align: center; }
-        .tracking-input:focus { outline: none; border-color: #667eea; }
-        .day-header { writing-mode: vertical-lr; text-orientation: mixed; height: 80px; }
-        .wound-dx-input { width: 150px; padding: 6px; border: 1px solid #e2e8f0; border-radius: 4px; margin-top: 5px; }
-        .tracking-patient-info { background: #f0f7ff; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
-        .tracking-patient-info h4 { color: #667eea; margin: 0 0 10px 0; }
-        .tracking-patient-info p { margin: 0; color: #4a5568; }
-
-        /* Report Styles */
-        .report-export { margin: 20px 0; text-align: right; }
-        .report-table { margin-top: 20px; }
-        .report-summary { background: #f0f7ff; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
-        .cost-highlight { background: #e6fffa; padding: 2px 6px; border-radius: 4px; font-weight: 600; color: #234e52; }
-        
-        /* Search and filter enhancements */
-        .sticky-search { position: sticky; top: 125px; z-index: 100; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); padding: 15px 0; margin-bottom: 20px; border-bottom: 1px solid #e2e8f0; }
-        .search-input { width: 100%; padding: 10px 15px; border: 2px solid #e2e8f0; border-radius: 25px; font-size: 16px; background: white; }
-        .search-input:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }
-        
-        /* Batch upload styles */
-        .upload-area { border: 2px dashed #e2e8f0; border-radius: 8px; padding: 40px; text-align: center; margin: 20px 0; transition: all 0.3s; }
-        .upload-area:hover { border-color: #667eea; background: #f8fafc; }
-        .upload-area.dragover { border-color: #667eea; background: #f0f7ff; }
-        
-        /* Enhanced table styles */
-        .editable-cell { cursor: pointer; position: relative; }
-        .editable-cell:hover { background: #f1f5f9; }
-        .inline-edit { width: 100%; padding: 4px 8px; border: 1px solid #667eea; border-radius: 4px; background: white; }
-        
-        /* Number formatting */
-        .stat-number { font-feature-settings: 'tnum'; }
-        
-        /* Admin-specific tracking view */
-        .admin-tracking-view { display: none; }
-        .user-tracking-view { display: block; }
-        .admin-tracking-view.show-admin { display: block; }
-        .user-tracking-view.hide-user { display: none; }
     </style>
 </head>
 <body>
@@ -271,287 +212,10 @@
                 <div class="card">
                     <div class="patients-header">
                         <h3>Patient List</h3>
-                        <div style="display: flex; gap: 10px;">
-                            <button class="btn btn-secondary btn-small" onclick="downloadPatientTemplate()">
-                                📥 Download Template
-                            </button>
-                            <button class="btn btn-secondary btn-small" onclick="openBatchUploadModal()">
-                                📤 Batch Upload
-                            </button>
-                            <button class="btn btn-success btn-small" onclick="openAddPatientModal()">
-                                + Add Patient
-                            </button>
-                        </div>
+                        <button class="btn btn-success btn-small" onclick="openAddPatientModal()">+ Add Patient</button>
                     </div>
                     <div id="patientsContent" class="loading">Loading patients...</div>
                 </div>
-            </div>
-
-            <div id="facilitiesSection" class="section">
-                <h2>Facility Management</h2>
-                <div class="card">
-                    <h3>Healthcare Facilities</h3>
-                    <div id="facilitiesContent" class="loading">Loading facilities...</div>
-                </div>
-            </div>
-
-            <div id="suppliesSection" class="section">
-                <h2>Supply Management</h2>
-                <div class="sticky-search">
-                    <div class="filter-container">
-                        <div class="filter-group">
-                            <label>Search Supplies</label>
-                            <input type="text" id="supplySearch" placeholder="Search by AR Code or description..." onkeyup="searchSupplies()">
-                        </div>
-                    </div>
-                </div>
-                <div class="card">
-                    <div class="patients-header">
-                        <h3>Medical Supplies</h3>
-                        <button class="btn btn-success btn-small admin-only" onclick="openAddSupplyModal()">
-                            + Add Supply
-                        </button>
-                    </div>
-                    <div id="suppliesContent" class="loading">Loading supplies...</div>
-                </div>
-            </div>
-
-            <div id="trackingSection" class="section">
-                <h2>Supply Tracking</h2>
-                <div class="filter-container">
-                    <div class="filter-group">
-                        <label>Select Patient</label>
-                        <select id="trackingPatientSelect" onchange="loadTrackingGrid()">
-                            <option value="">Choose a patient</option>
-                        </select>
-                    </div>
-                    <div class="filter-group">
-                        <label>Facility</label>
-                        <select id="trackingFacilityFilter" onchange="loadTrackingPatients()">
-                            <option value="">All Facilities</option>
-                        </select>
-                    </div>
-                    <div class="filter-group">
-                        <label>Month</label>
-                        <select id="trackingMonthFilter" onchange="loadTrackingPatients()">
-                            <option value="">All Months</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="card">
-                    <div class="patients-header">
-                        <h3>Patient Supply Usage</h3>
-                    </div>
-                    <div id="trackingContent">
-                        <div class="no-data">Select a patient to begin supply tracking</div>
-                    </div>
-                </div>
-            </div>
-
-            <div id="reportsSection" class="section">
-                <h2>Reports & Analytics</h2>
-                <div class="stats-grid" id="reportsStatsGrid">
-                    <div class="stat-card">
-                        <div class="stat-number" id="totalCostThisMonth">$0</div>
-                        <div class="stat-label">Total Cost This Month</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number" id="mostUsedSupply">-</div>
-                        <div class="stat-label">Most Used Supply</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number" id="activePatients">0</div>
-                        <div class="stat-label">Active Patients</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number" id="avgCostPerPatient">$0</div>
-                        <div class="stat-label">Avg Cost Per Patient</div>
-                    </div>
-                </div>
-                
-                <div class="card">
-                    <h3>Generate Reports</h3>
-                    <div class="filter-container">
-                        <div class="filter-group">
-                            <label>Report Type</label>
-                            <select id="reportType">
-                                <option value="patient-summary">Patient Summary</option>
-                                <option value="supply-usage">Supply Usage Report</option>
-                                <option value="cost-analysis">Cost Analysis</option>
-                                <option value="itemized-summary">Itemized Summary</option>
-                            </select>
-                        </div>
-                        <div class="filter-group">
-                            <label>Facility</label>
-                            <select id="reportFacilityFilter">
-                                <option value="">All Facilities</option>
-                            </select>
-                        </div>
-                        <div class="filter-group">
-                            <label>Month</label>
-                            <select id="reportMonthFilter">
-                                <option value="">All Months</option>
-                            </select>
-                        </div>
-                        <div class="filter-group">
-                            <label>&nbsp;</label>
-                            <button class="btn" onclick="generateReport()">Generate Report</button>
-                        </div>
-                    </div>
-                    <div id="reportsContent" class="loading" style="display: none;">Loading report...</div>
-                </div>
-            </div>
-
-            <div id="facilitiesSection" class="section">
-                <h2>Facility Management</h2>
-                <div class="filter-container">
-                    <div class="filter-group">
-                        <label>Search Facilities</label>
-                        <input type="text" id="facilitySearch" placeholder="Search by facility name..." onkeyup="searchFacilities()">
-                    </div>
-                </div>
-                <div class="card">
-                    <div class="patients-header">
-                        <h3>Healthcare Facilities</h3>
-                        <button class="btn btn-success btn-small admin-only" onclick="openAddFacilityModal()">
-                            + Add Facility
-                        </button>
-                    </div>
-                    <div id="facilitiesContent" class="loading">Loading facilities...</div>
-                </div>
-            </div>
-
-            <div id="usersSection" class="section">
-                <h2>User Management</h2>
-                <div class="filter-container">
-                    <div class="filter-group">
-                        <label>Search Users</label>
-                        <input type="text" id="userSearch" placeholder="Search by name or email..." onkeyup="searchUsers()">
-                    </div>
-                </div>
-                <div class="card">
-                    <h3>System Users</h3>
-                    <div id="usersContent" class="loading">Loading users...</div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Batch Upload Modal -->
-    <div id="batchUploadModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Batch Upload Patients</h2>
-                <span class="close" onclick="closeBatchUploadModal()">&times;</span>
-            </div>
-            <div class="upload-area" onclick="document.getElementById('batchFile').click()">
-                <input type="file" id="batchFile" accept=".csv,.xlsx" style="display: none;" onchange="handleBatchFile(this.files[0])">
-                <p><strong>Click to select CSV file</strong></p>
-                <p>Or drag and drop your file here</p>
-                <p><small>Template: Name, MRN, MM-YYYY, Facility</small></p>
-            </div>
-            <div id="batchUploadError" class="error-message"></div>
-            <div id="batchUploadPreview" style="display: none;"></div>
-            <div class="action-buttons">
-                <button class="btn btn-secondary" onclick="closeBatchUploadModal()">Cancel</button>
-                <button class="btn" onclick="processBatchUpload()" id="processBatchBtn" style="display: none;">Upload Patients</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Facility Modal -->
-    <div id="facilityModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 id="facilityModalTitle">Add New Facility</h2>
-                <span class="close" onclick="closeFacilityModal()">&times;</span>
-            </div>
-            <div class="form-group">
-                <label for="facilityName">Facility Name *</label>
-                <input type="text" id="facilityName" placeholder="Enter facility name" required>
-            </div>
-            <div id="facilityModalError" class="error-message"></div>
-            <div class="action-buttons">
-                <button class="btn btn-secondary" onclick="closeFacilityModal()">Cancel</button>
-                <button class="btn" onclick="saveFacility()" id="saveFacilityBtn">Save Facility</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- User Edit Modal -->
-    <div id="userEditModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Edit User</h2>
-                <span class="close" onclick="closeUserEditModal()">&times;</span>
-            </div>
-            <div class="form-group">
-                <label for="userEditName">Full Name *</label>
-                <input type="text" id="userEditName" required>
-            </div>
-            <div class="form-group">
-                <label for="userEditEmail">Email Address *</label>
-                <input type="email" id="userEditEmail" required>
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="userEditRole">Role</label>
-                    <select id="userEditRole">
-                        <option value="user">User</option>
-                        <option value="admin">Admin</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="userEditApproved">Status</label>
-                    <select id="userEditApproved">
-                        <option value="true">Approved</option>
-                        <option value="false">Pending</option>
-                    </select>
-                </div>
-            </div>
-            <div class="form-group">
-                <label for="userEditFacility">Facility</label>
-                <select id="userEditFacility">
-                    <option value="">Select a facility</option>
-                </select>
-            </div>
-            <div id="userEditModalError" class="error-message"></div>
-            <div class="action-buttons">
-                <button class="btn btn-secondary" onclick="closeUserEditModal()">Cancel</button>
-                <button class="btn" onclick="saveUserEdit()" id="saveUserEditBtn">Update User</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Supply Modal -->
-    <div id="supplyModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 id="supplyModalTitle">Add New Supply</h2>
-                <span class="close" onclick="closeSupplyModal()">&times;</span>
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="supplyCode">AR Code *</label>
-                    <input type="number" id="supplyCode" placeholder="Enter AR code" required>
-                </div>
-                <div class="form-group">
-                    <label for="supplyHcpcs">HCPCS Code</label>
-                    <input type="text" id="supplyHcpcs" placeholder="A6209" maxlength="10">
-                </div>
-            </div>
-            <div class="form-group">
-                <label for="supplyDescription">Description *</label>
-                <input type="text" id="supplyDescription" placeholder="Enter supply description" required>
-            </div>
-            <div class="form-group">
-                <label for="supplyCost">Unit Cost ($)</label>
-                <input type="number" id="supplyCost" placeholder="0.00" step="0.01" min="0">
-            </div>
-            <div id="supplyModalError" class="error-message"></div>
-            <div class="action-buttons">
-                <button class="btn btn-secondary" onclick="closeSupplyModal()">Cancel</button>
-                <button class="btn" onclick="saveSupply()" id="saveSupplyBtn">Save Supply</button>
             </div>
         </div>
     </div>
@@ -591,42 +255,12 @@
         </div>
     </div>
 
-    <!-- Confirmation Modal -->
-    <div id="confirmModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Confirm Action</h2>
-                <span class="close" onclick="closeConfirmModal()">&times;</span>
-            </div>
-            <p id="confirmMessage">Are you sure you want to proceed?</p>
-            <div class="action-buttons">
-                <button class="btn btn-secondary" onclick="closeConfirmModal()">Cancel</button>
-                <button class="btn btn-danger" onclick="confirmAction()" id="confirmBtn">Confirm</button>
-            </div>
-        </div>
-    </div>
-
     <div id="toast" class="toast"></div>
 
     <script>
         let currentUser = null;
-        let currentSection = 'dashboard';
         let patients = [];
         let facilities = [];
-        let supplies = [];
-        let users = [];
-        let trackingData = [];
-        let editingPatient = null;
-        let editingSupply = null;
-        let editingFacility = null;
-        let editingUser = null;
-        let confirmCallback = null;
-        let selectedTrackingPatient = null;
-        let batchUploadData = null;
-        let filteredPatients = [];
-        let filteredSupplies = [];
-        let filteredFacilities = [];
-        let filteredUsers = [];
 
         async function apiCall(endpoint, options = {}) {
             const token = localStorage.getItem('authToken');
@@ -653,12 +287,44 @@
             }
         }
 
-        // Authentication Functions
+        function formatNumber(num) {
+            return parseInt(num).toLocaleString();
+        }
+
+        function formatCurrency(num) {
+            return '$' + parseInt(num).toLocaleString();
+        }
+
+        function formatMonth(monthString) {
+            if (!monthString) return 'N/A';
+            const date = new Date(monthString + '-01');
+            return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+        }
+
+        function showError(elementId, message) {
+            const errorElement = document.getElementById(elementId);
+            if (errorElement) {
+                errorElement.textContent = message;
+                errorElement.style.display = 'block';
+            }
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            if (toast) {
+                toast.textContent = message;
+                toast.className = 'toast' + (type === 'error' ? ' error' : '');
+                toast.classList.add('show');
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                }, 4000);
+            }
+        }
+
         async function login() {
             const email = document.getElementById('loginEmail').value.trim();
             const password = document.getElementById('loginPassword').value.trim();
             const loginBtn = document.getElementById('loginBtn');
-            const loginError = document.getElementById('loginError');
             
             if (!email || !password) {
                 showError('loginError', 'Please enter both email and password');
@@ -667,7 +333,6 @@
             
             loginBtn.disabled = true;
             loginBtn.textContent = 'Signing In...';
-            loginError.style.display = 'none';
             
             try {
                 const response = await apiCall('/auth/login', {
@@ -692,7 +357,6 @@
             const password = document.getElementById('registerPassword').value.trim();
             const facilityId = document.getElementById('registerFacility').value;
             const registerBtn = document.getElementById('registerBtn');
-            const registerError = document.getElementById('registerError');
             
             if (!name || !email || !password || !facilityId) {
                 showError('registerError', 'Please fill in all fields');
@@ -701,7 +365,6 @@
             
             registerBtn.disabled = true;
             registerBtn.textContent = 'Registering...';
-            registerError.style.display = 'none';
             
             try {
                 await apiCall('/auth/register', {
@@ -740,10 +403,10 @@
 
         async function loadFacilitiesForRegistration() {
             try {
-                const facilities = await apiCall('/facilities/public');
+                const facilityList = await apiCall('/facilities/public');
                 const select = document.getElementById('registerFacility');
                 select.innerHTML = '<option value="">Select a facility</option>';
-                facilities.forEach(facility => {
+                facilityList.forEach(facility => {
                     const option = document.createElement('option');
                     option.value = facility.id;
                     option.textContent = facility.name;
@@ -766,15 +429,16 @@
             initializeApp();
         }
 
-        // Utility Functions
-        function formatNumber(num) {
-            return parseInt(num).toLocaleString();
+        async function initializeApp() {
+            try {
+                await loadFacilities();
+                await loadDashboard();
+                populateFilters();
+            } catch (error) {
+                console.error('Failed to initialize app:', error);
+            }
         }
 
-        function formatCurrency(num) {
-            return '
-
-        // Data Loading Functions
         async function loadFacilities() {
             try {
                 facilities = await apiCall('/facilities');
@@ -785,1081 +449,24 @@
             }
         }
 
-        async function loadSupplies() {
-            try {
-                supplies = await apiCall('/supplies');
-            } catch (error) {
-                console.error('Failed to load supplies:', error);
-                supplies = [];
-            }
-        }
-
-        async function loadSuppliesTable() {
-            try {
-                const suppliesData = await apiCall('/supplies');
-                supplies = suppliesData;
-                const content = document.getElementById('suppliesContent');
-                
-                if (suppliesData.length === 0) {
-                    content.innerHTML = '<div class="no-data">No supplies found</div>';
-                    return;
-                }
-                
-                const table = `
-                    <div class="table-container">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Code</th>
-                                    <th>Description</th>
-                                    <th>HCPCS</th>
-                                    <th>Unit Cost</th>
-                                    <th>Type</th>
-                                    <th>Created</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${suppliesData.map(supply => `
-                                    <tr>
-                                        <td>${supply.code}</td>
-                                        <td>${supply.description}</td>
-                                        <td>${supply.hcpcs || 'N/A'}</td>
-                                        <td>${parseFloat(supply.cost || 0).toFixed(2)}</td>
-                                        <td>${supply.is_custom ? 'Custom' : 'Standard'}</td>
-                                        <td>${new Date(supply.created_at).toLocaleDateString()}</td>
-                                        <td>
-                                            <div class="table-actions">
-                                                <button class="btn btn-small btn-secondary btn-icon admin-only" 
-                                                        onclick="editSupply(${supply.id})" title="Edit Supply">
-                                                    ✏️
-                                                </button>
-                                                <button class="btn btn-small btn-danger btn-icon admin-only" 
-                                                        onclick="deleteSupply(${supply.id})" title="Delete Supply">
-                                                    🗑️
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-                
-                content.innerHTML = table;
-                
-                // Show admin-only elements if user is admin
-                if (currentUser && currentUser.role === 'admin') {
-                    content.querySelectorAll('.admin-only').forEach(el => el.classList.add('show-admin'));
-                }
-                
-            } catch (error) {
-                console.error('Failed to load supplies:', error);
-                document.getElementById('suppliesContent').innerHTML = '<div class="no-data">Failed to load supplies</div>';
-            }
-        }
-
-        // Supply Modal Functions
-        function openAddSupplyModal() {
-            if (currentUser.role !== 'admin') {
-                showToast('Admin access required', 'error');
-                return;
-            }
-            editingSupply = null;
-            document.getElementById('supplyModalTitle').textContent = 'Add New Supply';
-            document.getElementById('supplyCode').value = '';
-            document.getElementById('supplyDescription').value = '';
-            document.getElementById('supplyHcpcs').value = '';
-            document.getElementById('supplyCost').value = '';
-            document.getElementById('supplyModalError').style.display = 'none';
-            document.getElementById('saveSupplyBtn').textContent = 'Save Supply';
-            document.getElementById('supplyModal').style.display = 'block';
-        }
-
-        function editSupply(supplyId) {
-            if (currentUser.role !== 'admin') {
-                showToast('Admin access required', 'error');
-                return;
-            }
-            
-            const supply = supplies.find(s => s.id === supplyId);
-            if (!supply) return;
-
-            editingSupply = supply;
-            document.getElementById('supplyModalTitle').textContent = 'Edit Supply';
-            document.getElementById('supplyCode').value = supply.code || '';
-            document.getElementById('supplyDescription').value = supply.description || '';
-            document.getElementById('supplyHcpcs').value = supply.hcpcs || '';
-            document.getElementById('supplyCost').value = supply.cost || '';
-            document.getElementById('supplyModalError').style.display = 'none';
-            document.getElementById('saveSupplyBtn').textContent = 'Update Supply';
-            document.getElementById('supplyModal').style.display = 'block';
-        }
-
-        function closeSupplyModal() {
-            document.getElementById('supplyModal').style.display = 'none';
-            editingSupply = null;
-        }
-
-        async function saveSupply() {
-            const code = document.getElementById('supplyCode').value.trim();
-            const description = document.getElementById('supplyDescription').value.trim();
-            const hcpcs = document.getElementById('supplyHcpcs').value.trim();
-            const cost = document.getElementById('supplyCost').value.trim();
-            const saveBtn = document.getElementById('saveSupplyBtn');
-            const modalError = document.getElementById('supplyModalError');
-            
-            if (!code || !description) {
-                showError('supplyModalError', 'Please fill in code and description');
-                return;
-            }
-            
-            saveBtn.disabled = true;
-            saveBtn.textContent = editingSupply ? 'Updating...' : 'Saving...';
-            modalError.style.display = 'none';
-            
-            try {
-                const supplyData = {
-                    code: parseInt(code),
-                    description,
-                    hcpcs: hcpcs || null,
-                    cost: parseFloat(cost) || 0
-                };
-
-                if (editingSupply) {
-                    await apiCall(`/supplies/${editingSupply.id}`, {
-                        method: 'PUT',
-                        body: supplyData
-                    });
-                    showToast('Supply updated successfully');
-                } else {
-                    await apiCall('/supplies', {
-                        method: 'POST',
-                        body: supplyData
-                    });
-                    showToast('Supply added successfully');
-                }
-                
-                closeSupplyModal();
-                await loadSuppliesTable();
-                await loadDashboard();
-                
-            } catch (error) {
-                showError('supplyModalError', error.message || 'Failed to save supply');
-            } finally {
-                saveBtn.disabled = false;
-                saveBtn.textContent = editingSupply ? 'Update Supply' : 'Save Supply';
-            }
-        }
-
-        function deleteSupply(supplyId) {
-            if (currentUser.role !== 'admin') {
-                showToast('Admin access required', 'error');
-                return;
-            }
-            
-            const supply = supplies.find(s => s.id === supplyId);
-            if (!supply) return;
-
-            showConfirmDialog(
-                `Delete Supply "${supply.description}"?`,
-                'This action cannot be undone. Any tracking data using this supply will also be affected.',
-                async () => {
-                    try {
-                        await apiCall(`/supplies/${supplyId}`, { method: 'DELETE' });
-                        showToast('Supply deleted successfully');
-                        await loadSuppliesTable();
-                        await loadDashboard();
-                    } catch (error) {
-                        showToast(error.message || 'Failed to delete supply', 'error');
-                    }
-                }
-            );
-        }
-
-        // Tracking Functions
-        async function loadTrackingPatients() {
-            try {
-                const trackingSelect = document.getElementById('trackingPatientSelect');
-                trackingSelect.innerHTML = '<option value="">Choose a patient</option>';
-                
-                patients.forEach(patient => {
-                    const option = document.createElement('option');
-                    option.value = patient.id;
-                    option.textContent = `${patient.name} - ${formatMonth(patient.month)} (${patient.facility_name})`;
-                    trackingSelect.appendChild(option);
-                });
-            } catch (error) {
-                console.error('Failed to load tracking patients:', error);
-            }
-        }
-
-        async function loadTrackingGrid() {
-            const patientId = document.getElementById('trackingPatientSelect').value;
-            const content = document.getElementById('trackingContent');
-            
-            if (!patientId) {
-                content.innerHTML = '<div class="no-data">Select a patient to begin supply tracking</div>';
-                return;
-            }
-
-            content.innerHTML = '<div class="loading">Loading tracking grid...</div>';
-            
-            try {
-                const patient = patients.find(p => p.id == patientId);
-                selectedTrackingPatient = patient;
-                
-                // Load existing tracking data
-                trackingData = await apiCall(`/tracking/${patientId}`);
-                
-                // Create tracking grid
-                createTrackingGrid(patient);
-                
-            } catch (error) {
-                console.error('Failed to load tracking grid:', error);
-                content.innerHTML = '<div class="no-data">Failed to load tracking data</div>';
-            }
-        }
-
-        function createTrackingGrid(patient) {
-            const content = document.getElementById('trackingContent');
-            
-            // Get days in month
-            const year = parseInt(patient.month.split('-')[0]);
-            const month = parseInt(patient.month.split('-')[1]);
-            const daysInMonth = new Date(year, month, 0).getDate();
-            
-            // Patient info header
-            const patientInfo = `
-                <div class="tracking-patient-info">
-                    <h4>${patient.name}</h4>
-                    <p><strong>Month:</strong> ${formatMonth(patient.month)} | <strong>Facility:</strong> ${patient.facility_name} | <strong>MRN:</strong> ${patient.mrn || 'N/A'}</p>
-                </div>
-            `;
-            
-            // Create tracking table
-            let tableHTML = `
-                <div class="tracking-grid">
-                    <table class="tracking-table">
-                        <thead>
-                            <tr>
-                                <th class="supply-header">Supply Item</th>
-            `;
-            
-            // Add day headers
-            for (let day = 1; day <= daysInMonth; day++) {
-                tableHTML += `<th class="supply-header day-header">${day}</th>`;
-            }
-            tableHTML += '<th class="supply-header">Total</th><th class="supply-header">Wound Dx</th></tr></thead><tbody>';
-            
-            // Add supply rows
-            supplies.forEach(supply => {
-                tableHTML += `<tr><td class="supply-name">${supply.description}<br><small>Code: ${supply.code} ${supply.hcpcs ? '| ' + supply.hcpcs : ''}</small></td>`;
-                
-                let rowTotal = 0;
-                let woundDx = '';
-                
-                // Add input cells for each day
-                for (let day = 1; day <= daysInMonth; day++) {
-                    const existingData = trackingData.find(t => t.supply_id == supply.id && t.day_of_month == day);
-                    const quantity = existingData ? existingData.quantity : 0;
-                    rowTotal += quantity;
-                    if (existingData && existingData.wound_dx) {
-                        woundDx = existingData.wound_dx;
-                    }
-                    
-                    tableHTML += `
-                        <td>
-                            <input type="number" 
-                                   class="tracking-input" 
-                                   value="${quantity}" 
-                                   min="0" 
-                                   onchange="updateTracking(${patient.id}, ${supply.id}, ${day}, this.value)"
-                                   data-patient="${patient.id}" 
-                                   data-supply="${supply.id}" 
-                                   data-day="${day}">
-                        </td>
-                    `;
-                }
-                
-                // Add total column
-                tableHTML += `<td><strong>${rowTotal}</strong></td>`;
-                
-                // Add wound diagnosis column
-                tableHTML += `
-                    <td>
-                        <input type="text" 
-                               class="wound-dx-input" 
-                               value="${woundDx}" 
-                               placeholder="Wound diagnosis"
-                               onchange="updateWoundDx(${patient.id}, ${supply.id}, this.value)">
-                    </td>
-                `;
-                
-                tableHTML += '</tr>';
-            });
-            
-            tableHTML += '</tbody></table></div>';
-            
-            content.innerHTML = patientInfo + tableHTML;
-        }
-
-        async function updateTracking(patientId, supplyId, dayOfMonth, quantity) {
-            try {
-                await apiCall('/tracking', {
-                    method: 'POST',
-                    body: {
-                        patientId: parseInt(patientId),
-                        supplyId: parseInt(supplyId),
-                        dayOfMonth: parseInt(dayOfMonth),
-                        quantity: parseInt(quantity) || 0
-                    }
-                });
-                
-                // Update row total
-                updateRowTotal(supplyId);
-                
-            } catch (error) {
-                console.error('Failed to update tracking:', error);
-                showToast('Failed to save tracking data', 'error');
-            }
-        }
-
-        async function updateWoundDx(patientId, supplyId, woundDx) {
-            try {
-                await apiCall('/tracking', {
-                    method: 'POST',
-                    body: {
-                        patientId: parseInt(patientId),
-                        supplyId: parseInt(supplyId),
-                        dayOfMonth: 1, // Use day 1 for wound diagnosis storage
-                        quantity: 0,
-                        woundDx: woundDx
-                    }
-                });
-            } catch (error) {
-                console.error('Failed to update wound diagnosis:', error);
-                showToast('Failed to save wound diagnosis', 'error');
-            }
-        }
-
         function populatePatientFacilitySelects() {
             const selects = ['patientFacility'];
             selects.forEach(selectId => {
                 const select = document.getElementById(selectId);
-                select.innerHTML = '<option value="">Select a facility</option>';
-                facilities.forEach(facility => {
-                    const option = document.createElement('option');
-                    option.value = facility.id;
-                    option.textContent = facility.name;
-                    select.appendChild(option);
-                });
-            });
-        }
-
-        function populateReportFilters() {
-            // Populate facility filter
-            const facilitySelect = document.getElementById('reportFacilityFilter');
-            facilitySelect.innerHTML = '<option value="">All Facilities</option>';
-            facilities.forEach(facility => {
-                const option = document.createElement('option');
-                option.value = facility.id;
-                option.textContent = facility.name;
-                facilitySelect.appendChild(option);
-            });
-            
-            // Populate month filter
-            const monthSelect = document.getElementById('reportMonthFilter');
-            monthSelect.innerHTML = '<option value="">All Months</option>';
-            const uniqueMonths = [...new Set(patients.map(p => p.month))].sort().reverse();
-            uniqueMonths.forEach(month => {
-                const option = document.createElement('option');
-                option.value = month;
-                option.textContent = formatMonth(month);
-                monthSelect.appendChild(option);
-            });
-        }
-
-        // Reporting Functions
-        async function generateReport() {
-            const reportType = document.getElementById('reportType').value;
-            const facilityId = document.getElementById('reportFacilityFilter').value;
-            const month = document.getElementById('reportMonthFilter').value;
-            const content = document.getElementById('reportsContent');
-            
-            content.style.display = 'block';
-            content.innerHTML = '<div class="loading">Generating report...</div>';
-            
-            try {
-                let reportData;
-                let reportHTML = '';
-                
-                switch (reportType) {
-                    case 'patient-summary':
-                        reportData = await apiCall(`/dashboard/summary?facilityId=${facilityId}&month=${month}`);
-                        reportHTML = generatePatientSummaryReport(reportData, facilityId, month);
-                        break;
-                    case 'supply-usage':
-                        reportData = await apiCall(`/reports/itemized-summary?facilityId=${facilityId}&month=${month}`);
-                        reportHTML = generateSupplyUsageReport(reportData, facilityId, month);
-                        break;
-                    case 'cost-analysis':
-                        reportData = await apiCall(`/reports/itemized-summary?facilityId=${facilityId}&month=${month}`);
-                        reportHTML = generateCostAnalysisReport(reportData, facilityId, month);
-                        break;
-                    case 'itemized-summary':
-                        reportData = await apiCall(`/reports/itemized-summary?facilityId=${facilityId}&month=${month}`);
-                        reportHTML = generateItemizedSummaryReport(reportData, facilityId, month);
-                        break;
-                }
-                
-                content.innerHTML = reportHTML;
-                await loadReportsStats();
-                
-            } catch (error) {
-                console.error('Failed to generate report:', error);
-                content.innerHTML = '<div class="no-data">Failed to generate report</div>';
-            }
-        }
-
-        function generatePatientSummaryReport(data, facilityId, month) {
-            const totalPatients = data.length;
-            const totalCost = data.reduce((sum, item) => sum + parseFloat(item.total_cost || 0), 0);
-            const avgCost = totalPatients > 0 ? totalCost / totalPatients : 0;
-            
-            const facilityName = facilityId ? facilities.find(f => f.id == facilityId)?.name : 'All Facilities';
-            const monthName = month ? formatMonth(month) : 'All Months';
-            
-            let html = `
-                <div class="report-export">
-                    <button class="btn btn-secondary btn-small" onclick="exportReport('patient-summary')">Export CSV</button>
-                </div>
-                <div class="report-summary">
-                    <h4>Patient Summary Report</h4>
-                    <p><strong>Facility:</strong> ${facilityName} | <strong>Period:</strong> ${monthName}</p>
-                    <p><strong>Total Patients:</strong> ${totalPatients} | <strong>Total Cost:</strong> <span class="cost-highlight">${totalCost.toFixed(2)}</span> | <strong>Average Cost per Patient:</strong> <span class="cost-highlight">${avgCost.toFixed(2)}</span></p>
-                </div>
-            `;
-            
-            if (data.length === 0) {
-                html += '<div class="no-data">No patient data found for the selected criteria</div>';
-                return html;
-            }
-            
-            html += `
-                <div class="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Patient Name</th>
-                                <th>MRN</th>
-                                <th>Month</th>
-                                <th>Facility</th>
-                                <th>Total Units</th>
-                                <th>Total Cost</th>
-                                <th>Supply Codes</th>
-                                <th>Wound Diagnoses</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${data.map(patient => `
-                                <tr>
-                                    <td>${patient.name}</td>
-                                    <td>${patient.mrn || 'N/A'}</td>
-                                    <td>${formatMonth(patient.month)}</td>
-                                    <td>${patient.facility_name}</td>
-                                    <td>${patient.total_units}</td>
-                                    <td class="cost-highlight">${parseFloat(patient.total_cost || 0).toFixed(2)}</td>
-                                    <td>${patient.supply_codes || 'N/A'}</td>
-                                    <td>${patient.wound_diagnoses || 'N/A'}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            `;
-            
-            return html;
-        }
-
-        function generateSupplyUsageReport(data, facilityId, month) {
-            const facilityName = facilityId ? facilities.find(f => f.id == facilityId)?.name : 'All Facilities';
-            const monthName = month ? formatMonth(month) : 'All Months';
-            
-            // Group by supply code
-            const supplyUsage = {};
-            data.forEach(item => {
-                const key = item.ar_code || 'Unknown';
-                if (!supplyUsage[key]) {
-                    supplyUsage[key] = {
-                        code: key,
-                        description: item.item_description,
-                        hcpcs: item.hcpcs,
-                        totalUnits: 0,
-                        totalCost: 0,
-                        patientCount: new Set()
-                    };
-                }
-                supplyUsage[key].totalUnits += parseInt(item.total_units || 0);
-                supplyUsage[key].totalCost += parseFloat(item.total_cost || 0);
-                supplyUsage[key].patientCount.add(item.patient_name);
-            });
-            
-            const sortedSupplies = Object.values(supplyUsage).sort((a, b) => b.totalUnits - a.totalUnits);
-            
-            let html = `
-                <div class="report-export">
-                    <button class="btn btn-secondary btn-small" onclick="exportReport('supply-usage')">Export CSV</button>
-                </div>
-                <div class="report-summary">
-                    <h4>Supply Usage Report</h4>
-                    <p><strong>Facility:</strong> ${facilityName} | <strong>Period:</strong> ${monthName}</p>
-                    <p><strong>Unique Supplies:</strong> ${sortedSupplies.length} | <strong>Total Usage:</strong> ${sortedSupplies.reduce((sum, s) => sum + s.totalUnits, 0)} units</p>
-                </div>
-            `;
-            
-            if (sortedSupplies.length === 0) {
-                html += '<div class="no-data">No supply usage data found for the selected criteria</div>';
-                return html;
-            }
-            
-            html += `
-                <div class="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Supply Code</th>
-                                <th>Description</th>
-                                <th>HCPCS</th>
-                                <th>Total Units Used</th>
-                                <th>Patient Count</th>
-                                <th>Total Cost</th>
-                                <th>Avg Cost per Unit</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${sortedSupplies.map(supply => `
-                                <tr>
-                                    <td>${supply.code}</td>
-                                    <td>${supply.description}</td>
-                                    <td>${supply.hcpcs || 'N/A'}</td>
-                                    <td><strong>${supply.totalUnits}</strong></td>
-                                    <td>${supply.patientCount.size}</td>
-                                    <td class="cost-highlight">${supply.totalCost.toFixed(2)}</td>
-                                    <td>${supply.totalUnits > 0 ? (supply.totalCost / supply.totalUnits).toFixed(2) : '0.00'}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            `;
-            
-            return html;
-        }
-
-        function generateCostAnalysisReport(data, facilityId, month) {
-            const facilityName = facilityId ? facilities.find(f => f.id == facilityId)?.name : 'All Facilities';
-            const monthName = month ? formatMonth(month) : 'All Months';
-            
-            const totalCost = data.reduce((sum, item) => sum + parseFloat(item.total_cost || 0), 0);
-            const patientCosts = {};
-            
-            data.forEach(item => {
-                const key = item.patient_name;
-                if (!patientCosts[key]) {
-                    patientCosts[key] = {
-                        name: key,
-                        facility: item.facility_name,
-                        totalCost: 0,
-                        itemCount: 0
-                    };
-                }
-                patientCosts[key].totalCost += parseFloat(item.total_cost || 0);
-                patientCosts[key].itemCount += 1;
-            });
-            
-            const sortedPatients = Object.values(patientCosts).sort((a, b) => b.totalCost - a.totalCost);
-            const avgCostPerPatient = sortedPatients.length > 0 ? totalCost / sortedPatients.length : 0;
-            
-            let html = `
-                <div class="report-export">
-                    <button class="btn btn-secondary btn-small" onclick="exportReport('cost-analysis')">Export CSV</button>
-                </div>
-                <div class="report-summary">
-                    <h4>Cost Analysis Report</h4>
-                    <p><strong>Facility:</strong> ${facilityName} | <strong>Period:</strong> ${monthName}</p>
-                    <p><strong>Total Cost:</strong> <span class="cost-highlight">${totalCost.toFixed(2)}</span> | <strong>Average per Patient:</strong> <span class="cost-highlight">${avgCostPerPatient.toFixed(2)}</span></p>
-                </div>
-            `;
-            
-            if (sortedPatients.length === 0) {
-                html += '<div class="no-data">No cost data found for the selected criteria</div>';
-                return html;
-            }
-            
-            html += `
-                <div class="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Patient Name</th>
-                                <th>Facility</th>
-                                <th>Total Cost</th>
-                                <th>Supply Items</th>
-                                <th>% of Total</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${sortedPatients.map(patient => `
-                                <tr>
-                                    <td>${patient.name}</td>
-                                    <td>${patient.facility}</td>
-                                    <td class="cost-highlight">${patient.totalCost.toFixed(2)}</td>
-                                    <td>${patient.itemCount}</td>
-                                    <td>${totalCost > 0 ? ((patient.totalCost / totalCost) * 100).toFixed(1) : 0}%</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            `;
-            
-            return html;
-        }
-
-        function generateItemizedSummaryReport(data, facilityId, month) {
-            const facilityName = facilityId ? facilities.find(f => f.id == facilityId)?.name : 'All Facilities';
-            const monthName = month ? formatMonth(month) : 'All Months';
-            
-            const totalCost = data.reduce((sum, item) => sum + parseFloat(item.total_cost || 0), 0);
-            const totalUnits = data.reduce((sum, item) => sum + parseInt(item.total_units || 0), 0);
-            
-            let html = `
-                <div class="report-export">
-                    <button class="btn btn-secondary btn-small" onclick="exportReport('itemized-summary')">Export CSV</button>
-                </div>
-                <div class="report-summary">
-                    <h4>Itemized Summary Report</h4>
-                    <p><strong>Facility:</strong> ${facilityName} | <strong>Period:</strong> ${monthName}</p>
-                    <p><strong>Total Items:</strong> ${data.length} | <strong>Total Units:</strong> ${totalUnits} | <strong>Total Cost:</strong> <span class="cost-highlight">${totalCost.toFixed(2)}</span></p>
-                </div>
-            `;
-            
-            if (data.length === 0) {
-                html += '<div class="no-data">No itemized data found for the selected criteria</div>';
-                return html;
-            }
-            
-            html += `
-                <div class="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Patient</th>
-                                <th>MRN</th>
-                                <th>Facility</th>
-                                <th>Supply Code</th>
-                                <th>Item Description</th>
-                                <th>HCPCS</th>
-                                <th>Units</th>
-                                <th>Unit Cost</th>
-                                <th>Total Cost</th>
-                                <th>Wound Dx</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${data.map(item => `
-                                <tr>
-                                    <td>${item.patient_name}</td>
-                                    <td>${item.mrn || 'N/A'}</td>
-                                    <td>${item.facility_name}</td>
-                                    <td>${item.ar_code}</td>
-                                    <td>${item.item_description}</td>
-                                    <td>${item.hcpcs || 'N/A'}</td>
-                                    <td>${item.total_units}</td>
-                                    <td>${parseFloat(item.unit_cost || 0).toFixed(2)}</td>
-                                    <td class="cost-highlight">${parseFloat(item.total_cost || 0).toFixed(2)}</td>
-                                    <td>${item.wound_dx || 'N/A'}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            `;
-            
-            return html;
-        }
-
-        async function loadReportsStats() {
-            try {
-                // Calculate stats from current data
-                const totalCost = patients.reduce((sum, patient) => sum + parseFloat(patient.total_cost || 0), 0);
-                const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
-                const thisMonthPatients = patients.filter(p => p.month === currentMonth);
-                const thisMonthCost = thisMonthPatients.reduce((sum, p) => sum + parseFloat(p.total_cost || 0), 0);
-                
-                document.getElementById('totalCostThisMonth').textContent = `${thisMonthCost.toFixed(2)}`;
-                document.getElementById('activePatients').textContent = thisMonthPatients.length;
-                document.getElementById('avgCostPerPatient').textContent = patients.length > 0 ? `${(totalCost / patients.length).toFixed(2)}` : '$0';
-                document.getElementById('mostUsedSupply').textContent = supplies.length > 0 ? supplies[0].description.substring(0, 20) + '...' : 'N/A';
-                
-            } catch (error) {
-                console.error('Failed to load reports stats:', error);
-            }
-        }
-
-        function exportReport(reportType) {
-            // Simple CSV export - in a real app you'd want more sophisticated export
-            showToast('Export functionality would be implemented here');
-        }
-
-        async function loadPatients() {
-            try {
-                patients = await apiCall('/patients');
-                displayPatients();
-            } catch (error) {
-                console.error('Failed to load patients:', error);
-                document.getElementById('patientsContent').innerHTML = '<div class="no-data">Failed to load patients</div>';
-            }
-        }
-
-        function displayPatients() {
-            const facilityFilter = document.getElementById('patientFacilityFilter').value;
-            const monthFilter = document.getElementById('patientMonthFilter').value;
-            
-            let filteredPatients = [...patients];
-            
-            if (facilityFilter) {
-                filteredPatients = filteredPatients.filter(p => p.facility_id == facilityFilter);
-            }
-            if (monthFilter) {
-                filteredPatients = filteredPatients.filter(p => p.month === monthFilter);
-            }
-            
-            const content = document.getElementById('patientsContent');
-            
-            if (filteredPatients.length === 0) {
-                content.innerHTML = '<div class="no-data">No patients found</div>';
-                return;
-            }
-            
-            const table = `
-                <div class="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Name</th>
-                                <th>MRN</th>
-                                <th>Month</th>
-                                <th>Facility</th>
-                                <th>Created</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${filteredPatients.map(patient => `
-                                <tr>
-                                    <td>${patient.name}</td>
-                                    <td>${patient.mrn || 'N/A'}</td>
-                                    <td>${formatMonth(patient.month)}</td>
-                                    <td>${patient.facility_name || 'N/A'}</td>
-                                    <td>${new Date(patient.created_at).toLocaleDateString()}</td>
-                                    <td>
-                                        <div class="table-actions">
-                                            <button class="btn btn-small btn-secondary btn-icon" 
-                                                    onclick="editPatient(${patient.id})" title="Edit Patient">
-                                                ✏️
-                                            </button>
-                                            <button class="btn btn-small btn-danger btn-icon" 
-                                                    onclick="deletePatient(${patient.id})" title="Delete Patient">
-                                                🗑️
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            `;
-            
-            content.innerHTML = table;
-        }
-
-        function formatMonth(monthString) {
-            if (!monthString) return 'N/A';
-            const date = new Date(monthString + '-01');
-            return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
-        }
-
-        async function loadDashboard() {
-            try {
-                const facilityFilter = document.getElementById('dashboardFacilityFilter')?.value || '';
-                const monthFilter = document.getElementById('dashboardMonthFilter')?.value || '';
-                
-                // Build query parameters
-                let queryParams = '';
-                if (facilityFilter || monthFilter) {
-                    const params = new URLSearchParams();
-                    if (facilityFilter) params.append('facilityId', facilityFilter);
-                    if (monthFilter) params.append('month', monthFilter);
-                    queryParams = '?' + params.toString();
-                }
-
-                const [patientsData, facilitiesData, suppliesData, usersData, dashboardSummary] = await Promise.all([
-                    apiCall(`/patients${queryParams}`),
-                    apiCall('/facilities'),
-                    apiCall('/supplies'),
-                    currentUser.role === 'admin' ? apiCall('/users') : Promise.resolve([]),
-                    currentUser.role === 'admin' ? apiCall(`/dashboard/summary${queryParams}`) : Promise.resolve([])
-                ]);
-                
-                // Update basic stats
-                document.getElementById('totalPatients').textContent = formatNumber(patientsData.length);
-                document.getElementById('totalFacilities').textContent = formatNumber(facilitiesData.length);
-                document.getElementById('totalSupplies').textContent = formatNumber(suppliesData.length);
-                document.getElementById('totalUsers').textContent = formatNumber(usersData.length);
-                
-                // Update admin-only total supply cost
-                if (currentUser.role === 'admin') {
-                    const totalCost = dashboardSummary.reduce((sum, item) => sum + parseFloat(item.total_cost || 0), 0);
-                    document.getElementById('totalSupplyCost').textContent = formatCurrency(totalCost);
-                }
-                
-                patients = patientsData;
-                
-            } catch (error) {
-                console.error('Failed to load dashboard:', error);
-            }
-        }
-
-        // Search Functions
-        function searchPatients() {
-            const searchTerm = document.getElementById('patientSearch').value.toLowerCase();
-            filteredPatients = patients.filter(patient => 
-                patient.name.toLowerCase().includes(searchTerm)
-            );
-            displayPatients();
-        }
-
-        function searchSupplies() {
-            const searchTerm = document.getElementById('supplySearch').value.toLowerCase();
-            filteredSupplies = supplies.filter(supply => 
-                supply.code.toString().includes(searchTerm) ||
-                supply.description.toLowerCase().includes(searchTerm)
-            );
-            displaySupplies();
-        }
-
-        function searchFacilities() {
-            const searchTerm = document.getElementById('facilitySearch').value.toLowerCase();
-            filteredFacilities = facilities.filter(facility => 
-                facility.name.toLowerCase().includes(searchTerm)
-            );
-            displayFacilities();
-        }
-
-        function searchUsers() {
-            const searchTerm = document.getElementById('userSearch').value.toLowerCase();
-            filteredUsers = users.filter(user => 
-                user.name.toLowerCase().includes(searchTerm) ||
-                user.email.toLowerCase().includes(searchTerm)
-            );
-            displayUsers();
-        }
-
-        // Batch Upload Functions
-        function downloadPatientTemplate() {
-            const csvContent = "Name,MRN,MM-YYYY,Facility\nJohn Doe,12345,2024-08,Main Hospital\nJane Smith,67890,2024-08,Clinic North";
-            const blob = new Blob([csvContent], { type: 'text/csv' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'patient_template.csv';
-            a.click();
-            window.URL.revokeObjectURL(url);
-        }
-
-        function openBatchUploadModal() {
-            document.getElementById('batchUploadModal').style.display = 'block';
-        }
-
-        function closeBatchUploadModal() {
-            document.getElementById('batchUploadModal').style.display = 'none';
-            batchUploadData = null;
-            document.getElementById('batchUploadPreview').style.display = 'none';
-            document.getElementById('processBatchBtn').style.display = 'none';
-        }
-
-        async function handleBatchFile(file) {
-            if (!file) return;
-            
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const csv = e.target.result;
-                    const lines = csv.split('\n');
-                    const headers = lines[0].split(',');
-                    
-                    if (!headers.includes('Name') || !headers.includes('MM-YYYY') || !headers.includes('Facility')) {
-                        showError('batchUploadError', 'Invalid file format. Please use the provided template.');
-                        return;
-                    }
-                    
-                    batchUploadData = [];
-                    for (let i = 1; i < lines.length; i++) {
-                        if (lines[i].trim()) {
-                            const data = lines[i].split(',');
-                            batchUploadData.push({
-                                name: data[0]?.trim(),
-                                mrn: data[1]?.trim(),
-                                month: data[2]?.trim(),
-                                facility: data[3]?.trim()
-                            });
-                        }
-                    }
-                    
-                    document.getElementById('batchUploadPreview').innerHTML = 
-                        `<p><strong>Preview:</strong> ${batchUploadData.length} patients ready to upload</p>`;
-                    document.getElementById('batchUploadPreview').style.display = 'block';
-                    document.getElementById('processBatchBtn').style.display = 'inline-block';
-                    
-                } catch (error) {
-                    showError('batchUploadError', 'Error reading file: ' + error.message);
-                }
-            };
-            reader.readAsText(file);
-        }
-
-        async function processBatchUpload() {
-            if (!batchUploadData || batchUploadData.length === 0) return;
-            
-            const btn = document.getElementById('processBatchBtn');
-            btn.disabled = true;
-            btn.textContent = 'Processing...';
-            
-            let successCount = 0;
-            let errorCount = 0;
-            
-            for (const patientData of batchUploadData) {
-                try {
-                    const facilityId = facilities.find(f => f.name === patientData.facility)?.id;
-                    if (!facilityId) {
-                        errorCount++;
-                        continue;
-                    }
-                    
-                    await apiCall('/patients', {
-                        method: 'POST',
-                        body: {
-                            name: patientData.name,
-                            mrn: patientData.mrn || null,
-                            month: patientData.month,
-                            facilityId: parseInt(facilityId)
-                        }
+                if (select) {
+                    select.innerHTML = '<option value="">Select a facility</option>';
+                    facilities.forEach(facility => {
+                        const option = document.createElement('option');
+                        option.value = facility.id;
+                        option.textContent = facility.name;
+                        select.appendChild(option);
                     });
-                    successCount++;
-                } catch (error) {
-                    errorCount++;
                 }
-            }
-            
-            showToast(`Batch upload complete: ${successCount} successful, ${errorCount} failed`);
-            closeBatchUploadModal();
-            await loadPatients();
-            await loadDashboard();
-        }
-
-        async function loadFacilitiesTable() {
-            try {
-                const facilitiesData = await apiCall('/facilities');
-                const content = document.getElementById('facilitiesContent');
-                
-                if (facilitiesData.length === 0) {
-                    content.innerHTML = '<div class="no-data">No facilities found</div>';
-                    return;
-                }
-                
-                const table = `
-                    <div class="table-container">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Name</th>
-                                    <th>Created</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${facilitiesData.map(facility => `
-                                    <tr>
-                                        <td>${facility.name}</td>
-                                        <td>${new Date(facility.created_at).toLocaleDateString()}</td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-                
-                content.innerHTML = table;
-            } catch (error) {
-                console.error('Failed to load facilities:', error);
-                document.getElementById('facilitiesContent').innerHTML = '<div class="no-data">Failed to load facilities</div>';
-            }
-        }
-
-        async function loadUsersTable() {
-            if (currentUser.role !== 'admin') return;
-            
-            try {
-                const users = await apiCall('/users');
-                const content = document.getElementById('usersContent');
-                
-                if (users.length === 0) {
-                    content.innerHTML = '<div class="no-data">No users found</div>';
-                    return;
-                }
-                
-                const table = `
-                    <div class="table-container">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Name</th>
-                                    <th>Email</th>
-                                    <th>Role</th>
-                                    <th>Facility</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${users.map(user => `
-                                    <tr>
-                                        <td>${user.name}</td>
-                                        <td>${user.email}</td>
-                                        <td>${user.role}</td>
-                                        <td>${user.facility_name || 'N/A'}</td>
-                                        <td style="color: ${user.is_approved ? '#38a169' : '#e53e3e'}">
-                                            ${user.is_approved ? 'Approved' : 'Pending'}
-                                        </td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-                
-                content.innerHTML = table;
-            } catch (error) {
-                console.error('Failed to load users:', error);
-                document.getElementById('usersContent').innerHTML = '<div class="no-data">Failed to load users</div>';
-            }
+            });
         }
 
         function populateFilters() {
-            // Populate all facility selectors
-            const facilitySelectors = ['patientFacilityFilter', 'dashboardFacilityFilter', 'trackingFacilityFilter', 'reportFacilityFilter'];
+            const facilitySelectors = ['patientFacilityFilter', 'dashboardFacilityFilter'];
             facilitySelectors.forEach(selectId => {
                 const select = document.getElementById(selectId);
                 if (select) {
@@ -1873,14 +480,22 @@
                 }
             });
             
-            // Populate all month selectors with date range
-            const dateOptions = generateDateOptions();
-            const monthSelectors = ['patientMonthFilter', 'dashboardMonthFilter', 'trackingMonthFilter', 'reportMonthFilter'];
+            const monthSelectors = ['patientMonthFilter', 'dashboardMonthFilter'];
             monthSelectors.forEach(selectId => {
                 const select = document.getElementById(selectId);
                 if (select) {
                     select.innerHTML = '<option value="">All Months</option>';
-                    dateOptions.forEach(option => {
+                    const options = [];
+                    const start = new Date(2024, 6);
+                    const end = new Date(2027, 7);
+                    
+                    for (let d = new Date(start); d <= end; d.setMonth(d.getMonth() + 1)) {
+                        const value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+                        const label = d.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+                        options.push({ value, label });
+                    }
+                    
+                    options.reverse().forEach(option => {
                         const optionElement = document.createElement('option');
                         optionElement.value = option.value;
                         optionElement.textContent = option.label;
@@ -1888,6 +503,47 @@
                     });
                 }
             });
+        }
+
+        async function loadDashboard() {
+            try {
+                const facilityFilter = document.getElementById('dashboardFacilityFilter')?.value || '';
+                const monthFilter = document.getElementById('dashboardMonthFilter')?.value || '';
+                
+                let queryParams = '';
+                if (facilityFilter || monthFilter) {
+                    const params = new URLSearchParams();
+                    if (facilityFilter) params.append('facilityId', facilityFilter);
+                    if (monthFilter) params.append('month', monthFilter);
+                    queryParams = '?' + params.toString();
+                }
+
+                const [patientsData, facilitiesData, suppliesData, usersData] = await Promise.all([
+                    apiCall('/patients' + queryParams),
+                    apiCall('/facilities'),
+                    apiCall('/supplies'),
+                    currentUser.role === 'admin' ? apiCall('/users') : Promise.resolve([])
+                ]);
+                
+                document.getElementById('totalPatients').textContent = formatNumber(patientsData.length);
+                document.getElementById('totalFacilities').textContent = formatNumber(facilitiesData.length);
+                document.getElementById('totalSupplies').textContent = formatNumber(suppliesData.length);
+                document.getElementById('totalUsers').textContent = formatNumber(usersData.length);
+                
+                if (currentUser.role === 'admin') {
+                    try {
+                        const dashboardSummary = await apiCall('/dashboard/summary' + queryParams);
+                        const totalCost = dashboardSummary.reduce((sum, item) => sum + parseFloat(item.total_cost || 0), 0);
+                        document.getElementById('totalSupplyCost').textContent = formatCurrency(totalCost);
+                    } catch (error) {
+                        console.error('Failed to load dashboard summary:', error);
+                    }
+                }
+                
+                patients = patientsData;
+            } catch (error) {
+                console.error('Failed to load dashboard:', error);
+            }
         }
 
         async function loadPatients() {
@@ -1903,8 +559,7 @@
                     queryParams = '?' + params.toString();
                 }
                 
-                patients = await apiCall(`/patients${queryParams}`);
-                filteredPatients = [...patients];
+                patients = await apiCall('/patients' + queryParams);
                 displayPatients();
             } catch (error) {
                 console.error('Failed to load patients:', error);
@@ -1912,116 +567,67 @@
             }
         }
 
-        function displayPatients() {
+        function searchPatients() {
+            const searchTerm = document.getElementById('patientSearch').value.toLowerCase();
+            displayPatients(searchTerm);
+        }
+
+        function displayPatients(searchTerm = '') {
             const content = document.getElementById('patientsContent');
+            
+            let filteredPatients = patients;
+            if (searchTerm) {
+                filteredPatients = patients.filter(patient => 
+                    patient.name.toLowerCase().includes(searchTerm)
+                );
+            }
             
             if (filteredPatients.length === 0) {
                 content.innerHTML = '<div class="no-data">No patients found</div>';
                 return;
             }
             
-            const table = `
-                <div class="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Name</th>
-                                <th>MRN</th>
-                                <th>Month</th>
-                                <th>Facility</th>
-                                <th>Created</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${filteredPatients.map(patient => `
-                                <tr>
-                                    <td class="editable-cell" onclick="editInline(this, 'patient', ${patient.id}, 'name', ${JSON.stringify(patient.name)})">${patient.name}</td>
-                                    <td class="editable-cell" onclick="editInline(this, 'patient', ${patient.id}, 'mrn', ${JSON.stringify(patient.mrn || '')})">${patient.mrn || 'N/A'}</td>
-                                    <td>${formatMonth(patient.month)}</td>
-                                    <td>${patient.facility_name || 'N/A'}</td>
-                                    <td>${new Date(patient.created_at).toLocaleDateString()}</td>
-                                    <td>
-                                        <div class="table-actions">
-                                            <button class="btn btn-small btn-secondary btn-icon" 
-                                                    onclick="editPatient(${patient.id})" title="Edit Patient">
-                                                ✏️
-                                            </button>
-                                            <button class="btn btn-small btn-danger btn-icon" 
-                                                    onclick="deletePatient(${patient.id})" title="Delete Patient">
-                                                🗑️
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            `;
+            const tableRows = [];
+            filteredPatients.forEach(patient => {
+                const row = document.createElement('tr');
+                row.innerHTML = 
+                    '<td>' + (patient.name || '') + '</td>' +
+                    '<td>' + (patient.mrn || 'N/A') + '</td>' +
+                    '<td>' + formatMonth(patient.month) + '</td>' +
+                    '<td>' + (patient.facility_name || 'N/A') + '</td>' +
+                    '<td>' + new Date(patient.created_at).toLocaleDateString() + '</td>' +
+                    '<td><div class="table-actions">' +
+                    '<button class="btn btn-small btn-secondary btn-icon" onclick="editPatient(' + patient.id + ')" title="Edit Patient">✏️</button>' +
+                    '<button class="btn btn-small btn-danger btn-icon" onclick="deletePatient(' + patient.id + ')" title="Delete Patient">🗑️</button>' +
+                    '</div></td>';
+                tableRows.push(row.outerHTML);
+            });
             
-            content.innerHTML = table;
+            const table = document.createElement('div');
+            table.className = 'table-container';
+            table.innerHTML = 
+                '<table>' +
+                '<thead>' +
+                '<tr>' +
+                '<th>Name</th>' +
+                '<th>MRN</th>' +
+                '<th>Month</th>' +
+                '<th>Facility</th>' +
+                '<th>Created</th>' +
+                '<th>Actions</th>' +
+                '</tr>' +
+                '</thead>' +
+                '<tbody>' +
+                tableRows.join('') +
+                '</tbody>' +
+                '</table>';
+            
+            content.innerHTML = '';
+            content.appendChild(table);
         }
 
-        function displaySupplies() {
-            const content = document.getElementById('suppliesContent');
-            
-            if (filteredSupplies.length === 0) {
-                content.innerHTML = '<div class="no-data">No supplies found</div>';
-                return;
-            }
-            
-            const table = `
-                <div class="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>AR Code</th>
-                                <th>Description</th>
-                                <th>HCPCS</th>
-                                <th>Unit Cost</th>
-                                <th>Type</th>
-                                <th>Created</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${filteredSupplies.map(supply => `
-                                <tr>
-                                    <td>${supply.code}</td>
-                                    <td>${supply.description}</td>
-                                    <td>${supply.hcpcs || 'N/A'}</td>
-                                    <td>${parseFloat(supply.cost || 0).toFixed(2)}</td>
-                                    <td>${supply.is_custom ? 'Custom' : 'Standard'}</td>
-                                    <td>${new Date(supply.created_at).toLocaleDateString()}</td>
-                                    <td>
-                                        <div class="table-actions">
-                                            <button class="btn btn-small btn-secondary btn-icon admin-only" 
-                                                    onclick="editSupply(${supply.id})" title="Edit Supply">
-                                                ✏️
-                                            </button>
-                                            <button class="btn btn-small btn-danger btn-icon admin-only" 
-                                                    onclick="deleteSupply(${supply.id})" title="Delete Supply">
-                                                🗑️
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            `;
-            
-            content.innerHTML = table;
-            
-            // Show admin-only elements if user is admin
-            if (currentUser && currentUser.role === 'admin') {
-                content.querySelectorAll('.admin-only').forEach(el => el.classList.add('show-admin'));
-            }
-        }
+        let editingPatient = null;
 
-        // Patient Modal Functions
         function openAddPatientModal() {
             editingPatient = null;
             document.getElementById('patientModalTitle').textContent = 'Add New Patient';
@@ -2060,7 +666,6 @@
             const month = document.getElementById('patientMonth').value;
             const facilityId = document.getElementById('patientFacility').value;
             const saveBtn = document.getElementById('savePatientBtn');
-            const modalError = document.getElementById('patientModalError');
             
             if (!name || !month || !facilityId) {
                 showError('patientModalError', 'Please fill in all required fields');
@@ -2069,7 +674,6 @@
             
             saveBtn.disabled = true;
             saveBtn.textContent = editingPatient ? 'Updating...' : 'Saving...';
-            modalError.style.display = 'none';
             
             try {
                 const patientData = {
@@ -2080,7 +684,7 @@
                 };
 
                 if (editingPatient) {
-                    await apiCall(`/patients/${editingPatient.id}`, {
+                    await apiCall('/patients/' + editingPatient.id, {
                         method: 'PUT',
                         body: patientData
                     });
@@ -2109,42 +713,19 @@
             const patient = patients.find(p => p.id === patientId);
             if (!patient) return;
 
-            showConfirmDialog(
-                `Delete Patient "${patient.name}"?`,
-                'This action cannot be undone. All tracking data for this patient will also be deleted.',
-                async () => {
-                    try {
-                        await apiCall(`/patients/${patientId}`, { method: 'DELETE' });
+            if (confirm('Delete patient "' + patient.name + '"? This action cannot be undone.')) {
+                apiCall('/patients/' + patientId, { method: 'DELETE' })
+                    .then(() => {
                         showToast('Patient deleted successfully');
-                        await loadPatients();
-                        await loadDashboard();
-                    } catch (error) {
+                        loadPatients();
+                        loadDashboard();
+                    })
+                    .catch(error => {
                         showToast(error.message || 'Failed to delete patient', 'error');
-                    }
-                }
-            );
-        }
-
-        // Confirmation Dialog Functions
-        function showConfirmDialog(title, message, callback) {
-            document.getElementById('confirmMessage').innerHTML = `<strong>${title}</strong><br><br>${message}`;
-            confirmCallback = callback;
-            document.getElementById('confirmModal').style.display = 'block';
-        }
-
-        function closeConfirmModal() {
-            document.getElementById('confirmModal').style.display = 'none';
-            confirmCallback = null;
-        }
-
-        function confirmAction() {
-            if (confirmCallback) {
-                confirmCallback();
+                    });
             }
-            closeConfirmModal();
         }
 
-        // Navigation Functions
         function showSection(sectionName) {
             document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
             if (event && event.target) {
@@ -2152,7 +733,6 @@
             }
             document.querySelectorAll('.section').forEach(section => section.classList.remove('active'));
             document.getElementById(sectionName + 'Section').classList.add('active');
-            currentSection = sectionName;
             
             switch(sectionName) {
                 case 'dashboard':
@@ -2161,25 +741,9 @@
                 case 'patients':
                     loadPatients();
                     break;
-                case 'supplies':
-                    loadSuppliesTable();
-                    break;
-                case 'tracking':
-                    loadTrackingPatients();
-                    break;
-                case 'reports':
-                    loadReportsStats();
-                    break;
-                case 'facilities':
-                    loadFacilitiesTable();
-                    break;
-                case 'users':
-                    loadUsersTable();
-                    break;
             }
         }
 
-        // Event Listeners
         window.addEventListener('DOMContentLoaded', async () => {
             const token = localStorage.getItem('authToken');
             if (token) {
@@ -2202,1265 +766,17 @@
                     register();
                 } else if (document.getElementById('patientModal').style.display === 'block') {
                     savePatient();
-                } else if (document.getElementById('supplyModal').style.display === 'block') {
-                    saveSupply();
-                } else if (document.getElementById('facilityModal').style.display === 'block') {
-                    saveFacility();
-                } else if (document.getElementById('userEditModal').style.display === 'block') {
-                    saveUserEdit();
                 }
             }
             if (e.key === 'Escape') {
                 closePatientModal();
-                closeSupplyModal();
-                closeFacilityModal();
-                closeUserEditModal();
-                closeBatchUploadModal();
-                closeConfirmModal();
             }
         });
 
-        // Close modals when clicking outside
         window.onclick = function(event) {
             const patientModal = document.getElementById('patientModal');
-            const supplyModal = document.getElementById('supplyModal');
-            const facilityModal = document.getElementById('facilityModal');
-            const userEditModal = document.getElementById('userEditModal');
-            const batchUploadModal = document.getElementById('batchUploadModal');
-            const confirmModal = document.getElementById('confirmModal');
-            
-            if (event.target === patientModal) closePatientModal();
-            if (event.target === supplyModal) closeSupplyModal();
-            if (event.target === facilityModal) closeFacilityModal();
-            if (event.target === userEditModal) closeUserEditModal();
-            if (event.target === batchUploadModal) closeBatchUploadModal();
-            if (event.target === confirmModal) closeConfirmModal();
-        }
-
-        // Drag and drop for batch upload
-        const uploadArea = document.querySelector('.upload-area');
-        if (uploadArea) {
-            uploadArea.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                uploadArea.classList.add('dragover');
-            });
-
-            uploadArea.addEventListener('dragleave', () => {
-                uploadArea.classList.remove('dragover');
-            });
-
-            uploadArea.addEventListener('drop', (e) => {
-                e.preventDefault();
-                uploadArea.classList.remove('dragover');
-                const files = e.dataTransfer.files;
-                if (files.length > 0) {
-                    handleBatchFile(files[0]);
-                }
-            });
-        }
-    </script>
-</body>
-</html> + parseInt(num).toLocaleString();
-        }
-
-        function generateDateOptions() {
-            const options = [];
-            const start = new Date(2024, 6); // July 2024
-            const end = new Date(2027, 7); // July 2027
-            
-            for (let d = new Date(start); d <= end; d.setMonth(d.getMonth() + 1)) {
-                const value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
-                const label = d.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
-                options.push({ value, label });
-            }
-            return options.reverse(); // Most recent first
-        }
-
-        async function initializeApp() {
-            try {
-                await loadFacilities();
-                await loadSupplies();
-                await loadUsers();
-                await loadDashboard();
-                populateFilters();
-                populateReportFilters();
-                await loadTrackingPatients();
-            } catch (error) {
-                console.error('Failed to initialize app:', error);
-            }
-        }
-
-        // Data Loading Functions
-        async function loadFacilities() {
-            try {
-                facilities = await apiCall('/facilities');
-                populatePatientFacilitySelects();
-            } catch (error) {
-                console.error('Failed to load facilities:', error);
-                facilities = [];
-            }
-        }
-
-        async function loadSupplies() {
-            try {
-                supplies = await apiCall('/supplies');
-            } catch (error) {
-                console.error('Failed to load supplies:', error);
-                supplies = [];
-            }
-        }
-
-        async function loadSuppliesTable() {
-            try {
-                const suppliesData = await apiCall('/supplies');
-                supplies = suppliesData;
-                const content = document.getElementById('suppliesContent');
-                
-                if (suppliesData.length === 0) {
-                    content.innerHTML = '<div class="no-data">No supplies found</div>';
-                    return;
-                }
-                
-                const table = `
-                    <div class="table-container">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Code</th>
-                                    <th>Description</th>
-                                    <th>HCPCS</th>
-                                    <th>Unit Cost</th>
-                                    <th>Type</th>
-                                    <th>Created</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${suppliesData.map(supply => `
-                                    <tr>
-                                        <td>${supply.code}</td>
-                                        <td>${supply.description}</td>
-                                        <td>${supply.hcpcs || 'N/A'}</td>
-                                        <td>${parseFloat(supply.cost || 0).toFixed(2)}</td>
-                                        <td>${supply.is_custom ? 'Custom' : 'Standard'}</td>
-                                        <td>${new Date(supply.created_at).toLocaleDateString()}</td>
-                                        <td>
-                                            <div class="table-actions">
-                                                <button class="btn btn-small btn-secondary btn-icon admin-only" 
-                                                        onclick="editSupply(${supply.id})" title="Edit Supply">
-                                                    ✏️
-                                                </button>
-                                                <button class="btn btn-small btn-danger btn-icon admin-only" 
-                                                        onclick="deleteSupply(${supply.id})" title="Delete Supply">
-                                                    🗑️
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-                
-                content.innerHTML = table;
-                
-                // Show admin-only elements if user is admin
-                if (currentUser && currentUser.role === 'admin') {
-                    content.querySelectorAll('.admin-only').forEach(el => el.classList.add('show-admin'));
-                }
-                
-            } catch (error) {
-                console.error('Failed to load supplies:', error);
-                document.getElementById('suppliesContent').innerHTML = '<div class="no-data">Failed to load supplies</div>';
-            }
-        }
-
-        // Supply Modal Functions
-        function openAddSupplyModal() {
-            if (currentUser.role !== 'admin') {
-                showToast('Admin access required', 'error');
-                return;
-            }
-            editingSupply = null;
-            document.getElementById('supplyModalTitle').textContent = 'Add New Supply';
-            document.getElementById('supplyCode').value = '';
-            document.getElementById('supplyDescription').value = '';
-            document.getElementById('supplyHcpcs').value = '';
-            document.getElementById('supplyCost').value = '';
-            document.getElementById('supplyModalError').style.display = 'none';
-            document.getElementById('saveSupplyBtn').textContent = 'Save Supply';
-            document.getElementById('supplyModal').style.display = 'block';
-        }
-
-        function editSupply(supplyId) {
-            if (currentUser.role !== 'admin') {
-                showToast('Admin access required', 'error');
-                return;
-            }
-            
-            const supply = supplies.find(s => s.id === supplyId);
-            if (!supply) return;
-
-            editingSupply = supply;
-            document.getElementById('supplyModalTitle').textContent = 'Edit Supply';
-            document.getElementById('supplyCode').value = supply.code || '';
-            document.getElementById('supplyDescription').value = supply.description || '';
-            document.getElementById('supplyHcpcs').value = supply.hcpcs || '';
-            document.getElementById('supplyCost').value = supply.cost || '';
-            document.getElementById('supplyModalError').style.display = 'none';
-            document.getElementById('saveSupplyBtn').textContent = 'Update Supply';
-            document.getElementById('supplyModal').style.display = 'block';
-        }
-
-        function closeSupplyModal() {
-            document.getElementById('supplyModal').style.display = 'none';
-            editingSupply = null;
-        }
-
-        async function saveSupply() {
-            const code = document.getElementById('supplyCode').value.trim();
-            const description = document.getElementById('supplyDescription').value.trim();
-            const hcpcs = document.getElementById('supplyHcpcs').value.trim();
-            const cost = document.getElementById('supplyCost').value.trim();
-            const saveBtn = document.getElementById('saveSupplyBtn');
-            const modalError = document.getElementById('supplyModalError');
-            
-            if (!code || !description) {
-                showError('supplyModalError', 'Please fill in code and description');
-                return;
-            }
-            
-            saveBtn.disabled = true;
-            saveBtn.textContent = editingSupply ? 'Updating...' : 'Saving...';
-            modalError.style.display = 'none';
-            
-            try {
-                const supplyData = {
-                    code: parseInt(code),
-                    description,
-                    hcpcs: hcpcs || null,
-                    cost: parseFloat(cost) || 0
-                };
-
-                if (editingSupply) {
-                    await apiCall(`/supplies/${editingSupply.id}`, {
-                        method: 'PUT',
-                        body: supplyData
-                    });
-                    showToast('Supply updated successfully');
-                } else {
-                    await apiCall('/supplies', {
-                        method: 'POST',
-                        body: supplyData
-                    });
-                    showToast('Supply added successfully');
-                }
-                
-                closeSupplyModal();
-                await loadSuppliesTable();
-                await loadDashboard();
-                
-            } catch (error) {
-                showError('supplyModalError', error.message || 'Failed to save supply');
-            } finally {
-                saveBtn.disabled = false;
-                saveBtn.textContent = editingSupply ? 'Update Supply' : 'Save Supply';
-            }
-        }
-
-        function deleteSupply(supplyId) {
-            if (currentUser.role !== 'admin') {
-                showToast('Admin access required', 'error');
-                return;
-            }
-            
-            const supply = supplies.find(s => s.id === supplyId);
-            if (!supply) return;
-
-            showConfirmDialog(
-                `Delete Supply "${supply.description}"?`,
-                'This action cannot be undone. Any tracking data using this supply will also be affected.',
-                async () => {
-                    try {
-                        await apiCall(`/supplies/${supplyId}`, { method: 'DELETE' });
-                        showToast('Supply deleted successfully');
-                        await loadSuppliesTable();
-                        await loadDashboard();
-                    } catch (error) {
-                        showToast(error.message || 'Failed to delete supply', 'error');
-                    }
-                }
-            );
-        }
-
-        // Tracking Functions
-        async function loadTrackingPatients() {
-            try {
-                const trackingSelect = document.getElementById('trackingPatientSelect');
-                trackingSelect.innerHTML = '<option value="">Choose a patient</option>';
-                
-                patients.forEach(patient => {
-                    const option = document.createElement('option');
-                    option.value = patient.id;
-                    option.textContent = `${patient.name} - ${formatMonth(patient.month)} (${patient.facility_name})`;
-                    trackingSelect.appendChild(option);
-                });
-            } catch (error) {
-                console.error('Failed to load tracking patients:', error);
-            }
-        }
-
-        async function loadTrackingGrid() {
-            const patientId = document.getElementById('trackingPatientSelect').value;
-            const content = document.getElementById('trackingContent');
-            
-            if (!patientId) {
-                content.innerHTML = '<div class="no-data">Select a patient to begin supply tracking</div>';
-                return;
-            }
-
-            content.innerHTML = '<div class="loading">Loading tracking grid...</div>';
-            
-            try {
-                const patient = patients.find(p => p.id == patientId);
-                selectedTrackingPatient = patient;
-                
-                // Load existing tracking data
-                trackingData = await apiCall(`/tracking/${patientId}`);
-                
-                // Create tracking grid
-                createTrackingGrid(patient);
-                
-            } catch (error) {
-                console.error('Failed to load tracking grid:', error);
-                content.innerHTML = '<div class="no-data">Failed to load tracking data</div>';
-            }
-        }
-
-        function createTrackingGrid(patient) {
-            const content = document.getElementById('trackingContent');
-            
-            // Get days in month
-            const year = parseInt(patient.month.split('-')[0]);
-            const month = parseInt(patient.month.split('-')[1]);
-            const daysInMonth = new Date(year, month, 0).getDate();
-            
-            // Patient info header
-            const patientInfo = `
-                <div class="tracking-patient-info">
-                    <h4>${patient.name}</h4>
-                    <p><strong>Month:</strong> ${formatMonth(patient.month)} | <strong>Facility:</strong> ${patient.facility_name} | <strong>MRN:</strong> ${patient.mrn || 'N/A'}</p>
-                </div>
-            `;
-            
-            // Create tracking table
-            let tableHTML = `
-                <div class="tracking-grid">
-                    <table class="tracking-table">
-                        <thead>
-                            <tr>
-                                <th class="supply-header">Supply Item</th>
-            `;
-            
-            // Add day headers
-            for (let day = 1; day <= daysInMonth; day++) {
-                tableHTML += `<th class="supply-header day-header">${day}</th>`;
-            }
-            tableHTML += '<th class="supply-header">Total</th><th class="supply-header">Wound Dx</th></tr></thead><tbody>';
-            
-            // Add supply rows
-            supplies.forEach(supply => {
-                tableHTML += `<tr><td class="supply-name">${supply.description}<br><small>Code: ${supply.code} ${supply.hcpcs ? '| ' + supply.hcpcs : ''}</small></td>`;
-                
-                let rowTotal = 0;
-                let woundDx = '';
-                
-                // Add input cells for each day
-                for (let day = 1; day <= daysInMonth; day++) {
-                    const existingData = trackingData.find(t => t.supply_id == supply.id && t.day_of_month == day);
-                    const quantity = existingData ? existingData.quantity : 0;
-                    rowTotal += quantity;
-                    if (existingData && existingData.wound_dx) {
-                        woundDx = existingData.wound_dx;
-                    }
-                    
-                    tableHTML += `
-                        <td>
-                            <input type="number" 
-                                   class="tracking-input" 
-                                   value="${quantity}" 
-                                   min="0" 
-                                   onchange="updateTracking(${patient.id}, ${supply.id}, ${day}, this.value)"
-                                   data-patient="${patient.id}" 
-                                   data-supply="${supply.id}" 
-                                   data-day="${day}">
-                        </td>
-                    `;
-                }
-                
-                // Add total column
-                tableHTML += `<td><strong>${rowTotal}</strong></td>`;
-                
-                // Add wound diagnosis column
-                tableHTML += `
-                    <td>
-                        <input type="text" 
-                               class="wound-dx-input" 
-                               value="${woundDx}" 
-                               placeholder="Wound diagnosis"
-                               onchange="updateWoundDx(${patient.id}, ${supply.id}, this.value)">
-                    </td>
-                `;
-                
-                tableHTML += '</tr>';
-            });
-            
-            tableHTML += '</tbody></table></div>';
-            
-            content.innerHTML = patientInfo + tableHTML;
-        }
-
-        async function updateTracking(patientId, supplyId, dayOfMonth, quantity) {
-            try {
-                await apiCall('/tracking', {
-                    method: 'POST',
-                    body: {
-                        patientId: parseInt(patientId),
-                        supplyId: parseInt(supplyId),
-                        dayOfMonth: parseInt(dayOfMonth),
-                        quantity: parseInt(quantity) || 0
-                    }
-                });
-                
-                // Update row total
-                updateRowTotal(supplyId);
-                
-            } catch (error) {
-                console.error('Failed to update tracking:', error);
-                showToast('Failed to save tracking data', 'error');
-            }
-        }
-
-        async function updateWoundDx(patientId, supplyId, woundDx) {
-            try {
-                await apiCall('/tracking', {
-                    method: 'POST',
-                    body: {
-                        patientId: parseInt(patientId),
-                        supplyId: parseInt(supplyId),
-                        dayOfMonth: 1, // Use day 1 for wound diagnosis storage
-                        quantity: 0,
-                        woundDx: woundDx
-                    }
-                });
-            } catch (error) {
-                console.error('Failed to update wound diagnosis:', error);
-                showToast('Failed to save wound diagnosis', 'error');
-            }
-        }
-
-        function populatePatientFacilitySelects() {
-            const selects = ['patientFacility'];
-            selects.forEach(selectId => {
-                const select = document.getElementById(selectId);
-                select.innerHTML = '<option value="">Select a facility</option>';
-                facilities.forEach(facility => {
-                    const option = document.createElement('option');
-                    option.value = facility.id;
-                    option.textContent = facility.name;
-                    select.appendChild(option);
-                });
-            });
-        }
-
-        function populateReportFilters() {
-            // Populate facility filter
-            const facilitySelect = document.getElementById('reportFacilityFilter');
-            facilitySelect.innerHTML = '<option value="">All Facilities</option>';
-            facilities.forEach(facility => {
-                const option = document.createElement('option');
-                option.value = facility.id;
-                option.textContent = facility.name;
-                facilitySelect.appendChild(option);
-            });
-            
-            // Populate month filter
-            const monthSelect = document.getElementById('reportMonthFilter');
-            monthSelect.innerHTML = '<option value="">All Months</option>';
-            const uniqueMonths = [...new Set(patients.map(p => p.month))].sort().reverse();
-            uniqueMonths.forEach(month => {
-                const option = document.createElement('option');
-                option.value = month;
-                option.textContent = formatMonth(month);
-                monthSelect.appendChild(option);
-            });
-        }
-
-        // Reporting Functions
-        async function generateReport() {
-            const reportType = document.getElementById('reportType').value;
-            const facilityId = document.getElementById('reportFacilityFilter').value;
-            const month = document.getElementById('reportMonthFilter').value;
-            const content = document.getElementById('reportsContent');
-            
-            content.style.display = 'block';
-            content.innerHTML = '<div class="loading">Generating report...</div>';
-            
-            try {
-                let reportData;
-                let reportHTML = '';
-                
-                switch (reportType) {
-                    case 'patient-summary':
-                        reportData = await apiCall(`/dashboard/summary?facilityId=${facilityId}&month=${month}`);
-                        reportHTML = generatePatientSummaryReport(reportData, facilityId, month);
-                        break;
-                    case 'supply-usage':
-                        reportData = await apiCall(`/reports/itemized-summary?facilityId=${facilityId}&month=${month}`);
-                        reportHTML = generateSupplyUsageReport(reportData, facilityId, month);
-                        break;
-                    case 'cost-analysis':
-                        reportData = await apiCall(`/reports/itemized-summary?facilityId=${facilityId}&month=${month}`);
-                        reportHTML = generateCostAnalysisReport(reportData, facilityId, month);
-                        break;
-                    case 'itemized-summary':
-                        reportData = await apiCall(`/reports/itemized-summary?facilityId=${facilityId}&month=${month}`);
-                        reportHTML = generateItemizedSummaryReport(reportData, facilityId, month);
-                        break;
-                }
-                
-                content.innerHTML = reportHTML;
-                await loadReportsStats();
-                
-            } catch (error) {
-                console.error('Failed to generate report:', error);
-                content.innerHTML = '<div class="no-data">Failed to generate report</div>';
-            }
-        }
-
-        function generatePatientSummaryReport(data, facilityId, month) {
-            const totalPatients = data.length;
-            const totalCost = data.reduce((sum, item) => sum + parseFloat(item.total_cost || 0), 0);
-            const avgCost = totalPatients > 0 ? totalCost / totalPatients : 0;
-            
-            const facilityName = facilityId ? facilities.find(f => f.id == facilityId)?.name : 'All Facilities';
-            const monthName = month ? formatMonth(month) : 'All Months';
-            
-            let html = `
-                <div class="report-export">
-                    <button class="btn btn-secondary btn-small" onclick="exportReport('patient-summary')">Export CSV</button>
-                </div>
-                <div class="report-summary">
-                    <h4>Patient Summary Report</h4>
-                    <p><strong>Facility:</strong> ${facilityName} | <strong>Period:</strong> ${monthName}</p>
-                    <p><strong>Total Patients:</strong> ${totalPatients} | <strong>Total Cost:</strong> <span class="cost-highlight">${totalCost.toFixed(2)}</span> | <strong>Average Cost per Patient:</strong> <span class="cost-highlight">${avgCost.toFixed(2)}</span></p>
-                </div>
-            `;
-            
-            if (data.length === 0) {
-                html += '<div class="no-data">No patient data found for the selected criteria</div>';
-                return html;
-            }
-            
-            html += `
-                <div class="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Patient Name</th>
-                                <th>MRN</th>
-                                <th>Month</th>
-                                <th>Facility</th>
-                                <th>Total Units</th>
-                                <th>Total Cost</th>
-                                <th>Supply Codes</th>
-                                <th>Wound Diagnoses</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${data.map(patient => `
-                                <tr>
-                                    <td>${patient.name}</td>
-                                    <td>${patient.mrn || 'N/A'}</td>
-                                    <td>${formatMonth(patient.month)}</td>
-                                    <td>${patient.facility_name}</td>
-                                    <td>${patient.total_units}</td>
-                                    <td class="cost-highlight">${parseFloat(patient.total_cost || 0).toFixed(2)}</td>
-                                    <td>${patient.supply_codes || 'N/A'}</td>
-                                    <td>${patient.wound_diagnoses || 'N/A'}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            `;
-            
-            return html;
-        }
-
-        function generateSupplyUsageReport(data, facilityId, month) {
-            const facilityName = facilityId ? facilities.find(f => f.id == facilityId)?.name : 'All Facilities';
-            const monthName = month ? formatMonth(month) : 'All Months';
-            
-            // Group by supply code
-            const supplyUsage = {};
-            data.forEach(item => {
-                const key = item.ar_code || 'Unknown';
-                if (!supplyUsage[key]) {
-                    supplyUsage[key] = {
-                        code: key,
-                        description: item.item_description,
-                        hcpcs: item.hcpcs,
-                        totalUnits: 0,
-                        totalCost: 0,
-                        patientCount: new Set()
-                    };
-                }
-                supplyUsage[key].totalUnits += parseInt(item.total_units || 0);
-                supplyUsage[key].totalCost += parseFloat(item.total_cost || 0);
-                supplyUsage[key].patientCount.add(item.patient_name);
-            });
-            
-            const sortedSupplies = Object.values(supplyUsage).sort((a, b) => b.totalUnits - a.totalUnits);
-            
-            let html = `
-                <div class="report-export">
-                    <button class="btn btn-secondary btn-small" onclick="exportReport('supply-usage')">Export CSV</button>
-                </div>
-                <div class="report-summary">
-                    <h4>Supply Usage Report</h4>
-                    <p><strong>Facility:</strong> ${facilityName} | <strong>Period:</strong> ${monthName}</p>
-                    <p><strong>Unique Supplies:</strong> ${sortedSupplies.length} | <strong>Total Usage:</strong> ${sortedSupplies.reduce((sum, s) => sum + s.totalUnits, 0)} units</p>
-                </div>
-            `;
-            
-            if (sortedSupplies.length === 0) {
-                html += '<div class="no-data">No supply usage data found for the selected criteria</div>';
-                return html;
-            }
-            
-            html += `
-                <div class="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Supply Code</th>
-                                <th>Description</th>
-                                <th>HCPCS</th>
-                                <th>Total Units Used</th>
-                                <th>Patient Count</th>
-                                <th>Total Cost</th>
-                                <th>Avg Cost per Unit</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${sortedSupplies.map(supply => `
-                                <tr>
-                                    <td>${supply.code}</td>
-                                    <td>${supply.description}</td>
-                                    <td>${supply.hcpcs || 'N/A'}</td>
-                                    <td><strong>${supply.totalUnits}</strong></td>
-                                    <td>${supply.patientCount.size}</td>
-                                    <td class="cost-highlight">${supply.totalCost.toFixed(2)}</td>
-                                    <td>${supply.totalUnits > 0 ? (supply.totalCost / supply.totalUnits).toFixed(2) : '0.00'}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            `;
-            
-            return html;
-        }
-
-        function generateCostAnalysisReport(data, facilityId, month) {
-            const facilityName = facilityId ? facilities.find(f => f.id == facilityId)?.name : 'All Facilities';
-            const monthName = month ? formatMonth(month) : 'All Months';
-            
-            const totalCost = data.reduce((sum, item) => sum + parseFloat(item.total_cost || 0), 0);
-            const patientCosts = {};
-            
-            data.forEach(item => {
-                const key = item.patient_name;
-                if (!patientCosts[key]) {
-                    patientCosts[key] = {
-                        name: key,
-                        facility: item.facility_name,
-                        totalCost: 0,
-                        itemCount: 0
-                    };
-                }
-                patientCosts[key].totalCost += parseFloat(item.total_cost || 0);
-                patientCosts[key].itemCount += 1;
-            });
-            
-            const sortedPatients = Object.values(patientCosts).sort((a, b) => b.totalCost - a.totalCost);
-            const avgCostPerPatient = sortedPatients.length > 0 ? totalCost / sortedPatients.length : 0;
-            
-            let html = `
-                <div class="report-export">
-                    <button class="btn btn-secondary btn-small" onclick="exportReport('cost-analysis')">Export CSV</button>
-                </div>
-                <div class="report-summary">
-                    <h4>Cost Analysis Report</h4>
-                    <p><strong>Facility:</strong> ${facilityName} | <strong>Period:</strong> ${monthName}</p>
-                    <p><strong>Total Cost:</strong> <span class="cost-highlight">${totalCost.toFixed(2)}</span> | <strong>Average per Patient:</strong> <span class="cost-highlight">${avgCostPerPatient.toFixed(2)}</span></p>
-                </div>
-            `;
-            
-            if (sortedPatients.length === 0) {
-                html += '<div class="no-data">No cost data found for the selected criteria</div>';
-                return html;
-            }
-            
-            html += `
-                <div class="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Patient Name</th>
-                                <th>Facility</th>
-                                <th>Total Cost</th>
-                                <th>Supply Items</th>
-                                <th>% of Total</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${sortedPatients.map(patient => `
-                                <tr>
-                                    <td>${patient.name}</td>
-                                    <td>${patient.facility}</td>
-                                    <td class="cost-highlight">${patient.totalCost.toFixed(2)}</td>
-                                    <td>${patient.itemCount}</td>
-                                    <td>${totalCost > 0 ? ((patient.totalCost / totalCost) * 100).toFixed(1) : 0}%</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            `;
-            
-            return html;
-        }
-
-        function generateItemizedSummaryReport(data, facilityId, month) {
-            const facilityName = facilityId ? facilities.find(f => f.id == facilityId)?.name : 'All Facilities';
-            const monthName = month ? formatMonth(month) : 'All Months';
-            
-            const totalCost = data.reduce((sum, item) => sum + parseFloat(item.total_cost || 0), 0);
-            const totalUnits = data.reduce((sum, item) => sum + parseInt(item.total_units || 0), 0);
-            
-            let html = `
-                <div class="report-export">
-                    <button class="btn btn-secondary btn-small" onclick="exportReport('itemized-summary')">Export CSV</button>
-                </div>
-                <div class="report-summary">
-                    <h4>Itemized Summary Report</h4>
-                    <p><strong>Facility:</strong> ${facilityName} | <strong>Period:</strong> ${monthName}</p>
-                    <p><strong>Total Items:</strong> ${data.length} | <strong>Total Units:</strong> ${totalUnits} | <strong>Total Cost:</strong> <span class="cost-highlight">${totalCost.toFixed(2)}</span></p>
-                </div>
-            `;
-            
-            if (data.length === 0) {
-                html += '<div class="no-data">No itemized data found for the selected criteria</div>';
-                return html;
-            }
-            
-            html += `
-                <div class="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Patient</th>
-                                <th>MRN</th>
-                                <th>Facility</th>
-                                <th>Supply Code</th>
-                                <th>Item Description</th>
-                                <th>HCPCS</th>
-                                <th>Units</th>
-                                <th>Unit Cost</th>
-                                <th>Total Cost</th>
-                                <th>Wound Dx</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${data.map(item => `
-                                <tr>
-                                    <td>${item.patient_name}</td>
-                                    <td>${item.mrn || 'N/A'}</td>
-                                    <td>${item.facility_name}</td>
-                                    <td>${item.ar_code}</td>
-                                    <td>${item.item_description}</td>
-                                    <td>${item.hcpcs || 'N/A'}</td>
-                                    <td>${item.total_units}</td>
-                                    <td>${parseFloat(item.unit_cost || 0).toFixed(2)}</td>
-                                    <td class="cost-highlight">${parseFloat(item.total_cost || 0).toFixed(2)}</td>
-                                    <td>${item.wound_dx || 'N/A'}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            `;
-            
-            return html;
-        }
-
-        async function loadReportsStats() {
-            try {
-                // Calculate stats from current data
-                const totalCost = patients.reduce((sum, patient) => sum + parseFloat(patient.total_cost || 0), 0);
-                const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
-                const thisMonthPatients = patients.filter(p => p.month === currentMonth);
-                const thisMonthCost = thisMonthPatients.reduce((sum, p) => sum + parseFloat(p.total_cost || 0), 0);
-                
-                document.getElementById('totalCostThisMonth').textContent = `${thisMonthCost.toFixed(2)}`;
-                document.getElementById('activePatients').textContent = thisMonthPatients.length;
-                document.getElementById('avgCostPerPatient').textContent = patients.length > 0 ? `${(totalCost / patients.length).toFixed(2)}` : '$0';
-                document.getElementById('mostUsedSupply').textContent = supplies.length > 0 ? supplies[0].description.substring(0, 20) + '...' : 'N/A';
-                
-            } catch (error) {
-                console.error('Failed to load reports stats:', error);
-            }
-        }
-
-        function exportReport(reportType) {
-            // Simple CSV export - in a real app you'd want more sophisticated export
-            showToast('Export functionality would be implemented here');
-        }
-
-        async function loadPatients() {
-            try {
-                patients = await apiCall('/patients');
-                displayPatients();
-            } catch (error) {
-                console.error('Failed to load patients:', error);
-                document.getElementById('patientsContent').innerHTML = '<div class="no-data">Failed to load patients</div>';
-            }
-        }
-
-        function displayPatients() {
-            const facilityFilter = document.getElementById('patientFacilityFilter').value;
-            const monthFilter = document.getElementById('patientMonthFilter').value;
-            
-            let filteredPatients = [...patients];
-            
-            if (facilityFilter) {
-                filteredPatients = filteredPatients.filter(p => p.facility_id == facilityFilter);
-            }
-            if (monthFilter) {
-                filteredPatients = filteredPatients.filter(p => p.month === monthFilter);
-            }
-            
-            const content = document.getElementById('patientsContent');
-            
-            if (filteredPatients.length === 0) {
-                content.innerHTML = '<div class="no-data">No patients found</div>';
-                return;
-            }
-            
-            const table = `
-                <div class="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Name</th>
-                                <th>MRN</th>
-                                <th>Month</th>
-                                <th>Facility</th>
-                                <th>Created</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${filteredPatients.map(patient => `
-                                <tr>
-                                    <td>${patient.name}</td>
-                                    <td>${patient.mrn || 'N/A'}</td>
-                                    <td>${formatMonth(patient.month)}</td>
-                                    <td>${patient.facility_name || 'N/A'}</td>
-                                    <td>${new Date(patient.created_at).toLocaleDateString()}</td>
-                                    <td>
-                                        <div class="table-actions">
-                                            <button class="btn btn-small btn-secondary btn-icon" 
-                                                    onclick="editPatient(${patient.id})" title="Edit Patient">
-                                                ✏️
-                                            </button>
-                                            <button class="btn btn-small btn-danger btn-icon" 
-                                                    onclick="deletePatient(${patient.id})" title="Delete Patient">
-                                                🗑️
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            `;
-            
-            content.innerHTML = table;
-        }
-
-        function formatMonth(monthString) {
-            if (!monthString) return 'N/A';
-            const date = new Date(monthString + '-01');
-            return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
-        }
-
-        async function loadDashboard() {
-            try {
-                const counts = await Promise.all([
-                    apiCall('/patients'),
-                    apiCall('/facilities'),
-                    apiCall('/supplies'),
-                    currentUser.role === 'admin' ? apiCall('/users') : Promise.resolve([])
-                ]);
-                
-                document.getElementById('totalPatients').textContent = counts[0].length;
-                document.getElementById('totalFacilities').textContent = counts[1].length;
-                document.getElementById('totalSupplies').textContent = counts[2].length;
-                document.getElementById('totalUsers').textContent = counts[3].length;
-                
-                document.getElementById('dashboardContent').innerHTML = '<div class="card"><h3>System Status</h3><p>All systems operational. Data loaded successfully.</p></div>';
-            } catch (error) {
-                console.error('Failed to load dashboard:', error);
-                document.getElementById('dashboardContent').innerHTML = '<div class="no-data">Failed to load dashboard data</div>';
-            }
-        }
-
-        async function loadFacilitiesTable() {
-            try {
-                const facilitiesData = await apiCall('/facilities');
-                const content = document.getElementById('facilitiesContent');
-                
-                if (facilitiesData.length === 0) {
-                    content.innerHTML = '<div class="no-data">No facilities found</div>';
-                    return;
-                }
-                
-                const table = `
-                    <div class="table-container">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Name</th>
-                                    <th>Created</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${facilitiesData.map(facility => `
-                                    <tr>
-                                        <td>${facility.name}</td>
-                                        <td>${new Date(facility.created_at).toLocaleDateString()}</td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-                
-                content.innerHTML = table;
-            } catch (error) {
-                console.error('Failed to load facilities:', error);
-                document.getElementById('facilitiesContent').innerHTML = '<div class="no-data">Failed to load facilities</div>';
-            }
-        }
-
-        async function loadUsersTable() {
-            if (currentUser.role !== 'admin') return;
-            
-            try {
-                const users = await apiCall('/users');
-                const content = document.getElementById('usersContent');
-                
-                if (users.length === 0) {
-                    content.innerHTML = '<div class="no-data">No users found</div>';
-                    return;
-                }
-                
-                const table = `
-                    <div class="table-container">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Name</th>
-                                    <th>Email</th>
-                                    <th>Role</th>
-                                    <th>Facility</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${users.map(user => `
-                                    <tr>
-                                        <td>${user.name}</td>
-                                        <td>${user.email}</td>
-                                        <td>${user.role}</td>
-                                        <td>${user.facility_name || 'N/A'}</td>
-                                        <td style="color: ${user.is_approved ? '#38a169' : '#e53e3e'}">
-                                            ${user.is_approved ? 'Approved' : 'Pending'}
-                                        </td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-                
-                content.innerHTML = table;
-            } catch (error) {
-                console.error('Failed to load users:', error);
-                document.getElementById('usersContent').innerHTML = '<div class="no-data">Failed to load users</div>';
-            }
-        }
-
-        function populateFilters() {
-            const facilitySelect = document.getElementById('patientFacilityFilter');
-            facilitySelect.innerHTML = '<option value="">All Facilities</option>';
-            facilities.forEach(facility => {
-                const option = document.createElement('option');
-                option.value = facility.id;
-                option.textContent = facility.name;
-                facilitySelect.appendChild(option);
-            });
-            
-            const monthSelect = document.getElementById('patientMonthFilter');
-            monthSelect.innerHTML = '<option value="">All Months</option>';
-            const uniqueMonths = [...new Set(patients.map(p => p.month))].sort();
-            uniqueMonths.forEach(month => {
-                const option = document.createElement('option');
-                option.value = month;
-                option.textContent = formatMonth(month);
-                monthSelect.appendChild(option);
-            });
-        }
-
-        // Patient Modal Functions
-        function openAddPatientModal() {
-            editingPatient = null;
-            document.getElementById('patientModalTitle').textContent = 'Add New Patient';
-            document.getElementById('patientName').value = '';
-            document.getElementById('patientMrn').value = '';
-            document.getElementById('patientMonth').value = '';
-            document.getElementById('patientFacility').value = '';
-            document.getElementById('patientModalError').style.display = 'none';
-            document.getElementById('savePatientBtn').textContent = 'Save Patient';
-            document.getElementById('patientModal').style.display = 'block';
-        }
-
-        function editPatient(patientId) {
-            const patient = patients.find(p => p.id === patientId);
-            if (!patient) return;
-
-            editingPatient = patient;
-            document.getElementById('patientModalTitle').textContent = 'Edit Patient';
-            document.getElementById('patientName').value = patient.name || '';
-            document.getElementById('patientMrn').value = patient.mrn || '';
-            document.getElementById('patientMonth').value = patient.month || '';
-            document.getElementById('patientFacility').value = patient.facility_id || '';
-            document.getElementById('patientModalError').style.display = 'none';
-            document.getElementById('savePatientBtn').textContent = 'Update Patient';
-            document.getElementById('patientModal').style.display = 'block';
-        }
-
-        function closePatientModal() {
-            document.getElementById('patientModal').style.display = 'none';
-            editingPatient = null;
-        }
-
-        async function savePatient() {
-            const name = document.getElementById('patientName').value.trim();
-            const mrn = document.getElementById('patientMrn').value.trim();
-            const month = document.getElementById('patientMonth').value;
-            const facilityId = document.getElementById('patientFacility').value;
-            const saveBtn = document.getElementById('savePatientBtn');
-            const modalError = document.getElementById('patientModalError');
-            
-            if (!name || !month || !facilityId) {
-                showError('patientModalError', 'Please fill in all required fields');
-                return;
-            }
-            
-            saveBtn.disabled = true;
-            saveBtn.textContent = editingPatient ? 'Updating...' : 'Saving...';
-            modalError.style.display = 'none';
-            
-            try {
-                const patientData = {
-                    name,
-                    mrn: mrn || null,
-                    month,
-                    facilityId: parseInt(facilityId)
-                };
-
-                if (editingPatient) {
-                    await apiCall(`/patients/${editingPatient.id}`, {
-                        method: 'PUT',
-                        body: patientData
-                    });
-                    showToast('Patient updated successfully');
-                } else {
-                    await apiCall('/patients', {
-                        method: 'POST',
-                        body: patientData
-                    });
-                    showToast('Patient added successfully');
-                }
-                
-                closePatientModal();
-                await loadPatients();
-                await loadDashboard();
-                
-            } catch (error) {
-                showError('patientModalError', error.message || 'Failed to save patient');
-            } finally {
-                saveBtn.disabled = false;
-                saveBtn.textContent = editingPatient ? 'Update Patient' : 'Save Patient';
-            }
-        }
-
-        function deletePatient(patientId) {
-            const patient = patients.find(p => p.id === patientId);
-            if (!patient) return;
-
-            showConfirmDialog(
-                `Delete Patient "${patient.name}"?`,
-                'This action cannot be undone. All tracking data for this patient will also be deleted.',
-                async () => {
-                    try {
-                        await apiCall(`/patients/${patientId}`, { method: 'DELETE' });
-                        showToast('Patient deleted successfully');
-                        await loadPatients();
-                        await loadDashboard();
-                    } catch (error) {
-                        showToast(error.message || 'Failed to delete patient', 'error');
-                    }
-                }
-            );
-        }
-
-        // Confirmation Dialog Functions
-        function showConfirmDialog(title, message, callback) {
-            document.getElementById('confirmMessage').innerHTML = `<strong>${title}</strong><br><br>${message}`;
-            confirmCallback = callback;
-            document.getElementById('confirmModal').style.display = 'block';
-        }
-
-        function closeConfirmModal() {
-            document.getElementById('confirmModal').style.display = 'none';
-            confirmCallback = null;
-        }
-
-        function confirmAction() {
-            if (confirmCallback) {
-                confirmCallback();
-            }
-            closeConfirmModal();
-        }
-
-        // Navigation Functions
-        function showSection(sectionName) {
-            document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
-            if (event && event.target) {
-                event.target.classList.add('active');
-            }
-            document.querySelectorAll('.section').forEach(section => section.classList.remove('active'));
-            document.getElementById(sectionName + 'Section').classList.add('active');
-            currentSection = sectionName;
-            
-            switch(sectionName) {
-                case 'dashboard':
-                    loadDashboard();
-                    break;
-                case 'patients':
-                    loadPatients();
-                    break;
-                case 'supplies':
-                    loadSuppliesTable();
-                    break;
-                case 'tracking':
-                    loadTrackingPatients();
-                    break;
-                case 'reports':
-                    loadReportsStats();
-                    break;
-                case 'facilities':
-                    loadFacilitiesTable();
-                    break;
-                case 'users':
-                    loadUsersTable();
-                    break;
-            }
-        }
-
-        // Utility Functions
-        function showError(elementId, message) {
-            const errorElement = document.getElementById(elementId);
-            errorElement.textContent = message;
-            errorElement.style.display = 'block';
-        }
-
-        function showToast(message, type = 'success') {
-            const toast = document.getElementById('toast');
-            toast.textContent = message;
-            toast.className = 'toast' + (type === 'error' ? ' error' : '');
-            toast.classList.add('show');
-            
-            setTimeout(() => {
-                toast.classList.remove('show');
-            }, 4000);
-        }
-
-        // Event Listeners
-        window.addEventListener('DOMContentLoaded', async () => {
-            const token = localStorage.getItem('authToken');
-            if (token) {
-                try {
-                    const response = await apiCall('/auth/verify');
-                    currentUser = response.user;
-                    showMainApp();
-                } catch (error) {
-                    console.error('Token verification failed:', error);
-                    localStorage.removeItem('authToken');
-                }
-            }
-        });
-
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                if (document.getElementById('loginForm').style.display !== 'none') {
-                    login();
-                } else if (document.getElementById('registerForm').style.display !== 'none') {
-                    register();
-                } else if (document.getElementById('patientModal').style.display === 'block') {
-                    savePatient();
-                } else if (document.getElementById('supplyModal').style.display === 'block') {
-                    saveSupply();
-                }
-            }
-            if (e.key === 'Escape') {
-                closePatientModal();
-                closeSupplyModal();
-                closeConfirmModal();
-            }
-        });
-
-        // Close modals when clicking outside
-        window.onclick = function(event) {
-            const patientModal = document.getElementById('patientModal');
-            const supplyModal = document.getElementById('supplyModal');
-            const confirmModal = document.getElementById('confirmModal');
-            
             if (event.target === patientModal) {
                 closePatientModal();
-            }
-            if (event.target === supplyModal) {
-                closeSupplyModal();
-            }
-            if (event.target === confirmModal) {
-                closeConfirmModal();
             }
         }
     </script>
