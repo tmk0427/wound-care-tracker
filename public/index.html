@@ -539,6 +539,7 @@
     <script>
         // Global Variables
         let currentUser = null;
+        let authToken = null;
         let patients = [];
         let supplies = [];
         let facilities = [];
@@ -548,6 +549,32 @@
         let filteredSupplies = [];
         let filteredFacilities = [];
         let filteredUsers = [];
+
+        // API helper function
+        function apiRequest(url, options = {}) {
+            const defaultOptions = {
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            };
+
+            // Add auth token if available
+            if (authToken) {
+                defaultOptions.headers['Authorization'] = `Bearer ${authToken}`;
+            }
+
+            // Merge options
+            const mergedOptions = {
+                ...defaultOptions,
+                ...options,
+                headers: {
+                    ...defaultOptions.headers,
+                    ...options.headers
+                }
+            };
+
+            return fetch(url, mergedOptions);
+        }
 
         // Initialize Application
         document.addEventListener('DOMContentLoaded', function() {
@@ -573,6 +600,7 @@
 
         async function loadFacilitiesForAuth() {
             try {
+                // Don't use apiRequest here since user isn't authenticated yet
                 const response = await fetch('/api/facilities');
                 const data = await response.json();
                 if (data.success) {
@@ -605,7 +633,9 @@
                 const data = await response.json();
                 if (data.success) {
                     currentUser = data.user;
+                    authToken = data.token;
                     sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+                    sessionStorage.setItem('authToken', authToken);
                     showMainApplication();
                 } else {
                     showError('loginError', data.error || 'Invalid credentials');
@@ -678,7 +708,9 @@
 
         function logout() {
             currentUser = null;
+            authToken = null;
             sessionStorage.removeItem('currentUser');
+            sessionStorage.removeItem('authToken');
             document.getElementById('authContainer').style.display = 'flex';
             document.getElementById('appContainer').style.display = 'none';
             document.body.classList.remove('admin-user');
@@ -703,7 +735,7 @@
 
         async function loadPatients() {
             try {
-                const response = await fetch('/api/patients');
+                const response = await apiRequest('/api/patients');
                 const data = await response.json();
                 if (data.success) {
                     patients = data.patients;
@@ -718,7 +750,7 @@
 
         async function loadSupplies() {
             try {
-                const response = await fetch('/api/supplies');
+                const response = await apiRequest('/api/supplies');
                 const data = await response.json();
                 if (data.success) {
                     supplies = data.supplies;
@@ -733,7 +765,7 @@
 
         async function loadFacilities() {
             try {
-                const response = await fetch('/api/facilities');
+                const response = await apiRequest('/api/facilities');
                 const data = await response.json();
                 if (data.success) {
                     facilities = data.facilities;
@@ -751,7 +783,7 @@
             try {
                 if (currentUser.role !== 'admin') return;
                 
-                const response = await fetch('/api/users');
+                const response = await apiRequest('/api/users');
                 const data = await response.json();
                 if (data.success) {
                     users = data.users;
@@ -766,7 +798,7 @@
 
         async function loadTrackingData() {
             try {
-                const response = await fetch('/api/tracking');
+                const response = await apiRequest('/api/tracking');
                 const data = await response.json();
                 if (data.success) {
                     trackingData = data.tracking;
@@ -1184,9 +1216,8 @@
         function saveInlineEdit(element, table, id, field, newValue) {
             const data = { [field]: newValue };
             
-            fetch(`/api/${table}s/${id}`, {
+            apiRequest(`/api/${table}s/${id}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
             })
             .then(response => response.json())
@@ -1637,9 +1668,8 @@
             };
 
             try {
-                const response = await fetch('/api/patients', {
+                const response = await apiRequest('/api/patients', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(patientData)
                 });
 
@@ -1842,9 +1872,8 @@
         // Save Functions
         async function saveQuantity(patientId, supplyId, day, quantity, month) {
             try {
-                const response = await fetch('/api/tracking', {
+                const response = await apiRequest('/api/tracking', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         patient_id: patientId,
                         supply_id: supplyId,
@@ -2199,8 +2228,10 @@
         // Check for existing session
         window.addEventListener('load', function() {
             const savedUser = sessionStorage.getItem('currentUser');
-            if (savedUser) {
+            const savedToken = sessionStorage.getItem('authToken');
+            if (savedUser && savedToken) {
                 currentUser = JSON.parse(savedUser);
+                authToken = savedToken;
                 showMainApplication();
             }
         });
