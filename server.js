@@ -24,9 +24,10 @@ const db = new sqlite3.Database('wound_care.db', (err) => {
     }
 });
 
-// Initialize database tables
+// Initialize database tables (FIXED ASYNC VERSION)
 function initializeTables() {
-    // Users table
+    console.log('🔧 Step 1: Creating users table...');
+    
     db.run(`CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         email TEXT UNIQUE NOT NULL,
@@ -35,18 +36,38 @@ function initializeTables() {
         role TEXT DEFAULT 'user',
         facility_id INTEGER,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
+    )`, (err) => {
+        if (err) {
+            console.error('❌ Users table creation failed:', err);
+            return;
+        }
+        console.log('✅ Users table created');
+        createFacilitiesTable();
+    });
+}
 
-    // Facilities table
+function createFacilitiesTable() {
+    console.log('🔧 Step 2: Creating facilities table...');
+    
     db.run(`CREATE TABLE IF NOT EXISTS facilities (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         address TEXT,
         phone TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
+    )`, (err) => {
+        if (err) {
+            console.error('❌ Facilities table creation failed:', err);
+            return;
+        }
+        console.log('✅ Facilities table created');
+        createPatientsTable();
+    });
+}
 
-    // Patients table
+function createPatientsTable() {
+    console.log('🔧 Step 3: Creating patients table...');
+    
     db.run(`CREATE TABLE IF NOT EXISTS patients (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         patient_id TEXT UNIQUE NOT NULL,
@@ -60,9 +81,19 @@ function initializeTables() {
         notes TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (facility_id) REFERENCES facilities (id)
-    )`);
+    )`, (err) => {
+        if (err) {
+            console.error('❌ Patients table creation failed:', err);
+            return;
+        }
+        console.log('✅ Patients table created');
+        createSupplyTypesTable();
+    });
+}
 
-    // Supply types table
+function createSupplyTypesTable() {
+    console.log('🔧 Step 4: Creating supply_types table...');
+    
     db.run(`CREATE TABLE IF NOT EXISTS supply_types (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
@@ -73,9 +104,19 @@ function initializeTables() {
         reorder_level INTEGER DEFAULT 10,
         description TEXT DEFAULT '',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
+    )`, (err) => {
+        if (err) {
+            console.error('❌ Supply types table creation failed:', err);
+            return;
+        }
+        console.log('✅ Supply types table created');
+        createInventoryTable();
+    });
+}
 
-    // Supply inventory table
+function createInventoryTable() {
+    console.log('🔧 Step 5: Creating supply_inventory table...');
+    
     db.run(`CREATE TABLE IF NOT EXISTS supply_inventory (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         supply_type_id INTEGER NOT NULL,
@@ -85,9 +126,19 @@ function initializeTables() {
         last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (supply_type_id) REFERENCES supply_types (id),
         FOREIGN KEY (facility_id) REFERENCES facilities (id)
-    )`);
+    )`, (err) => {
+        if (err) {
+            console.error('❌ Supply inventory table creation failed:', err);
+            return;
+        }
+        console.log('✅ Supply inventory table created');
+        createUsageTable();
+    });
+}
 
-    // Supply usage tracking table
+function createUsageTable() {
+    console.log('🔧 Step 6: Creating supply_usage table...');
+    
     db.run(`CREATE TABLE IF NOT EXISTS supply_usage (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         patient_id INTEGER NOT NULL,
@@ -101,27 +152,54 @@ function initializeTables() {
         FOREIGN KEY (supply_type_id) REFERENCES supply_types (id),
         FOREIGN KEY (facility_id) REFERENCES facilities (id),
         FOREIGN KEY (user_id) REFERENCES users (id)
-    )`);
-
-    console.log('✅ Database tables initialized');
-    seedInitialData();
+    )`, (err) => {
+        if (err) {
+            console.error('❌ Supply usage table creation failed:', err);
+            return;
+        }
+        console.log('✅ Supply usage table created');
+        console.log('🎉 ALL TABLES CREATED SUCCESSFULLY!');
+        console.log('🔧 Starting data seeding...');
+        seedInitialData();
+    });
 }
 
-// Seed initial data
+// Seed initial data (FIXED ASYNC VERSION)
 function seedInitialData() {
-    // Create default admin user
+    console.log('🔧 Seeding Step 1: Creating admin user...');
+    
     const adminEmail = 'admin@system.com';
     const adminPassword = bcrypt.hashSync('admin123', 10);
     
     db.run(`INSERT OR IGNORE INTO users (email, password, name, role) 
             VALUES (?, ?, ?, ?)`, 
-            [adminEmail, adminPassword, 'System Admin', 'admin']);
+            [adminEmail, adminPassword, 'System Admin', 'admin'], (err) => {
+        if (err) {
+            console.error('❌ Admin user creation failed:', err);
+            return;
+        }
+        console.log('✅ Admin user created/verified');
+        seedFacility();
+    });
+}
 
-    // Create default facility
+function seedFacility() {
+    console.log('🔧 Seeding Step 2: Creating default facility...');
+    
     db.run(`INSERT OR IGNORE INTO facilities (name, address, phone) 
-            VALUES ('Main Healthcare Facility', '123 Healthcare Blvd', '555-0100')`);
+            VALUES ('Main Healthcare Facility', '123 Healthcare Blvd', '555-0100')`, (err) => {
+        if (err) {
+            console.error('❌ Facility creation failed:', err);
+            return;
+        }
+        console.log('✅ Default facility created/verified');
+        seedSupplies();
+    });
+}
 
-    // Add essential wound care supplies with descriptions
+function seedSupplies() {
+    console.log('🔧 Seeding Step 3: Adding essential supplies...');
+    
     const supplies = [
         ['Gauze Pads 4x4"', 'dressing', 'AR001', 'each', 0.50, 50, 'Sterile gauze pads for wound dressing'],
         ['Medical Tape 1"', 'tape', 'AR002', 'roll', 3.25, 20, 'Medical adhesive tape for securing dressings'],
@@ -139,28 +217,55 @@ function seedInitialData() {
                             (name, category, ar_code, unit, cost_per_unit, reorder_level, description) 
                             VALUES (?, ?, ?, ?, ?, ?, ?)`);
     
-    supplies.forEach(supply => {
-        stmt.run(supply);
+    let completed = 0;
+    supplies.forEach((supply, index) => {
+        stmt.run(supply, (err) => {
+            if (err) {
+                console.error(`❌ Supply ${index + 1} creation failed:`, err);
+            } else {
+                completed++;
+                console.log(`✅ Supply ${index + 1}/10 added: ${supply[0]}`);
+                
+                if (completed === supplies.length) {
+                    stmt.finalize();
+                    console.log('🎉 ALL SUPPLIES SEEDED!');
+                    seedPatients();
+                }
+            }
+        });
     });
-    stmt.finalize();
+}
 
-    // Add some sample patients
+function seedPatients() {
+    console.log('🔧 Seeding Step 4: Adding sample patients...');
+    
     const patients = [
         ['PT001', 'John Smith', '101A', 1, '2025-08-20', 'Pressure Ulcer', 'Stage 2', 'Patient recovering well'],
         ['PT002', 'Jane Doe', '102B', 1, '2025-08-22', 'Surgical Wound', 'Moderate', 'Post-operative care'],
         ['PT003', 'Robert Johnson', '103A', 1, '2025-08-25', 'Diabetic Ulcer', 'Stage 3', 'Requires daily dressing changes']
     ];
 
-    const patientStmt = db.prepare(`INSERT OR IGNORE INTO patients 
-                                   (patient_id, name, room, facility_id, admission_date, wound_type, severity, notes) 
-                                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
+    const stmt = db.prepare(`INSERT OR IGNORE INTO patients 
+                           (patient_id, name, room, facility_id, admission_date, wound_type, severity, notes) 
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
     
-    patients.forEach(patient => {
-        patientStmt.run(patient);
+    let completed = 0;
+    patients.forEach((patient, index) => {
+        stmt.run(patient, (err) => {
+            if (err) {
+                console.error(`❌ Patient ${index + 1} creation failed:`, err);
+            } else {
+                completed++;
+                console.log(`✅ Patient ${index + 1}/3 added: ${patient[1]}`);
+                
+                if (completed === patients.length) {
+                    stmt.finalize();
+                    console.log('🎉 ALL PATIENTS SEEDED!');
+                    console.log('✅ DATABASE INITIALIZATION COMPLETE!');
+                }
+            }
+        });
     });
-    patientStmt.finalize();
-
-    console.log('✅ Initial data seeded');
 }
 
 // Authentication middleware
