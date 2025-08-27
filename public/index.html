@@ -394,6 +394,77 @@
             opacity: 0.9;
         }
 
+        /* Tracking Styles */
+        .tracking-grid {
+            display: grid;
+            grid-template-columns: 80px 300px 80px 80px 80px 200px 100px auto;
+            gap: 10px;
+            min-width: 100%;
+        }
+
+        .days-container {
+            display: grid;
+            grid-template-columns: repeat(31, 50px);
+            gap: 2px;
+            padding: 8px;
+            border: 1px solid #e5e7eb;
+            background: #f9fafb;
+            overflow-x: auto;
+            max-width: calc(100vw - 200px);
+        }
+
+        .day-input {
+            width: 45px;
+            height: 35px;
+            text-align: center;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            font-size: 12px;
+            padding: 2px;
+        }
+
+        .day-input:focus {
+            border-color: #4f46e5;
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+        }
+
+        .supply-row {
+            margin-bottom: 10px;
+            padding: 10px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            background: white;
+        }
+
+        .supply-header {
+            display: grid;
+            grid-template-columns: 80px 300px 80px 80px 100px 100px 200px;
+            gap: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e5e7eb;
+            margin-bottom: 10px;
+            font-weight: 600;
+            background: #f8fafc;
+            align-items: center;
+        }
+
+        .days-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(45px, 1fr));
+            gap: 3px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .day-header {
+            font-size: 10px;
+            text-align: center;
+            font-weight: 600;
+            color: #666;
+            margin-bottom: 2px;
+        }
+
         /* Responsive Design */
         @media (max-width: 768px) {
             .header-content {
@@ -416,13 +487,17 @@
             .logo h1 {
                 font-size: 1.5rem;
             }
+
+            .days-grid {
+                grid-template-columns: repeat(7, 1fr);
+            }
         }
 
         /* Utility Classes */
         .text-center { text-align: center; }
         .mt-20 { margin-top: 20px; }
         .mb-20 { margin-bottom: 20px; }
-        .hidden { display: none; }
+        .hidden { display: none !important; }
         .flex { display: flex; }
         .flex-wrap { flex-wrap: wrap; }
         .gap-10 { gap: 10px; }
@@ -614,614 +689,58 @@
                 </div>
             </div>
 
-            <!-- Replace the existing tracking panel in your index.html with this enhanced version -->
-
-<!-- Enhanced Tracking Panel -->
-<div id="trackingPanel" class="panel">
-    <div class="flex" style="justify-content: space-between; align-items: center; margin-bottom: 20px;">
-        <h2>📈 Supply Tracking</h2>
-        <div class="flex gap-10">
-            <button class="btn btn-success" onclick="exportTrackingReport()" id="exportBtn" style="display: none;">📄 Export Report</button>
-            <button class="btn btn-primary" onclick="saveAllTrackingData()" id="saveAllBtn" style="display: none;">💾 Save All</button>
-        </div>
-    </div>
-
-    <!-- Patient Selection -->
-    <div class="search-container">
-        <div class="search-box">
-            <select id="trackingPatient" class="form-control" onchange="loadPatientTracking()">
-    <option value="">Select Patient...</option>
-</select>
-        </div>
-        <div class="filter-group">
-            <select id="trackingFacilityFilter" class="form-control" onchange="filterTrackingPatients()">
-                <option value="">All Facilities</option>
-            </select>
-        </div>
-    </div>
-
-    <!-- Sticky Search Bar -->
-    <div id="trackingSearchContainer" style="display: none; position: sticky; top: 0; z-index: 100; background: white; border-bottom: 2px solid #e5e7eb; padding: 15px 0; margin-bottom: 20px;">
-        <div class="flex gap-10" style="align-items: center;">
-            <div style="flex: 1;">
-                <input type="text" id="trackingSupplySearch" class="form-control" 
-                       placeholder="🔍 Search supplies by code or description..." 
-                       oninput="filterTrackingSupplies()" style="font-size: 16px; padding: 12px;">
-            </div>
-            <div>
-                <span id="searchResultsCount" style="color: #666; font-size: 14px;"></span>
-            </div>
-        </div>
-    </div>
-
-    <!-- Tracking Table Container -->
-    <div id="trackingTableContainer" style="display: none;">
-        <div id="patientInfo" style="background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px;"></div>
-        
-        <!-- Role-specific views -->
-        <div id="adminTrackingView" style="display: none;">
-            <div id="trackingTable"></div>
-        </div>
-        
-        <div id="userTrackingView" style="display: none;">
-            <div id="userTrackingTable"></div>
-        </div>
-    </div>
-</div>
-
-<style>
-/* Enhanced tracking styles */
-.tracking-grid {
-    display: grid;
-    grid-template-columns: 80px 300px 80px 80px 80px 200px 100px auto;
-    gap: 10px;
-    min-width: 100%;
-}
-
-.tracking-row {
-    display: contents;
-}
-
-.tracking-cell {
-    padding: 8px;
-    border: 1px solid #e5e7eb;
-    background: white;
-    display: flex;
-    align-items: center;
-}
-
-.days-container {
-    display: grid;
-    grid-template-columns: repeat(31, 50px);
-    gap: 2px;
-    padding: 8px;
-    border: 1px solid #e5e7eb;
-    background: #f9fafb;
-    overflow-x: auto;
-    max-width: calc(100vw - 200px);
-}
-
-.day-input {
-    width: 45px;
-    height: 35px;
-    text-align: center;
-    border: 1px solid #d1d5db;
-    border-radius: 4px;
-    font-size: 12px;
-    padding: 2px;
-}
-
-.day-input:focus {
-    border-color: #4f46e5;
-    outline: none;
-    box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
-}
-
-.supply-row {
-    margin-bottom: 10px;
-    padding: 10px;
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
-    background: white;
-}
-
-.supply-header {
-    display: grid;
-    grid-template-columns: 80px 300px 80px 80px 100px 100px 200px;
-    gap: 10px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid #e5e7eb;
-    margin-bottom: 10px;
-    font-weight: 600;
-    background: #f8fafc;
-    align-items: center;
-}
-
-.days-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(45px, 1fr));
-    gap: 3px;
-    max-height: 200px;
-    overflow-y: auto;
-}
-
-@media (max-width: 1200px) {
-    .days-grid {
-        grid-template-columns: repeat(7, 1fr);
-    }
-}
-
-.hidden {
-    display: none !important;
-}
-
-.day-header {
-    font-size: 10px;
-    text-align: center;
-    font-weight: 600;
-    color: #666;
-    margin-bottom: 2px;
-}
-</style>
-
-<script>
-// Enhanced tracking functionality
-let currentTrackingPatient = null;
-let allTrackingData = [];
-let filteredSupplies = [];
-let trackingData = {};
-
-// Replace the loadPatientTracking function with this fixed version
-async function loadPatientTracking() {
-    const patientSelect = document.getElementById('trackingPatient');
-    if (!patientSelect) {
-        console.error('trackingPatient select element not found');
-        return;
-    }
-
-    const patientId = patientSelect.value;
-    
-    if (!patientId) {
-        const containers = ['trackingTableContainer', 'trackingSearchContainer'];
-        containers.forEach(id => {
-            const elem = document.getElementById(id);
-            if (elem) elem.style.display = 'none';
-        });
-        return;
-    }
-
-    try {
-        currentTrackingPatient = patientId;
-        
-        // Show loading with safe element access
-        const trackingTable = document.getElementById('trackingTable');
-        if (trackingTable) {
-            trackingTable.innerHTML = '<p class="text-center">Loading tracking data...</p>';
-        }
-        
-        const tableContainer = document.getElementById('trackingTableContainer');
-        const searchContainer = document.getElementById('trackingSearchContainer');
-        if (tableContainer) tableContainer.style.display = 'block';
-        if (searchContainer) searchContainer.style.display = 'block';
-        
-        // Find patient with safe check
-        const patient = patients.find(p => p.id == patientId);
-        if (!patient) {
-            showMessage('Patient not found', 'error');
-            return;
-        }
-        
-        // Update patient info safely
-        const patientInfo = document.getElementById('patientInfo');
-        if (patientInfo) {
-            patientInfo.innerHTML = `
-                <strong>Patient:</strong> ${patient.name} | 
-                <strong>MRN:</strong> ${patient.mrn || 'N/A'} | 
-                <strong>Month:</strong> ${patient.month} | 
-                <strong>Facility:</strong> ${patient.facility_name || 'N/A'}
-            `;
-        }
-        
-        // Load tracking data
-        const trackingResponse = await apiCall(`/api/tracking/${patientId}`);
-        allTrackingData = trackingResponse.tracking || [];
-        
-        // Process tracking data into lookup object
-        trackingData = {};
-        allTrackingData.forEach(item => {
-            const key = `${item.supply_id}_${item.day_of_month}`;
-            trackingData[key] = item;
-        });
-        
-        // Show all supplies with safe check
-        if (supplies && supplies.length > 0) {
-            filteredSupplies = [...supplies];
-            renderTrackingInterface();
-        } else {
-            showMessage('No supplies loaded. Please refresh the page.', 'error');
-            return;
-        }
-        
-        // Show buttons safely
-        const exportBtn = document.getElementById('exportBtn');
-        const saveAllBtn = document.getElementById('saveAllBtn');
-        if (exportBtn) exportBtn.style.display = 'block';
-        if (saveAllBtn) saveAllBtn.style.display = 'block';
-        
-    } catch (error) {
-        console.error('Failed to load tracking data:', error);
-        showMessage('Failed to load tracking data: ' + error.message, 'error');
-    }
-}
-
-
-function filterTrackingSupplies() {
-    const searchTerm = document.getElementById('trackingSupplySearch').value.toLowerCase();
-    
-    if (!searchTerm) {
-        filteredSupplies = [...supplies];
-    } else {
-        filteredSupplies = supplies.filter(supply => 
-            supply.code.toString().includes(searchTerm) ||
-            supply.description.toLowerCase().includes(searchTerm) ||
-            (supply.hcpcs && supply.hcpcs.toLowerCase().includes(searchTerm))
-        );
-    }
-    
-    document.getElementById('searchResultsCount').textContent = 
-        `${filteredSupplies.length} of ${supplies.length} supplies`;
-    
-    renderTrackingInterface();
-}
-
-/ Replace the renderTrackingInterface function with safe checks
-function renderTrackingInterface() {
-    if (!currentUser) {
-        showMessage('User not authenticated', 'error');
-        return;
-    }
-    
-    const adminView = document.getElementById('adminTrackingView');
-    const userView = document.getElementById('userTrackingView');
-    
-    if (!adminView || !userView) {
-        console.error('Tracking view elements not found');
-        return;
-    }
-    
-    if (currentUser.role === 'admin') {
-        renderAdminTrackingView();
-        adminView.style.display = 'block';
-        userView.style.display = 'none';
-    } else {
-        renderUserTrackingView();
-        adminView.style.display = 'none';
-        userView.style.display = 'block';
-    }
-}
-
-// Fix for the renderAdminTrackingView function - add missing closing brace
-function renderAdminTrackingView() {
-    let html = `
-        <div style="margin-bottom: 20px;">
-            <h3>Administrative View - Complete Report Data</h3>
-        </div>
-        <div style="overflow-x: auto;">
-            <table class="table" style="min-width: 1200px;">
-                <thead>
-                    <tr style="background: #f8fafc;">
-                        <th>Code</th>
-                        <th style="min-width: 250px;">Description</th>
-                        <th>HCPCS</th>
-                        <th>Unit Cost</th>
-                        <th>Total Units</th>
-                        <th>Total Cost</th>
-                        <th style="min-width: 200px;">Wound Dx</th>
-                        <th style="min-width: 400px;">Daily Quantities (1-31)</th>
-                    </tr>
-                </thead>
-                <tbody>
-    `;
-    
-    filteredSupplies.forEach(supply => {
-        const totalUnits = getTotalUnitsForSupply(supply.id);
-        const totalCost = totalUnits * parseFloat(supply.cost || 0);
-        const woundDx = getWoundDxForSupply(supply.id);
-        
-        html += `
-            <tr class="${totalUnits > 0 ? 'supply-with-data' : ''}" style="border-bottom: 2px solid #e5e7eb;">
-                <td><strong>${supply.code}</strong></td>
-                <td>${supply.description}</td>
-                <td>${supply.hcpcs || 'N/A'}</td>
-                <td>$${parseFloat(supply.cost || 0).toFixed(2)}</td>
-                <td><strong>${totalUnits}</strong></td>
-                <td><strong>$${totalCost.toFixed(2)}</strong></td>
-                <td>
-                    <input type="text" 
-                           value="${woundDx}" 
-                           placeholder="Enter diagnosis"
-                           style="width: 180px; padding: 4px; border: 1px solid #ddd; border-radius: 4px;"
-                           onchange="updateSupplyWoundDx(${supply.id}, this.value)"
-                           data-supply-id="${supply.id}">
-                </td>
-                <td>
-                    <div class="days-grid">
-        `;
-        
-        // Add day inputs
-        for (let day = 1; day <= 31; day++) {
-            const key = `${supply.id}_${day}`;
-            const currentData = trackingData[key];
-            const quantity = currentData ? currentData.quantity : 0;
-            
-            html += `
-                <div style="text-align: center;">
-                    <div class="day-header">${day}</div>
-                    <input type="number" 
-                           class="day-input"
-                           value="${quantity || ''}" 
-                           min="0" 
-                           max="9999"
-                           placeholder="0"
-                           data-supply-id="${supply.id}" 
-                           data-day="${day}"
-                           onchange="updateTrackingValue(${supply.id}, ${day}, this.value)">
-                </div>
-            `;
-        }
-        
-        html += `
+            <!-- Tracking Panel -->
+            <div id="trackingPanel" class="panel">
+                <div class="flex" style="justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2>📈 Supply Tracking</h2>
+                    <div class="flex gap-10">
+                        <button class="btn btn-success" onclick="exportTrackingReport()" id="exportBtn" style="display: none;">📄 Export Report</button>
+                        <button class="btn btn-primary" onclick="saveAllTrackingData()" id="saveAllBtn" style="display: none;">💾 Save All</button>
                     </div>
-                </td>
-            </tr>
-        `;
-    });
-    
-    html += '</tbody></table></div>';
-    const trackingTable = document.getElementById('trackingTable');
-    if (trackingTable) {
-        trackingTable.innerHTML = html;
-    }
-}
-        
-        html += `
-                    </div>
-                </td>
-            </tr>
-        `;
-    });
-    
-    html += '</tbody></table></div>';
-    document.getElementById('trackingTable').innerHTML = html;
-}
+                </div>
 
-function renderUserTrackingView() {
-    let html = `
-        <div style="margin-bottom: 20px;">
-            <h3>Supply Tracking - Daily Quantities</h3>
-            <p>Enter quantities used for each day (1-31). Leave blank for zero.</p>
-        </div>
-    `;
-    
-    // Show only supplies with existing data or commonly used ones first
-    const suppliesWithData = filteredSupplies.filter(supply => getTotalUnitsForSupply(supply.id) > 0);
-    const suppliesWithoutData = filteredSupplies.filter(supply => getTotalUnitsForSupply(supply.id) === 0);
-    
-    const orderedSupplies = [...suppliesWithData, ...suppliesWithoutData];
-    
-    orderedSupplies.forEach(supply => {
-        const totalUnits = getTotalUnitsForSupply(supply.id);
-        
-        html += `
-            <div class="supply-row" style="margin-bottom: 20px; ${totalUnits > 0 ? 'border-left: 4px solid #10b981;' : ''}">
-                <div class="supply-header">
-                    <div><strong>Code: ${supply.code}</strong></div>
-                    <div>${supply.description}</div>
-                    <div>Units: <strong>${totalUnits}</strong></div>
-                    <div>Cost: $${parseFloat(supply.cost || 0).toFixed(2)}</div>
-                    <div>Total: <strong>$${(totalUnits * parseFloat(supply.cost || 0)).toFixed(2)}</strong></div>
+                <!-- Patient Selection -->
+                <div class="search-container">
+                    <div class="search-box">
+                        <select id="trackingPatient" class="form-control" onchange="loadPatientTracking()">
+                            <option value="">Select Patient...</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <select id="trackingFacilityFilter" class="form-control" onchange="filterTrackingPatients()">
+                            <option value="">All Facilities</option>
+                        </select>
+                    </div>
                 </div>
-                
-                <div style="margin-top: 10px;">
-                    <div style="font-weight: 600; margin-bottom: 8px; color: #374151;">Daily Quantities:</div>
-                    <div class="days-grid">
-        `;
-        
-        // Add day inputs in a responsive grid
-        for (let day = 1; day <= 31; day++) {
-            const key = `${supply.id}_${day}`;
-            const currentData = trackingData[key];
-            const quantity = currentData ? currentData.quantity : 0;
-            
-            html += `
-                <div style="text-align: center;">
-                    <div class="day-header">${day}</div>
-                    <input type="number" 
-                           class="day-input"
-                           value="${quantity || ''}" 
-                           min="0" 
-                           max="9999"
-                           placeholder="0"
-                           data-supply-id="${supply.id}" 
-                           data-day="${day}"
-                           onchange="updateTrackingValue(${supply.id}, ${day}, this.value)">
+
+                <!-- Sticky Search Bar -->
+                <div id="trackingSearchContainer" style="display: none; position: sticky; top: 0; z-index: 100; background: white; border-bottom: 2px solid #e5e7eb; padding: 15px 0; margin-bottom: 20px;">
+                    <div class="flex gap-10" style="align-items: center;">
+                        <div style="flex: 1;">
+                            <input type="text" id="trackingSupplySearch" class="form-control" 
+                                   placeholder="🔍 Search supplies by code or description..." 
+                                   oninput="filterTrackingSupplies()" style="font-size: 16px; padding: 12px;">
+                        </div>
+                        <div>
+                            <span id="searchResultsCount" style="color: #666; font-size: 14px;"></span>
+                        </div>
+                    </div>
                 </div>
-            `;
-        }
-        
-        html += `
+
+                <!-- Tracking Table Container -->
+                <div id="trackingTableContainer" style="display: none;">
+                    <div id="patientInfo" style="background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px;"></div>
+                    
+                    <!-- Role-specific views -->
+                    <div id="adminTrackingView" style="display: none;">
+                        <div id="trackingTable"></div>
+                    </div>
+                    
+                    <div id="userTrackingView" style="display: none;">
+                        <div id="userTrackingTable"></div>
                     </div>
                 </div>
             </div>
-        `;
-    });
-    
-    document.getElementById('userTrackingTable').innerHTML = html;
-}
-
-function getTotalUnitsForSupply(supplyId) {
-    let total = 0;
-    for (let day = 1; day <= 31; day++) {
-        const key = `${supplyId}_${day}`;
-        const data = trackingData[key];
-        if (data) {
-            total += parseInt(data.quantity || 0);
-        }
-    }
-    return total;
-}
-
-function getWoundDxForSupply(supplyId) {
-    for (let day = 1; day <= 31; day++) {
-        const key = `${supplyId}_${day}`;
-        const data = trackingData[key];
-        if (data && data.wound_dx) {
-            return data.wound_dx;
-        }
-    }
-    return '';
-}
-
-function updateTrackingValue(supplyId, day, value) {
-    const key = `${supplyId}_${day}`;
-    const quantity = parseInt(value) || 0;
-    
-    // Update local tracking data
-    if (!trackingData[key]) {
-        trackingData[key] = {
-            patient_id: currentTrackingPatient,
-            supply_id: supplyId,
-            day_of_month: day,
-            quantity: quantity
-        };
-    } else {
-        trackingData[key].quantity = quantity;
-    }
-    
-    // Update totals in the interface
-    updateSupplyTotals(supplyId);
-}
-
-function updateSupplyWoundDx(supplyId, diagnosis) {
-    // Update wound diagnosis for the first day entry of this supply
-    const key = `${supplyId}_1`;
-    if (!trackingData[key]) {
-        trackingData[key] = {
-            patient_id: currentTrackingPatient,
-            supply_id: supplyId,
-            day_of_month: 1,
-            quantity: 0,
-            wound_dx: diagnosis
-        };
-    } else {
-        trackingData[key].wound_dx = diagnosis;
-    }
-}
-
-function updateSupplyTotals(supplyId) {
-    const totalUnits = getTotalUnitsForSupply(supplyId);
-    const supply = supplies.find(s => s.id == supplyId);
-    const totalCost = totalUnits * parseFloat(supply.cost || 0);
-    
-    // Update totals in the display
-    const rows = document.querySelectorAll(`[data-supply-id="${supplyId}"]`);
-    // This would need specific selectors to update the total displays
-}
-
-async function saveAllTrackingData() {
-    if (!currentTrackingPatient) {
-        showMessage('No patient selected', 'error');
-        return;
-    }
-
-    const savePromises = [];
-    
-    // Save all tracking data
-    Object.values(trackingData).forEach(data => {
-        if (data.quantity > 0 || data.wound_dx) {
-            savePromises.push(
-                apiCall('/api/tracking', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        patientId: data.patient_id || currentTrackingPatient,
-                        supplyId: data.supply_id,
-                        dayOfMonth: data.day_of_month,
-                        quantity: data.quantity || 0,
-                        woundDx: data.wound_dx || null
-                    })
-                })
-            );
-        }
-    });
-
-    try {
-        await Promise.all(savePromises);
-        showMessage('All tracking data saved successfully!', 'success');
-        
-        // Reload to get fresh data
-        loadPatientTracking();
-    } catch (error) {
-        console.error('Failed to save tracking data:', error);
-        showMessage('Failed to save some tracking data', 'error');
-    }
-}
-
-async function exportTrackingReport() {
-    if (!currentTrackingPatient) {
-        showMessage('No patient selected', 'error');
-        return;
-    }
-
-    const patient = patients.find(p => p.id == currentTrackingPatient);
-    if (!patient) {
-        showMessage('Patient not found', 'error');
-        return;
-    }
-
-    // Create CSV data in the format requested
-    const csvRows = [];
-    csvRows.push(['Name', 'MRN', 'MM-YYYY', 'Facility', 'Code', 'Description', 'HCPCS', 'Total Units', 'Total Cost', 'Wound Dx']);
-
-    supplies.forEach(supply => {
-        const totalUnits = getTotalUnitsForSupply(supply.id);
-        if (totalUnits > 0) { // Only include supplies with usage
-            const totalCost = totalUnits * parseFloat(supply.cost || 0);
-            const woundDx = getWoundDxForSupply(supply.id);
-            
-            csvRows.push([
-                patient.name,
-                patient.mrn || '',
-                patient.month,
-                patient.facility_name || '',
-                supply.code,
-                supply.description,
-                supply.hcpcs || '',
-                totalUnits,
-                totalCost.toFixed(2),
-                woundDx
-            ]);
-        }
-    });
-
-    // Convert to CSV string
-    const csvContent = csvRows.map(row => 
-        row.map(cell => `"${cell}"`).join(',')
-    ).join('\n');
-
-    // Download the file
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Itemized_Summary_Report_${new Date().toISOString().split('T')[0]}_${patient.name.replace(/\s+/g, '_')}_${patient.month.replace('-', '_')}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-    
-    showMessage('Report exported successfully!', 'success');
-}
-</script>
 
             <!-- Admin Panel -->
             <div id="adminPanel" class="panel">
@@ -1384,150 +903,138 @@ async function exportTrackingReport() {
         </div>
     </div>
 
-// Replace the entire <script> section in your HTML file with this fixed version
+    <script>
+        /* Global variables */
+        var currentUser = null;
+        var authToken = null;
+        var patients = [];
+        var supplies = [];
+        var facilities = [];
+        var allPatients = [];
+        var currentTrackingPatient = null;
+        var allTrackingData = [];
+        var filteredSupplies = [];
+        var trackingData = {};
 
-<!-- Replace the entire <script> section in your index.html with this corrected version -->
-
-<script>
-        // Global variables
-        let currentUser = null;
-        let authToken = null;
-        let patients = [];
-        let supplies = [];
-        let facilities = [];
-        let allPatients = []; // Store unfiltered patients
-
-        // Generate month options from July 2024 to September 2027
+        /* Generate month options */
         function generateMonthOptions() {
-            const startYear = 2024;
-            const startMonth = 7; // July
-            const endYear = 2027;
-            const endMonth = 9; // September
-            
-            const months = [];
-            const monthNames = [
+            var startYear = 2024;
+            var startMonth = 7;
+            var endYear = 2027;
+            var endMonth = 9;
+            var months = [];
+            var monthNames = [
                 'January', 'February', 'March', 'April', 'May', 'June',
                 'July', 'August', 'September', 'October', 'November', 'December'
             ];
 
-            for (let year = startYear; year <= endYear; year++) {
-                const start = (year === startYear) ? startMonth : 1;
-                const end = (year === endYear) ? endMonth : 12;
+            for (var year = startYear; year <= endYear; year++) {
+                var start = (year === startYear) ? startMonth : 1;
+                var end = (year === endYear) ? endMonth : 12;
                 
-                for (let month = start; month <= end; month++) {
-                    const value = `${year}-${month.toString().padStart(2, '0')}`;
-                    const label = `${monthNames[month - 1]} ${year}`;
-                    months.push({ value, label });
+                for (var month = start; month <= end; month++) {
+                    var value = year + '-' + (month < 10 ? '0' + month : month);
+                    var label = monthNames[month - 1] + ' ' + year;
+                    months.push({ value: value, label: label });
                 }
             }
             
             return months;
         }
 
-        // Initialize month dropdowns with safe element checks
+        /* Initialize month dropdowns */
         function initializeMonthDropdowns() {
-            const months = generateMonthOptions();
+            var months = generateMonthOptions();
             
-            // Patient month filter
-            const patientMonthFilter = document.getElementById('patientMonthFilter');
+            var patientMonthFilter = document.getElementById('patientMonthFilter');
             if (patientMonthFilter) {
                 patientMonthFilter.innerHTML = '<option value="">All Months</option>';
-                months.forEach(month => {
-                    const option = document.createElement('option');
-                    option.value = month.value;
-                    option.textContent = month.label;
+                for (var i = 0; i < months.length; i++) {
+                    var option = document.createElement('option');
+                    option.value = months[i].value;
+                    option.textContent = months[i].label;
                     patientMonthFilter.appendChild(option);
-                });
+                }
             }
 
-            // Patient modal month selector
-            const patientMonth = document.getElementById('patientMonth');
+            var patientMonth = document.getElementById('patientMonth');
             if (patientMonth) {
                 patientMonth.innerHTML = '<option value="">Select Month</option>';
-                months.forEach(month => {
-                    const option = document.createElement('option');
-                    option.value = month.value;
-                    option.textContent = month.label;
+                for (var i = 0; i < months.length; i++) {
+                    var option = document.createElement('option');
+                    option.value = months[i].value;
+                    option.textContent = months[i].label;
                     patientMonth.appendChild(option);
-                });
+                }
             }
+        }
 
-            // Tracking month selector - FIXED: Check if element exists
-            const trackingMonth = document.getElementById('trackingMonth');
-            if (trackingMonth) {
-                trackingMonth.innerHTML = '<option value="">Select Month</option>';
-                months.forEach(month => {
-                    const option = document.createElement('option');
-                    option.value = month.value;
-                    option.textContent = month.label;
-                    trackingMonth.appendChild(option);
+        /* Authentication */
+        function setupLoginForm() {
+            var loginForm = document.getElementById('loginForm');
+            if (loginForm) {
+                loginForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    var email = document.getElementById('email').value;
+                    var password = document.getElementById('password').value;
+
+                    fetch('/api/auth/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email: email, password: password })
+                    })
+                    .then(function(response) { return response.json(); })
+                    .then(function(data) {
+                        if (data.success) {
+                            authToken = data.token;
+                            currentUser = data.user;
+                            localStorage.setItem('authToken', authToken);
+                            localStorage.setItem('currentUser', JSON.stringify(currentUser));
+                            showMainApp();
+                        } else {
+                            showMessage('loginMessage', data.message, 'error');
+                        }
+                    })
+                    .catch(function(error) {
+                        showMessage('loginMessage', 'Login failed. Please try again.', 'error');
+                    });
                 });
             }
         }
 
-        // Authentication
-        document.getElementById('loginForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-
-            try {
-                const response = await fetch('/api/auth/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password })
-                });
-
-                const data = await response.json();
-                
-                if (data.success) {
-                    authToken = data.token;
-                    currentUser = data.user;
-                    localStorage.setItem('authToken', authToken);
-                    localStorage.setItem('currentUser', JSON.stringify(currentUser));
-                    showMainApp();
-                } else {
-                    showMessage('loginMessage', data.message, 'error');
-                }
-            } catch (error) {
-                showMessage('loginMessage', 'Login failed. Please try again.', 'error');
-            }
-        });
-
         function showMainApp() {
             try {
-                const loginScreen = document.getElementById('loginScreen');
-                const mainApp = document.getElementById('mainApp');
+                var loginScreen = document.getElementById('loginScreen');
+                var mainApp = document.getElementById('mainApp');
                 
                 if (loginScreen) loginScreen.style.display = 'none';
                 if (mainApp) mainApp.style.display = 'block';
                 
-                // Update user info safely
-                const userName = document.getElementById('userName');
-                const userRole = document.getElementById('userRole');
+                var userName = document.getElementById('userName');
+                var userRole = document.getElementById('userRole');
                 
                 if (userName && currentUser) userName.textContent = currentUser.name;
                 if (userRole && currentUser) userRole.textContent = currentUser.role.toUpperCase();
                 
-                // Show admin panel if user is admin
                 if (currentUser && currentUser.role === 'admin') {
-                    document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'block');
+                    var adminElements = document.querySelectorAll('.admin-only');
+                    for (var i = 0; i < adminElements.length; i++) {
+                        adminElements[i].style.display = 'block';
+                    }
                 }
 
-                // Initialize month dropdowns with error handling
                 try {
                     initializeMonthDropdowns();
                 } catch (error) {
                     console.error('Error initializing month dropdowns:', error);
                 }
 
-                // Load initial data with error handling
                 Promise.all([
                     loadDashboardData(),
                     loadPatients(),
                     loadSupplies(),
                     loadFacilities()
-                ]).catch(error => {
+                ]).catch(function(error) {
                     console.error('Error loading initial data:', error);
                     showMessage('Some data failed to load. Please refresh the page.', 'error');
                 });
@@ -1547,60 +1054,74 @@ async function exportTrackingReport() {
             currentUser = null;
         }
 
-        // Check for existing auth on page load
-        window.addEventListener('load', () => {
-            const savedToken = localStorage.getItem('authToken');
-            const savedUser = localStorage.getItem('currentUser');
+        /* Check for existing auth on page load */
+        window.addEventListener('load', function() {
+            var savedToken = localStorage.getItem('authToken');
+            var savedUser = localStorage.getItem('currentUser');
             
             if (savedToken && savedUser) {
                 authToken = savedToken;
                 currentUser = JSON.parse(savedUser);
                 showMainApp();
             }
+
+            setupLoginForm();
+            setupFormHandlers();
         });
 
-        // API Helper function
-        async function apiCall(endpoint, options = {}) {
-            const headers = {
-                'Content-Type': 'application/json',
-                ...options.headers
+        /* API Helper function */
+        function apiCall(endpoint, options) {
+            options = options || {};
+            var headers = {
+                'Content-Type': 'application/json'
             };
 
-            if (authToken) {
-                headers.Authorization = `Bearer ${authToken}`;
-            }
-
-            try {
-                const response = await fetch(endpoint, {
-                    ...options,
-                    headers
-                });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+            if (options.headers) {
+                for (var key in options.headers) {
+                    headers[key] = options.headers[key];
                 }
-
-                return await response.json();
-            } catch (error) {
-                console.error('API call failed:', error);
-                throw error;
             }
+
+            if (authToken) {
+                headers.Authorization = 'Bearer ' + authToken;
+            }
+
+            var requestOptions = {
+                headers: headers
+            };
+
+            for (var key in options) {
+                if (key !== 'headers') {
+                    requestOptions[key] = options[key];
+                }
+            }
+
+            return fetch(endpoint, requestOptions)
+                .then(function(response) {
+                    if (!response.ok) {
+                        throw new Error('HTTP error! status: ' + response.status);
+                    }
+                    return response.json();
+                })
+                .catch(function(error) {
+                    console.error('API call failed:', error);
+                    throw error;
+                });
         }
 
-        // Panel navigation with safe data loading
+        /* Panel navigation */
         function showPanel(panelName) {
-            // Hide all panels
-            document.querySelectorAll('.panel').forEach(panel => {
-                panel.classList.remove('active');
-            });
+            var panels = document.querySelectorAll('.panel');
+            for (var i = 0; i < panels.length; i++) {
+                panels[i].classList.remove('active');
+            }
             
-            // Remove active from all tabs
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                btn.classList.remove('active');
-            });
+            var tabs = document.querySelectorAll('.tab-btn');
+            for (var i = 0; i < tabs.length; i++) {
+                tabs[i].classList.remove('active');
+            }
             
-            // Show selected panel
-            const targetPanel = document.getElementById(panelName + 'Panel');
+            var targetPanel = document.getElementById(panelName + 'Panel');
             if (targetPanel) {
                 targetPanel.classList.add('active');
             }
@@ -1609,96 +1130,104 @@ async function exportTrackingReport() {
                 event.target.classList.add('active');
             }
 
-            // Load panel-specific data with error handling
             switch(panelName) {
                 case 'dashboard':
-                    loadDashboardData().catch(err => console.error('Dashboard load error:', err));
+                    loadDashboardData().catch(function(err) { console.error('Dashboard load error:', err); });
                     break;
                 case 'patients':
-                    loadPatients().catch(err => console.error('Patients load error:', err));
+                    loadPatients().catch(function(err) { console.error('Patients load error:', err); });
                     break;
                 case 'supplies':
-                    loadSupplies().catch(err => console.error('Supplies load error:', err));
+                    loadSupplies().catch(function(err) { console.error('Supplies load error:', err); });
                     break;
                 case 'tracking':
-                    ensureDataLoaded().then(() => {
+                    ensureDataLoaded().then(function() {
                         loadTrackingPatients();
-                    }).catch(err => console.error('Tracking load error:', err));
+                    }).catch(function(err) { console.error('Tracking load error:', err); });
                     break;
                 case 'admin':
                     if (currentUser && currentUser.role === 'admin') {
-                        loadAdminData().catch(err => console.error('Admin load error:', err));
+                        loadAdminData().catch(function(err) { console.error('Admin load error:', err); });
                     }
                     break;
             }
         }
 
-        // Dashboard functions
-        async function loadDashboardData() {
-            try {
-                const [patientsData, suppliesData, trackingData] = await Promise.all([
-                    apiCall('/api/patients'),
-                    apiCall('/api/supplies'),
-                    apiCall('/api/tracking')
-                ]);
+        /* Dashboard functions */
+        function loadDashboardData() {
+            return Promise.all([
+                apiCall('/api/patients'),
+                apiCall('/api/supplies'),
+                apiCall('/api/tracking')
+            ]).then(function(results) {
+                var patientsData = results[0];
+                var suppliesData = results[1];
+                var trackingData = results[2];
 
-                document.getElementById('totalPatients').textContent = patientsData.patients?.length || 0;
-                document.getElementById('totalSupplies').textContent = suppliesData.supplies?.length || 0;
-                document.getElementById('monthlyTracking').textContent = trackingData.tracking?.length || 0;
+                document.getElementById('totalPatients').textContent = (patientsData.patients && patientsData.patients.length) || 0;
+                document.getElementById('totalSupplies').textContent = (suppliesData.supplies && suppliesData.supplies.length) || 0;
+                document.getElementById('monthlyTracking').textContent = (trackingData.tracking && trackingData.tracking.length) || 0;
                 
-                const totalCost = suppliesData.supplies?.reduce((sum, supply) => sum + (parseFloat(supply.cost) || 0), 0) || 0;
-                document.getElementById('totalCost').textContent = `$${totalCost.toFixed(2)}`;
+                var totalCost = 0;
+                if (suppliesData.supplies) {
+                    for (var i = 0; i < suppliesData.supplies.length; i++) {
+                        totalCost += parseFloat(suppliesData.supplies[i].cost) || 0;
+                    }
+                }
+                document.getElementById('totalCost').textContent = '$' + totalCost.toFixed(2);
                 
                 loadRecentActivity();
-            } catch (error) {
+            }).catch(function(error) {
                 console.error('Failed to load dashboard data:', error);
-            }
+            });
         }
 
-        async function loadRecentActivity() {
-            const tbody = document.getElementById('recentActivity');
+        function loadRecentActivity() {
+            var tbody = document.getElementById('recentActivity');
             if (tbody) {
-                tbody.innerHTML = `
-                    <tr><td>${new Date().toLocaleDateString()}</td><td>System</td><td>Login</td><td>User logged in successfully</td></tr>
-                    <tr><td>${new Date().toLocaleDateString()}</td><td>System</td><td>Dashboard</td><td>Dashboard data loaded</td></tr>
-                    <tr><td>${new Date().toLocaleDateString()}</td><td>System</td><td>Supplies</td><td>Complete AR supply database loaded</td></tr>
-                `;
+                var today = new Date().toLocaleDateString();
+                tbody.innerHTML = '<tr><td>' + today + '</td><td>System</td><td>Login</td><td>User logged in successfully</td></tr>' +
+                                  '<tr><td>' + today + '</td><td>System</td><td>Dashboard</td><td>Dashboard data loaded</td></tr>' +
+                                  '<tr><td>' + today + '</td><td>System</td><td>Supplies</td><td>Complete AR supply database loaded</td></tr>';
             }
         }
 
-        // Patient functions
-        async function loadPatients() {
-            try {
-                const data = await apiCall('/api/patients');
+        /* Patient functions */
+        function loadPatients() {
+            return apiCall('/api/patients').then(function(data) {
                 allPatients = data.patients || [];
-                patients = [...allPatients]; // Copy for filtering
-                filterPatients(); // Apply current filters
-            } catch (error) {
+                patients = allPatients.slice();
+                filterPatients();
+            }).catch(function(error) {
                 console.error('Failed to load patients:', error);
-                const tbody = document.getElementById('patientsTable');
+                var tbody = document.getElementById('patientsTable');
                 if (tbody) {
                     tbody.innerHTML = '<tr><td colspan="5" class="text-center">Failed to load patients</td></tr>';
                 }
-            }
+            });
         }
 
         function filterPatients() {
-            const searchTerm = document.getElementById('patientSearch')?.value.toLowerCase() || '';
-            const facilityFilter = document.getElementById('patientFacilityFilter')?.value || '';
-            const monthFilter = document.getElementById('patientMonthFilter')?.value || '';
-            const sortBy = document.getElementById('patientSortBy')?.value || 'name';
+            var searchElement = document.getElementById('patientSearch');
+            var facilityElement = document.getElementById('patientFacilityFilter');
+            var monthElement = document.getElementById('patientMonthFilter');
+            var sortElement = document.getElementById('patientSortBy');
+
+            var searchTerm = searchElement ? searchElement.value.toLowerCase() : '';
+            var facilityFilter = facilityElement ? facilityElement.value : '';
+            var monthFilter = monthElement ? monthElement.value : '';
+            var sortBy = sortElement ? sortElement.value : 'name';
             
-            let filtered = allPatients.filter(patient => {
-                const matchesSearch = patient.name.toLowerCase().includes(searchTerm) ||
-                                    (patient.mrn && patient.mrn.toLowerCase().includes(searchTerm));
-                const matchesFacility = !facilityFilter || patient.facility_id.toString() === facilityFilter;
-                const matchesMonth = !monthFilter || patient.month === monthFilter;
+            var filtered = allPatients.filter(function(patient) {
+                var matchesSearch = patient.name.toLowerCase().indexOf(searchTerm) >= 0 ||
+                                  (patient.mrn && patient.mrn.toLowerCase().indexOf(searchTerm) >= 0);
+                var matchesFacility = !facilityFilter || patient.facility_id.toString() === facilityFilter;
+                var matchesMonth = !monthFilter || patient.month === monthFilter;
                 
                 return matchesSearch && matchesFacility && matchesMonth;
             });
 
-            // Sort patients
-            filtered.sort((a, b) => {
+            filtered.sort(function(a, b) {
                 switch(sortBy) {
                     case 'name':
                         return a.name.localeCompare(b.name);
@@ -1718,7 +1247,7 @@ async function exportTrackingReport() {
         }
 
         function renderPatientsTable() {
-            const tbody = document.getElementById('patientsTable');
+            var tbody = document.getElementById('patientsTable');
             if (!tbody) return;
             
             if (patients.length === 0) {
@@ -1726,82 +1255,61 @@ async function exportTrackingReport() {
                 return;
             }
 
-            tbody.innerHTML = patients.map(patient => `
-                <tr>
-                    <td>${patient.name}</td>
-                    <td>${patient.mrn || 'N/A'}</td>
-                    <td>${patient.month}</td>
-                    <td>${patient.facility_name || 'N/A'}</td>
-                    <td>
-                        <button class="btn btn-primary btn-small" onclick="editPatient(${patient.id})">Edit</button>
-                        <button class="btn btn-danger btn-small" onclick="deletePatient(${patient.id})" style="margin-left: 5px;">Delete</button>
-                    </td>
-                </tr>
-            `).join('');
+            var html = '';
+            for (var i = 0; i < patients.length; i++) {
+                var patient = patients[i];
+                html += '<tr>' +
+                    '<td>' + patient.name + '</td>' +
+                    '<td>' + (patient.mrn || 'N/A') + '</td>' +
+                    '<td>' + patient.month + '</td>' +
+                    '<td>' + (patient.facility_name || 'N/A') + '</td>' +
+                    '<td>' +
+                        '<button class="btn btn-primary btn-small" onclick="editPatient(' + patient.id + ')">Edit</button>' +
+                        '<button class="btn btn-danger btn-small" onclick="deletePatient(' + patient.id + ')" style="margin-left: 5px;">Delete</button>' +
+                    '</td>' +
+                '</tr>';
+            }
+            tbody.innerHTML = html;
         }
 
         function showAddPatientModal() {
-            const modal = document.getElementById('addPatientModal');
+            var modal = document.getElementById('addPatientModal');
             if (modal) {
                 modal.style.display = 'block';
                 loadFacilityOptions('patientFacility');
             }
         }
 
-        document.getElementById('addPatientForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const patientData = {
-                name: document.getElementById('patientName').value,
-                mrn: document.getElementById('patientMRN').value,
-                month: document.getElementById('patientMonth').value,
-                facility_id: document.getElementById('patientFacility').value
-            };
-
-            try {
-                await apiCall('/api/patients', {
-                    method: 'POST',
-                    body: JSON.stringify(patientData)
-                });
-
-                closeModal('addPatientModal');
-                document.getElementById('addPatientForm').reset();
-                loadPatients();
-                showMessage('Successfully added patient!', 'success');
-            } catch (error) {
-                showMessage('Failed to add patient', 'error');
-            }
-        });
-
-        // Supply functions
-        async function loadSupplies() {
-            try {
-                const data = await apiCall('/api/supplies');
+        /* Supply functions */
+        function loadSupplies() {
+            return apiCall('/api/supplies').then(function(data) {
                 supplies = data.supplies || [];
                 filterSupplies();
-            } catch (error) {
+            }).catch(function(error) {
                 console.error('Failed to load supplies:', error);
-                const tbody = document.getElementById('suppliesTable');
+                var tbody = document.getElementById('suppliesTable');
                 if (tbody) {
                     tbody.innerHTML = '<tr><td colspan="6" class="text-center">Failed to load supplies</td></tr>';
                 }
-            }
+            });
         }
 
         function filterSupplies() {
-            const searchTerm = document.getElementById('supplySearch')?.value.toLowerCase() || '';
+            var searchElement = document.getElementById('supplySearch');
+            var searchTerm = searchElement ? searchElement.value.toLowerCase() : '';
             
-            const filtered = supplies.filter(supply => 
-                supply.description.toLowerCase().includes(searchTerm) ||
-                supply.code.toString().includes(searchTerm) ||
-                (supply.hcpcs && supply.hcpcs.toLowerCase().includes(searchTerm))
-            );
+            var filtered = supplies.filter(function(supply) {
+                return supply.description.toLowerCase().indexOf(searchTerm) >= 0 ||
+                       supply.code.toString().indexOf(searchTerm) >= 0 ||
+                       (supply.hcpcs && supply.hcpcs.toLowerCase().indexOf(searchTerm) >= 0);
+            });
             
             renderSuppliesTable(filtered);
         }
 
-        function renderSuppliesTable(filteredSupplies = supplies) {
-            const tbody = document.getElementById('suppliesTable');
+        function renderSuppliesTable(filteredSupplies) {
+            filteredSupplies = filteredSupplies || supplies;
+            var tbody = document.getElementById('suppliesTable');
             if (!tbody) return;
             
             if (filteredSupplies.length === 0) {
@@ -1809,395 +1317,211 @@ async function exportTrackingReport() {
                 return;
             }
 
-            tbody.innerHTML = filteredSupplies.map(supply => `
-                <tr>
-                    <td>${supply.code}</td>
-                    <td>${supply.description}</td>
-                    <td>${supply.hcpcs || 'N/A'}</td>
-                    <td>$${parseFloat(supply.cost || 0).toFixed(2)}</td>
-                    <td>${supply.is_custom ? 'Custom' : 'AR Standard'}</td>
-                    <td>
-                        ${currentUser && currentUser.role === 'admin' ? `
-                            <button class="btn btn-primary btn-small" onclick="editSupply(${supply.id})">Edit</button>
-                            ${supply.is_custom ? `<button class="btn btn-danger btn-small" onclick="deleteSupply(${supply.id})" style="margin-left: 5px;">Delete</button>` : ''}
-                        ` : '<span>View Only</span>'}
-                    </td>
-                </tr>
-            `).join('');
+            var html = '';
+            for (var i = 0; i < filteredSupplies.length; i++) {
+                var supply = filteredSupplies[i];
+                var actions = '<span>View Only</span>';
+                
+                if (currentUser && currentUser.role === 'admin') {
+                    actions = '<button class="btn btn-primary btn-small" onclick="editSupply(' + supply.id + ')">Edit</button>';
+                    if (supply.is_custom) {
+                        actions += '<button class="btn btn-danger btn-small" onclick="deleteSupply(' + supply.id + ')" style="margin-left: 5px;">Delete</button>';
+                    }
+                }
+                
+                html += '<tr>' +
+                    '<td>' + supply.code + '</td>' +
+                    '<td>' + supply.description + '</td>' +
+                    '<td>' + (supply.hcpcs || 'N/A') + '</td>' +
+                    '<td>$' + parseFloat(supply.cost || 0).toFixed(2) + '</td>' +
+                    '<td>' + (supply.is_custom ? 'Custom' : 'AR Standard') + '</td>' +
+                    '<td>' + actions + '</td>' +
+                '</tr>';
+            }
+            tbody.innerHTML = html;
         }
 
         function showAddSupplyModal() {
-            const modal = document.getElementById('addSupplyModal');
+            var modal = document.getElementById('addSupplyModal');
             if (modal) modal.style.display = 'block';
         }
 
-        document.getElementById('addSupplyForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const supplyData = {
-                code: document.getElementById('supplyCode').value,
-                description: document.getElementById('supplyDescription').value,
-                hcpcs: document.getElementById('supplyHCPCS').value,
-                cost: document.getElementById('supplyCost').value
-            };
-
-            try {
-                await apiCall('/api/supplies', {
-                    method: 'POST',
-                    body: JSON.stringify(supplyData)
-                });
-
-                closeModal('addSupplyModal');
-                document.getElementById('addSupplyForm').reset();
-                loadSupplies();
-                showMessage('Successfully added supply!', 'success');
-            } catch (error) {
-                showMessage('Failed to add supply', 'error');
-            }
-        });
-
-        // Facility functions
-        async function loadFacilities() {
-            try {
-                const data = await apiCall('/api/facilities');
+        /* Facility functions */
+        function loadFacilities() {
+            return apiCall('/api/facilities').then(function(data) {
                 facilities = data.facilities || [];
-                
-                // Update facility filters
                 updateFacilityFilters();
-            } catch (error) {
+            }).catch(function(error) {
                 console.error('Failed to load facilities:', error);
-            }
+            });
         }
 
         function updateFacilityFilters() {
-            // Patient facility filter
-            const patientFacilityFilter = document.getElementById('patientFacilityFilter');
+            var patientFacilityFilter = document.getElementById('patientFacilityFilter');
             if (patientFacilityFilter) {
                 patientFacilityFilter.innerHTML = '<option value="">All Facilities</option>';
-                facilities.forEach(facility => {
-                    const option = document.createElement('option');
+                for (var i = 0; i < facilities.length; i++) {
+                    var facility = facilities[i];
+                    var option = document.createElement('option');
                     option.value = facility.id;
                     option.textContent = facility.name;
                     patientFacilityFilter.appendChild(option);
-                });
+                }
             }
 
-            // Tracking facility filter
-            const trackingFacilityFilter = document.getElementById('trackingFacilityFilter');
+            var trackingFacilityFilter = document.getElementById('trackingFacilityFilter');
             if (trackingFacilityFilter) {
                 trackingFacilityFilter.innerHTML = '<option value="">All Facilities</option>';
-                facilities.forEach(facility => {
-                    const option = document.createElement('option');
+                for (var i = 0; i < facilities.length; i++) {
+                    var facility = facilities[i];
+                    var option = document.createElement('option');
                     option.value = facility.id;
                     option.textContent = facility.name;
                     trackingFacilityFilter.appendChild(option);
-                });
+                }
             }
         }
 
         function loadFacilityOptions(selectId) {
-            const select = document.getElementById(selectId);
+            var select = document.getElementById(selectId);
             if (!select) return;
             
-            const currentHTML = select.innerHTML;
+            var defaultOption = selectId.indexOf('patient') >= 0 ? 
+                '<option value="">Select Facility</option>' : 
+                '<option value="">No Specific Facility</option>';
             
-            select.innerHTML = selectId.includes('patient') ? '<option value="">Select Facility</option>' : '<option value="">No Specific Facility</option>';
+            select.innerHTML = defaultOption;
             
-            facilities.forEach(facility => {
-                const option = document.createElement('option');
+            for (var i = 0; i < facilities.length; i++) {
+                var facility = facilities[i];
+                var option = document.createElement('option');
                 option.value = facility.id;
                 option.textContent = facility.name;
                 select.appendChild(option);
-            });
-        }
-
-        // Tracking functions
-        async function loadTrackingPatients() {
-            try {
-                const data = await apiCall('/api/patients');
-                const select = document.getElementById('trackingPatient');
-                
-                // Store all patients for filtering
-                window.trackingPatients = data.patients || [];
-                
-                filterTrackingPatients();
-            } catch (error) {
-                console.error('Failed to load tracking patients:', error);
             }
         }
 
+        /* Tracking functions */
+        function loadTrackingPatients() {
+            return apiCall('/api/patients').then(function(data) {
+                window.trackingPatients = data.patients || [];
+                filterTrackingPatients();
+            }).catch(function(error) {
+                console.error('Failed to load tracking patients:', error);
+            });
+        }
+
         function filterTrackingPatients() {
-            const facilityFilter = document.getElementById('trackingFacilityFilter')?.value || '';
-            const select = document.getElementById('trackingPatient');
+            var facilityElement = document.getElementById('trackingFacilityFilter');
+            var facilityFilter = facilityElement ? facilityElement.value : '';
+            var select = document.getElementById('trackingPatient');
             if (!select) return;
             
             select.innerHTML = '<option value="">Select Patient...</option>';
             
-            const filteredPatients = (window.trackingPatients || []).filter(patient => {
+            var filteredPatients = (window.trackingPatients || []).filter(function(patient) {
                 return !facilityFilter || patient.facility_id.toString() === facilityFilter;
             });
 
-            filteredPatients.sort((a, b) => a.name.localeCompare(b.name));
+            filteredPatients.sort(function(a, b) { return a.name.localeCompare(b.name); });
 
-            filteredPatients.forEach(patient => {
-                const option = document.createElement('option');
+            for (var i = 0; i < filteredPatients.length; i++) {
+                var patient = filteredPatients[i];
+                var option = document.createElement('option');
                 option.value = patient.id;
-                option.textContent = `${patient.name} (${patient.month}) - ${patient.facility_name || 'No Facility'}`;
+                option.textContent = patient.name + ' (' + patient.month + ') - ' + (patient.facility_name || 'No Facility');
                 select.appendChild(option);
-            });
+            }
         }
 
-        // Enhanced tracking functionality variables
-        let currentTrackingPatient = null;
-        let allTrackingData = [];
-        let filteredSupplies = [];
-        let trackingData = {};
-
-        async function loadPatientTracking() {
-            const patientSelect = document.getElementById('trackingPatient');
+        function loadPatientTracking() {
+            var patientSelect = document.getElementById('trackingPatient');
             if (!patientSelect) {
                 console.error('trackingPatient select element not found');
                 return;
             }
 
-            const patientId = patientSelect.value;
+            var patientId = patientSelect.value;
             
             if (!patientId) {
-                const containers = ['trackingTableContainer', 'trackingSearchContainer'];
-                containers.forEach(id => {
-                    const elem = document.getElementById(id);
+                var containers = ['trackingTableContainer', 'trackingSearchContainer'];
+                for (var i = 0; i < containers.length; i++) {
+                    var elem = document.getElementById(containers[i]);
                     if (elem) elem.style.display = 'none';
-                });
+                }
                 return;
             }
 
-            try {
-                currentTrackingPatient = patientId;
-                
-                // Show loading with safe element access
-                const trackingTable = document.getElementById('trackingTable');
-                if (trackingTable) {
-                    trackingTable.innerHTML = '<p class="text-center">Loading tracking data...</p>';
+            currentTrackingPatient = patientId;
+            
+            var trackingTable = document.getElementById('trackingTable');
+            if (trackingTable) {
+                trackingTable.innerHTML = '<p class="text-center">Loading tracking data...</p>';
+            }
+            
+            var tableContainer = document.getElementById('trackingTableContainer');
+            var searchContainer = document.getElementById('trackingSearchContainer');
+            if (tableContainer) tableContainer.style.display = 'block';
+            if (searchContainer) searchContainer.style.display = 'block';
+            
+            var patient = null;
+            for (var i = 0; i < patients.length; i++) {
+                if (patients[i].id == patientId) {
+                    patient = patients[i];
+                    break;
                 }
-                
-                const tableContainer = document.getElementById('trackingTableContainer');
-                const searchContainer = document.getElementById('trackingSearchContainer');
-                if (tableContainer) tableContainer.style.display = 'block';
-                if (searchContainer) searchContainer.style.display = 'block';
-                
-                // Find patient with safe check
-                const patient = patients.find(p => p.id == patientId);
-                if (!patient) {
-                    showMessage('Patient not found', 'error');
-                    return;
-                }
-                
-                // Update patient info safely
-                const patientInfo = document.getElementById('patientInfo');
-                if (patientInfo) {
-                    patientInfo.innerHTML = `
-                        <strong>Patient:</strong> ${patient.name} | 
-                        <strong>MRN:</strong> ${patient.mrn || 'N/A'} | 
-                        <strong>Month:</strong> ${patient.month} | 
-                        <strong>Facility:</strong> ${patient.facility_name || 'N/A'}
-                    `;
-                }
-                
-                // Load tracking data
-                const trackingResponse = await apiCall(`/api/tracking/${patientId}`);
+            }
+
+            if (!patient) {
+                showMessage('Patient not found', 'error');
+                return;
+            }
+            
+            var patientInfo = document.getElementById('patientInfo');
+            if (patientInfo) {
+                patientInfo.innerHTML = '<strong>Patient:</strong> ' + patient.name + ' | ' +
+                    '<strong>MRN:</strong> ' + (patient.mrn || 'N/A') + ' | ' +
+                    '<strong>Month:</strong> ' + patient.month + ' | ' +
+                    '<strong>Facility:</strong> ' + (patient.facility_name || 'N/A');
+            }
+            
+            apiCall('/api/tracking/' + patientId).then(function(trackingResponse) {
                 allTrackingData = trackingResponse.tracking || [];
                 
-                // Process tracking data into lookup object
                 trackingData = {};
-                allTrackingData.forEach(item => {
-                    const key = `${item.supply_id}_${item.day_of_month}`;
+                for (var i = 0; i < allTrackingData.length; i++) {
+                    var item = allTrackingData[i];
+                    var key = item.supply_id + '_' + item.day_of_month;
                     trackingData[key] = item;
-                });
+                }
                 
-                // Show all supplies with safe check
                 if (supplies && supplies.length > 0) {
-                    filteredSupplies = [...supplies];
+                    filteredSupplies = supplies.slice();
                     renderTrackingInterface();
                 } else {
                     showMessage('No supplies loaded. Please refresh the page.', 'error');
                     return;
                 }
                 
-                // Show buttons safely
-                const exportBtn = document.getElementById('exportBtn');
-                const saveAllBtn = document.getElementById('saveAllBtn');
+                var exportBtn = document.getElementById('exportBtn');
+                var saveAllBtn = document.getElementById('saveAllBtn');
                 if (exportBtn) exportBtn.style.display = 'block';
                 if (saveAllBtn) saveAllBtn.style.display = 'block';
                 
-            } catch (error) {
+            }).catch(function(error) {
                 console.error('Failed to load tracking data:', error);
                 showMessage('Failed to load tracking data: ' + error.message, 'error');
-            }
+            });
         }
 
-        // Admin functions
-        async function loadAdminData() {
-            if (currentUser.role !== 'admin') return;
-
-            try {
-                const [usersData, facilitiesData] = await Promise.all([
-                    apiCall('/api/admin/users'),
-                    apiCall('/api/facilities')
-                ]);
-
-                document.getElementById('totalUsers').textContent = usersData.users?.length || 0;
-                document.getElementById('totalFacilities').textContent = facilitiesData.facilities?.length || 0;
-                
-                const pendingUsers = usersData.users?.filter(user => !user.is_approved).length || 0;
-                document.getElementById('pendingApprovals').textContent = pendingUsers;
-
-                renderUsersTable(usersData.users || []);
-            } catch (error) {
-                console.error('Failed to load admin data:', error);
-            }
-        }
-
-        function renderUsersTable(users) {
-            const tbody = document.getElementById('usersTable');
-            if (!tbody) return;
-            
-            if (users.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="text-center">No users found</td></tr>';
-                return;
-            }
-
-            tbody.innerHTML = users.map(user => `
-                <tr>
-                    <td>${user.name}</td>
-                    <td>${user.email}</td>
-                    <td>${user.role}</td>
-                    <td>${user.facility_name || 'N/A'}</td>
-                    <td>${user.is_approved ? 'Approved' : 'Pending'}</td>
-                    <td>
-                        ${!user.is_approved ? `<button class="btn btn-success btn-small" onclick="approveUser(${user.id})">Approve</button>` : ''}
-                        <button class="btn btn-danger btn-small" onclick="deleteUser(${user.id})">Delete</button>
-                    </td>
-                </tr>
-            `).join('');
-        }
-
-        function showAddUserModal() {
-            const modal = document.getElementById('addUserModal');
-            if (modal) {
-                modal.style.display = 'block';
-                loadFacilityOptions('userFacility');
-            }
-        }
-
-        function showAddFacilityModal() {
-            const modal = document.getElementById('addFacilityModal');
-            if (modal) modal.style.display = 'block';
-        }
-
-        // Add User Form Submit
-        document.getElementById('addUserForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const userData = {
-                name: document.getElementById('userName').value,
-                email: document.getElementById('userEmail').value,
-                password: document.getElementById('userPassword').value,
-                role: document.getElementById('userRole').value,
-                facility_id: document.getElementById('userFacility').value || null
-            };
-
-            try {
-                await apiCall('/api/admin/users', {
-                    method: 'POST',
-                    body: JSON.stringify(userData)
-                });
-
-                closeModal('addUserModal');
-                document.getElementById('addUserForm').reset();
-                loadAdminData();
-                showMessage('Successfully added user!', 'success');
-            } catch (error) {
-                showMessage('Failed to add user', 'error');
-            }
-        });
-
-        // Add Facility Form Submit
-        document.getElementById('addFacilityForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const facilityData = {
-                name: document.getElementById('facilityName').value
-            };
-
-            try {
-                await apiCall('/api/facilities', {
-                    method: 'POST',
-                    body: JSON.stringify(facilityData)
-                });
-
-                closeModal('addFacilityModal');
-                document.getElementById('addFacilityForm').reset();
-                loadFacilities();
-                loadAdminData();
-                showMessage('Successfully added facility!', 'success');
-            } catch (error) {
-                showMessage('Failed to add facility', 'error');
-            }
-        });
-
-        async function approveUser(userId) {
-            try {
-                await apiCall(`/api/admin/users/${userId}/approve`, {
-                    method: 'PUT'
-                });
-                loadAdminData();
-                showMessage('User approved successfully!', 'success');
-            } catch (error) {
-                showMessage('Failed to approve user', 'error');
-            }
-        }
-
-        async function deleteUser(userId) {
-            if (!confirm('Are you sure you want to delete this user?')) return;
-
-            try {
-                await apiCall(`/api/admin/users/${userId}`, {
-                    method: 'DELETE'
-                });
-                loadAdminData();
-                showMessage('User deleted successfully!', 'success');
-            } catch (error) {
-                showMessage('Failed to delete user', 'error');
-            }
-        }
-
-        // Data loading helper function
-        async function ensureDataLoaded() {
-            if (!patients || patients.length === 0) {
-                console.log('Loading patients data...');
-                await loadPatients();
-            }
-            
-            if (!supplies || supplies.length === 0) {
-                console.log('Loading supplies data...');
-                await loadSupplies();
-            }
-            
-            if (!facilities || facilities.length === 0) {
-                console.log('Loading facilities data...');
-                await loadFacilities();
-            }
-        }
-
-        // FIXED: All tracking interface functions with proper syntax
         function renderTrackingInterface() {
             if (!currentUser) {
                 showMessage('User not authenticated', 'error');
                 return;
             }
             
-            const adminView = document.getElementById('adminTrackingView');
-            const userView = document.getElementById('userTrackingView');
+            var adminView = document.getElementById('adminTrackingView');
+            var userView = document.getElementById('userTrackingView');
             
             if (!adminView || !userView) {
                 console.error('Tracking view elements not found');
@@ -2216,186 +1540,173 @@ async function exportTrackingReport() {
         }
 
         function renderAdminTrackingView() {
-            let html = `
-                <div style="margin-bottom: 20px;">
-                    <h3>Administrative View - Complete Report Data</h3>
-                </div>
-                <div style="overflow-x: auto;">
-                    <table class="table" style="min-width: 1200px;">
-                        <thead>
-                            <tr style="background: #f8fafc;">
-                                <th>Code</th>
-                                <th style="min-width: 250px;">Description</th>
-                                <th>HCPCS</th>
-                                <th>Unit Cost</th>
-                                <th>Total Units</th>
-                                <th>Total Cost</th>
-                                <th style="min-width: 200px;">Wound Dx</th>
-                                <th style="min-width: 400px;">Daily Quantities (1-31)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-            `;
+            var html = [];
             
-            filteredSupplies.forEach(supply => {
-                const totalUnits = getTotalUnitsForSupply(supply.id);
-                const totalCost = totalUnits * parseFloat(supply.cost || 0);
-                const woundDx = getWoundDxForSupply(supply.id);
+            html.push('<div style="margin-bottom: 20px;">');
+            html.push('<h3>Administrative View - Complete Report Data</h3>');
+            html.push('</div>');
+            html.push('<div style="overflow-x: auto;">');
+            html.push('<table class="table" style="min-width: 1200px;">');
+            html.push('<thead>');
+            html.push('<tr style="background: #f8fafc;">');
+            html.push('<th>Code</th>');
+            html.push('<th style="min-width: 250px;">Description</th>');
+            html.push('<th>HCPCS</th>');
+            html.push('<th>Unit Cost</th>');
+            html.push('<th>Total Units</th>');
+            html.push('<th>Total Cost</th>');
+            html.push('<th style="min-width: 200px;">Wound Dx</th>');
+            html.push('<th style="min-width: 400px;">Daily Quantities (1-31)</th>');
+            html.push('</tr>');
+            html.push('</thead>');
+            html.push('<tbody>');
+            
+            for (var s = 0; s < filteredSupplies.length; s++) {
+                var supply = filteredSupplies[s];
+                var totalUnits = getTotalUnitsForSupply(supply.id);
+                var totalCost = totalUnits * parseFloat(supply.cost || 0);
+                var woundDx = getWoundDxForSupply(supply.id);
                 
-                html += `
-                    <tr class="${totalUnits > 0 ? 'supply-with-data' : ''}" style="border-bottom: 2px solid #e5e7eb;">
-                        <td><strong>${supply.code}</strong></td>
-                        <td>${supply.description}</td>
-                        <td>${supply.hcpcs || 'N/A'}</td>
-                        <td>$${parseFloat(supply.cost || 0).toFixed(2)}</td>
-                        <td><strong>${totalUnits}</strong></td>
-                        <td><strong>$${totalCost.toFixed(2)}</strong></td>
-                        <td>
-                            <input type="text" 
-                                   value="${woundDx}" 
-                                   placeholder="Enter diagnosis"
-                                   style="width: 180px; padding: 4px; border: 1px solid #ddd; border-radius: 4px;"
-                                   onchange="updateSupplyWoundDx(${supply.id}, this.value)"
-                                   data-supply-id="${supply.id}">
-                        </td>
-                        <td>
-                            <div class="days-grid">
-                `;
+                var rowClass = totalUnits > 0 ? 'supply-with-data' : '';
                 
-                // Add day inputs
-                for (let day = 1; day <= 31; day++) {
-                    const key = `${supply.id}_${day}`;
-                    const currentData = trackingData[key];
-                    const quantity = currentData ? currentData.quantity : 0;
+                html.push('<tr class="' + rowClass + '" style="border-bottom: 2px solid #e5e7eb;">');
+                html.push('<td><strong>' + supply.code + '</strong></td>');
+                html.push('<td>' + supply.description + '</td>');
+                html.push('<td>' + (supply.hcpcs || 'N/A') + '</td>');
+                html.push('<td>$' + parseFloat(supply.cost || 0).toFixed(2) + '</td>');
+                html.push('<td><strong>' + totalUnits + '</strong></td>');
+                html.push('<td><strong>$' + totalCost.toFixed(2) + '</strong></td>');
+                
+                html.push('<td>');
+                html.push('<input type="text" value="' + (woundDx || '') + '" placeholder="Enter diagnosis"');
+                html.push(' style="width: 180px; padding: 4px; border: 1px solid #ddd; border-radius: 4px;"');
+                html.push(' onchange="updateSupplyWoundDx(' + supply.id + ', this.value)"');
+                html.push(' data-supply-id="' + supply.id + '">');
+                html.push('</td>');
+                
+                html.push('<td><div class="days-grid">');
+                
+                for (var day = 1; day <= 31; day++) {
+                    var key = supply.id + '_' + day;
+                    var currentData = trackingData[key];
+                    var quantity = currentData ? currentData.quantity : 0;
                     
-                    html += `
-                        <div style="text-align: center;">
-                            <div class="day-header">${day}</div>
-                            <input type="number" 
-                                   class="day-input"
-                                   value="${quantity || ''}" 
-                                   min="0" 
-                                   max="9999"
-                                   placeholder="0"
-                                   data-supply-id="${supply.id}" 
-                                   data-day="${day}"
-                                   onchange="updateTrackingValue(${supply.id}, ${day}, this.value)">
-                        </div>
-                    `;
+                    html.push('<div style="text-align: center;">');
+                    html.push('<div class="day-header">' + day + '</div>');
+                    html.push('<input type="number" class="day-input"');
+                    html.push(' value="' + (quantity || '') + '" min="0" max="9999" placeholder="0"');
+                    html.push(' data-supply-id="' + supply.id + '" data-day="' + day + '"');
+                    html.push(' onchange="updateTrackingValue(' + supply.id + ', ' + day + ', this.value)">');
+                    html.push('</div>');
                 }
                 
-                html += `
-                            </div>
-                        </td>
-                    </tr>
-                `;
-            });
+                html.push('</div></td>');
+                html.push('</tr>');
+            }
             
-            html += '</tbody></table></div>';
-            const trackingTableElement = document.getElementById('trackingTable');
+            html.push('</tbody></table></div>');
+            
+            var trackingTableElement = document.getElementById('trackingTable');
             if (trackingTableElement) {
-                trackingTableElement.innerHTML = html;
+                trackingTableElement.innerHTML = html.join('');
             }
         }
 
         function renderUserTrackingView() {
-            let html = `
-                <div style="margin-bottom: 20px;">
-                    <h3>Supply Tracking - Daily Quantities</h3>
-                    <p>Enter quantities used for each day (1-31). Leave blank for zero.</p>
-                </div>
-            `;
+            var html = [];
             
-            // Show only supplies with existing data or commonly used ones first
-            const suppliesWithData = filteredSupplies.filter(supply => getTotalUnitsForSupply(supply.id) > 0);
-            const suppliesWithoutData = filteredSupplies.filter(supply => getTotalUnitsForSupply(supply.id) === 0);
+            html.push('<div style="margin-bottom: 20px;">');
+            html.push('<h3>Supply Tracking - Daily Quantities</h3>');
+            html.push('<p>Enter quantities used for each day (1-31). Leave blank for zero.</p>');
+            html.push('</div>');
             
-            const orderedSupplies = [...suppliesWithData, ...suppliesWithoutData];
+            var suppliesWithData = [];
+            var suppliesWithoutData = [];
             
-            orderedSupplies.forEach(supply => {
-                const totalUnits = getTotalUnitsForSupply(supply.id);
-                const borderStyle = totalUnits > 0 ? 'border-left: 4px solid #10b981;' : '';
+            for (var i = 0; i < filteredSupplies.length; i++) {
+                var supply = filteredSupplies[i];
+                if (getTotalUnitsForSupply(supply.id) > 0) {
+                    suppliesWithData.push(supply);
+                } else {
+                    suppliesWithoutData.push(supply);
+                }
+            }
+            
+            var orderedSupplies = suppliesWithData.concat(suppliesWithoutData);
+            
+            for (var s = 0; s < orderedSupplies.length; s++) {
+                var supply = orderedSupplies[s];
+                var totalUnits = getTotalUnitsForSupply(supply.id);
+                var borderStyle = totalUnits > 0 ? 'border-left: 4px solid #10b981;' : '';
                 
-                html += `
-                    <div class="supply-row" style="margin-bottom: 20px; ${borderStyle}">
-                        <div class="supply-header">
-                            <div><strong>Code: ${supply.code}</strong></div>
-                            <div>${supply.description}</div>
-                            <div>Units: <strong>${totalUnits}</strong></div>
-                            <div>Cost: $${parseFloat(supply.cost || 0).toFixed(2)}</div>
-                            <div>Total: <strong>$${(totalUnits * parseFloat(supply.cost || 0)).toFixed(2)}</strong></div>
-                        </div>
-                        
-                        <div style="margin-top: 10px;">
-                            <div style="font-weight: 600; margin-bottom: 8px; color: #374151;">Daily Quantities:</div>
-                            <div class="days-grid">
-                `;
+                html.push('<div class="supply-row" style="margin-bottom: 20px; ' + borderStyle + '">');
+                html.push('<div class="supply-header">');
+                html.push('<div><strong>Code: ' + supply.code + '</strong></div>');
+                html.push('<div>' + supply.description + '</div>');
+                html.push('<div>Units: <strong>' + totalUnits + '</strong></div>');
+                html.push('<div>Cost: $' + parseFloat(supply.cost || 0).toFixed(2) + '</div>');
+                html.push('<div>Total: <strong>$' + (totalUnits * parseFloat(supply.cost || 0)).toFixed(2) + '</strong></div>');
+                html.push('</div>');
                 
-                // Add day inputs in a responsive grid
-                for (let day = 1; day <= 31; day++) {
-                    const key = `${supply.id}_${day}`;
-                    const currentData = trackingData[key];
-                    const quantity = currentData ? currentData.quantity : 0;
+                html.push('<div style="margin-top: 10px;">');
+                html.push('<div style="font-weight: 600; margin-bottom: 8px; color: #374151;">Daily Quantities:</div>');
+                html.push('<div class="days-grid">');
+                
+                for (var day = 1; day <= 31; day++) {
+                    var key = supply.id + '_' + day;
+                    var currentData = trackingData[key];
+                    var quantity = currentData ? currentData.quantity : 0;
                     
-                    html += `
-                        <div style="text-align: center;">
-                            <div class="day-header">${day}</div>
-                            <input type="number" 
-                                   class="day-input"
-                                   value="${quantity || ''}" 
-                                   min="0" 
-                                   max="9999"
-                                   placeholder="0"
-                                   data-supply-id="${supply.id}" 
-                                   data-day="${day}"
-                                   onchange="updateTrackingValue(${supply.id}, ${day}, this.value)">
-                        </div>
-                    `;
+                    html.push('<div style="text-align: center;">');
+                    html.push('<div class="day-header">' + day + '</div>');
+                    html.push('<input type="number" class="day-input"');
+                    html.push(' value="' + (quantity || '') + '" min="0" max="9999" placeholder="0"');
+                    html.push(' data-supply-id="' + supply.id + '" data-day="' + day + '"');
+                    html.push(' onchange="updateTrackingValue(' + supply.id + ', ' + day + ', this.value)">');
+                    html.push('</div>');
                 }
                 
-                html += `
-                            </div>
-                        </div>
-                    </div>
-                `;
-            });
+                html.push('</div>');
+                html.push('</div>');
+                html.push('</div>');
+            }
             
-            const userTrackingTableElement = document.getElementById('userTrackingTable');
+            var userTrackingTableElement = document.getElementById('userTrackingTable');
             if (userTrackingTableElement) {
-                userTrackingTableElement.innerHTML = html;
+                userTrackingTableElement.innerHTML = html.join('');
             }
         }
 
         function filterTrackingSupplies() {
-            const searchTermElement = document.getElementById('trackingSupplySearch');
-            if (!searchTermElement) return;
+            var searchElement = document.getElementById('trackingSupplySearch');
+            if (!searchElement) return;
             
-            const searchTerm = searchTermElement.value.toLowerCase();
+            var searchTerm = searchElement.value.toLowerCase();
             
             if (!searchTerm) {
-                filteredSupplies = [...supplies];
+                filteredSupplies = supplies.slice();
             } else {
-                filteredSupplies = supplies.filter(supply => {
-                    const codeMatch = supply.code.toString().includes(searchTerm);
-                    const descMatch = supply.description.toLowerCase().includes(searchTerm);
-                    const hcpcsMatch = supply.hcpcs && supply.hcpcs.toLowerCase().includes(searchTerm);
+                filteredSupplies = supplies.filter(function(supply) {
+                    var codeMatch = supply.code.toString().indexOf(searchTerm) >= 0;
+                    var descMatch = supply.description.toLowerCase().indexOf(searchTerm) >= 0;
+                    var hcpcsMatch = supply.hcpcs && supply.hcpcs.toLowerCase().indexOf(searchTerm) >= 0;
                     return codeMatch || descMatch || hcpcsMatch;
                 });
             }
             
-            const searchResultsElement = document.getElementById('searchResultsCount');
+            var searchResultsElement = document.getElementById('searchResultsCount');
             if (searchResultsElement) {
-                searchResultsElement.textContent = `${filteredSupplies.length} of ${supplies.length} supplies`;
+                searchResultsElement.textContent = filteredSupplies.length + ' of ' + supplies.length + ' supplies';
             }
             
             renderTrackingInterface();
         }
 
         function getTotalUnitsForSupply(supplyId) {
-            let total = 0;
-            for (let day = 1; day <= 31; day++) {
-                const key = `${supplyId}_${day}`;
-                const data = trackingData[key];
+            var total = 0;
+            for (var day = 1; day <= 31; day++) {
+                var key = supplyId + '_' + day;
+                var data = trackingData[key];
                 if (data) {
                     total += parseInt(data.quantity || 0);
                 }
@@ -2404,9 +1715,9 @@ async function exportTrackingReport() {
         }
 
         function getWoundDxForSupply(supplyId) {
-            for (let day = 1; day <= 31; day++) {
-                const key = `${supplyId}_${day}`;
-                const data = trackingData[key];
+            for (var day = 1; day <= 31; day++) {
+                var key = supplyId + '_' + day;
+                var data = trackingData[key];
                 if (data && data.wound_dx) {
                     return data.wound_dx;
                 }
@@ -2415,10 +1726,9 @@ async function exportTrackingReport() {
         }
 
         function updateTrackingValue(supplyId, day, value) {
-            const key = `${supplyId}_${day}`;
-            const quantity = parseInt(value) || 0;
+            var key = String(supplyId) + '_' + String(day);
+            var quantity = parseInt(value) || 0;
             
-            // Update local tracking data
             if (!trackingData[key]) {
                 trackingData[key] = {
                     patient_id: currentTrackingPatient,
@@ -2430,13 +1740,11 @@ async function exportTrackingReport() {
                 trackingData[key].quantity = quantity;
             }
             
-            // Update totals in the interface
             updateSupplyTotals(supplyId);
         }
 
         function updateSupplyWoundDx(supplyId, diagnosis) {
-            // Update wound diagnosis for the first day entry of this supply
-            const key = `${supplyId}_1`;
+            var key = String(supplyId) + '_1';
             if (!trackingData[key]) {
                 trackingData[key] = {
                     patient_id: currentTrackingPatient,
@@ -2451,74 +1759,81 @@ async function exportTrackingReport() {
         }
 
         function updateSupplyTotals(supplyId) {
-            const totalUnits = getTotalUnitsForSupply(supplyId);
-            const supply = supplies.find(s => s.id == supplyId);
-            const totalCost = totalUnits * parseFloat(supply.cost || 0);
-            
-            // Update totals in the display
-            const rows = document.querySelectorAll(`[data-supply-id="${supplyId}"]`);
-            // This would need specific selectors to update the total displays
+            var totalUnits = getTotalUnitsForSupply(supplyId);
+            var supply = null;
+            for (var i = 0; i < supplies.length; i++) {
+                if (supplies[i].id == supplyId) {
+                    supply = supplies[i];
+                    break;
+                }
+            }
+            if (supply) {
+                var totalCost = totalUnits * parseFloat(supply.cost || 0);
+            }
         }
 
-        async function saveAllTrackingData() {
+        function saveAllTrackingData() {
             if (!currentTrackingPatient) {
                 showMessage('No patient selected', 'error');
                 return;
             }
 
-            const savePromises = [];
+            var savePromises = [];
             
-            // Save all tracking data
-            Object.values(trackingData).forEach(data => {
+            for (var key in trackingData) {
+                var data = trackingData[key];
                 if (data.quantity > 0 || data.wound_dx) {
-                    savePromises.push(
-                        apiCall('/api/tracking', {
-                            method: 'POST',
-                            body: JSON.stringify({
-                                patientId: data.patient_id || currentTrackingPatient,
-                                supplyId: data.supply_id,
-                                dayOfMonth: data.day_of_month,
-                                quantity: data.quantity || 0,
-                                woundDx: data.wound_dx || null
-                            })
+                    var promise = apiCall('/api/tracking', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            patientId: data.patient_id || currentTrackingPatient,
+                            supplyId: data.supply_id,
+                            dayOfMonth: data.day_of_month,
+                            quantity: data.quantity || 0,
+                            woundDx: data.wound_dx || null
                         })
-                    );
+                    });
+                    savePromises.push(promise);
                 }
-            });
+            }
 
-            try {
-                await Promise.all(savePromises);
+            Promise.all(savePromises).then(function() {
                 showMessage('All tracking data saved successfully!', 'success');
-                
-                // Reload to get fresh data
                 loadPatientTracking();
-            } catch (error) {
+            }).catch(function(error) {
                 console.error('Failed to save tracking data:', error);
                 showMessage('Failed to save some tracking data', 'error');
-            }
+            });
         }
 
-        async function exportTrackingReport() {
+        function exportTrackingReport() {
             if (!currentTrackingPatient) {
                 showMessage('No patient selected', 'error');
                 return;
             }
 
-            const patient = patients.find(p => p.id == currentTrackingPatient);
+            var patient = null;
+            for (var i = 0; i < patients.length; i++) {
+                if (patients[i].id == currentTrackingPatient) {
+                    patient = patients[i];
+                    break;
+                }
+            }
+
             if (!patient) {
                 showMessage('Patient not found', 'error');
                 return;
             }
 
-            // Create CSV data in the format requested
-            const csvRows = [];
+            var csvRows = [];
             csvRows.push(['Name', 'MRN', 'MM-YYYY', 'Facility', 'Code', 'Description', 'HCPCS', 'Total Units', 'Total Cost', 'Wound Dx']);
 
-            supplies.forEach(supply => {
-                const totalUnits = getTotalUnitsForSupply(supply.id);
-                if (totalUnits > 0) { // Only include supplies with usage
-                    const totalCost = totalUnits * parseFloat(supply.cost || 0);
-                    const woundDx = getWoundDxForSupply(supply.id);
+            for (var i = 0; i < supplies.length; i++) {
+                var supply = supplies[i];
+                var totalUnits = getTotalUnitsForSupply(supply.id);
+                if (totalUnits > 0) {
+                    var totalCost = totalUnits * parseFloat(supply.cost || 0);
+                    var woundDx = getWoundDxForSupply(supply.id);
                     
                     csvRows.push([
                         patient.name,
@@ -2533,19 +1848,25 @@ async function exportTrackingReport() {
                         woundDx
                     ]);
                 }
-            });
+            }
 
-            // Convert to CSV string
-            const csvContent = csvRows.map(row => 
-                row.map(cell => `"${cell}"`).join(',')
-            ).join('\n');
+            var csvContent = '';
+            for (var i = 0; i < csvRows.length; i++) {
+                var row = csvRows[i];
+                var csvRow = '';
+                for (var j = 0; j < row.length; j++) {
+                    csvRow += '"' + row[j] + '"';
+                    if (j < row.length - 1) csvRow += ',';
+                }
+                csvContent += csvRow + '\n';
+            }
 
-            // Download the file
-            const blob = new Blob([csvContent], { type: 'text/csv' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
+            var blob = new Blob([csvContent], { type: 'text/csv' });
+            var url = window.URL.createObjectURL(blob);
+            var a = document.createElement('a');
             a.href = url;
-            a.download = `Itemized_Summary_Report_${new Date().toISOString().split('T')[0]}_${patient.name.replace(/\s+/g, '_')}_${patient.month.replace('-', '_')}.csv`;
+            a.download = 'Itemized_Summary_Report_' + new Date().toISOString().split('T')[0] + '_' + 
+                        patient.name.replace(/\s+/g, '_') + '_' + patient.month.replace('-', '_') + '.csv';
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -2554,28 +1875,252 @@ async function exportTrackingReport() {
             showMessage('Report exported successfully!', 'success');
         }
 
-        // Utility functions
+        /* Admin functions */
+        function loadAdminData() {
+            if (currentUser.role !== 'admin') return;
+
+            Promise.all([
+                apiCall('/api/admin/users'),
+                apiCall('/api/facilities')
+            ]).then(function(results) {
+                var usersData = results[0];
+                var facilitiesData = results[1];
+
+                document.getElementById('totalUsers').textContent = (usersData.users && usersData.users.length) || 0;
+                document.getElementById('totalFacilities').textContent = (facilitiesData.facilities && facilitiesData.facilities.length) || 0;
+                
+                var pendingUsers = 0;
+                if (usersData.users) {
+                    for (var i = 0; i < usersData.users.length; i++) {
+                        if (!usersData.users[i].is_approved) pendingUsers++;
+                    }
+                }
+                document.getElementById('pendingApprovals').textContent = pendingUsers;
+
+                renderUsersTable(usersData.users || []);
+            }).catch(function(error) {
+                console.error('Failed to load admin data:', error);
+            });
+        }
+
+        function renderUsersTable(users) {
+            var tbody = document.getElementById('usersTable');
+            if (!tbody) return;
+            
+            if (users.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center">No users found</td></tr>';
+                return;
+            }
+
+            var html = '';
+            for (var i = 0; i < users.length; i++) {
+                var user = users[i];
+                var approveBtn = user.is_approved ? '' : 
+                    '<button class="btn btn-success btn-small" onclick="approveUser(' + user.id + ')">Approve</button>';
+                
+                html += '<tr>' +
+                    '<td>' + user.name + '</td>' +
+                    '<td>' + user.email + '</td>' +
+                    '<td>' + user.role + '</td>' +
+                    '<td>' + (user.facility_name || 'N/A') + '</td>' +
+                    '<td>' + (user.is_approved ? 'Approved' : 'Pending') + '</td>' +
+                    '<td>' +
+                        approveBtn +
+                        '<button class="btn btn-danger btn-small" onclick="deleteUser(' + user.id + ')">Delete</button>' +
+                    '</td>' +
+                '</tr>';
+            }
+            tbody.innerHTML = html;
+        }
+
+        function showAddUserModal() {
+            var modal = document.getElementById('addUserModal');
+            if (modal) {
+                modal.style.display = 'block';
+                loadFacilityOptions('userFacility');
+            }
+        }
+
+        function showAddFacilityModal() {
+            var modal = document.getElementById('addFacilityModal');
+            if (modal) modal.style.display = 'block';
+        }
+
+        function approveUser(userId) {
+            apiCall('/api/admin/users/' + userId + '/approve', {
+                method: 'PUT'
+            }).then(function() {
+                loadAdminData();
+                showMessage('User approved successfully!', 'success');
+            }).catch(function(error) {
+                showMessage('Failed to approve user', 'error');
+            });
+        }
+
+        function deleteUser(userId) {
+            if (!confirm('Are you sure you want to delete this user?')) return;
+
+            apiCall('/api/admin/users/' + userId, {
+                method: 'DELETE'
+            }).then(function() {
+                loadAdminData();
+                showMessage('User deleted successfully!', 'success');
+            }).catch(function(error) {
+                showMessage('Failed to delete user', 'error');
+            });
+        }
+
+        /* Data loading helper */
+        function ensureDataLoaded() {
+            var promises = [];
+            
+            if (!patients || patients.length === 0) {
+                console.log('Loading patients data...');
+                promises.push(loadPatients());
+            }
+            
+            if (!supplies || supplies.length === 0) {
+                console.log('Loading supplies data...');
+                promises.push(loadSupplies());
+            }
+            
+            if (!facilities || facilities.length === 0) {
+                console.log('Loading facilities data...');
+                promises.push(loadFacilities());
+            }
+            
+            return Promise.all(promises);
+        }
+
+        /* Form handlers */
+        function setupFormHandlers() {
+            var addPatientForm = document.getElementById('addPatientForm');
+            if (addPatientForm) {
+                addPatientForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    
+                    var patientData = {
+                        name: document.getElementById('patientName').value,
+                        mrn: document.getElementById('patientMRN').value,
+                        month: document.getElementById('patientMonth').value,
+                        facility_id: document.getElementById('patientFacility').value
+                    };
+
+                    apiCall('/api/patients', {
+                        method: 'POST',
+                        body: JSON.stringify(patientData)
+                    }).then(function() {
+                        closeModal('addPatientModal');
+                        document.getElementById('addPatientForm').reset();
+                        loadPatients();
+                        showMessage('Successfully added patient!', 'success');
+                    }).catch(function(error) {
+                        showMessage('Failed to add patient', 'error');
+                    });
+                });
+            }
+
+            var addSupplyForm = document.getElementById('addSupplyForm');
+            if (addSupplyForm) {
+                addSupplyForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    
+                    var supplyData = {
+                        code: document.getElementById('supplyCode').value,
+                        description: document.getElementById('supplyDescription').value,
+                        hcpcs: document.getElementById('supplyHCPCS').value,
+                        cost: document.getElementById('supplyCost').value
+                    };
+
+                    apiCall('/api/supplies', {
+                        method: 'POST',
+                        body: JSON.stringify(supplyData)
+                    }).then(function() {
+                        closeModal('addSupplyModal');
+                        document.getElementById('addSupplyForm').reset();
+                        loadSupplies();
+                        showMessage('Successfully added supply!', 'success');
+                    }).catch(function(error) {
+                        showMessage('Failed to add supply', 'error');
+                    });
+                });
+            }
+
+            var addUserForm = document.getElementById('addUserForm');
+            if (addUserForm) {
+                addUserForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    
+                    var userData = {
+                        name: document.getElementById('userName').value,
+                        email: document.getElementById('userEmail').value,
+                        password: document.getElementById('userPassword').value,
+                        role: document.getElementById('userRole').value,
+                        facility_id: document.getElementById('userFacility').value || null
+                    };
+
+                    apiCall('/api/admin/users', {
+                        method: 'POST',
+                        body: JSON.stringify(userData)
+                    }).then(function() {
+                        closeModal('addUserModal');
+                        document.getElementById('addUserForm').reset();
+                        loadAdminData();
+                        showMessage('Successfully added user!', 'success');
+                    }).catch(function(error) {
+                        showMessage('Failed to add user', 'error');
+                    });
+                });
+            }
+
+            var addFacilityForm = document.getElementById('addFacilityForm');
+            if (addFacilityForm) {
+                addFacilityForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    
+                    var facilityData = {
+                        name: document.getElementById('facilityName').value
+                    };
+
+                    apiCall('/api/facilities', {
+                        method: 'POST',
+                        body: JSON.stringify(facilityData)
+                    }).then(function() {
+                        closeModal('addFacilityModal');
+                        document.getElementById('addFacilityForm').reset();
+                        loadFacilities();
+                        loadAdminData();
+                        showMessage('Successfully added facility!', 'success');
+                    }).catch(function(error) {
+                        showMessage('Failed to add facility', 'error');
+                    });
+                });
+            }
+        }
+
+        /* Utility functions */
         function closeModal(modalId) {
-            const modal = document.getElementById(modalId);
+            var modal = document.getElementById(modalId);
             if (modal) modal.style.display = 'none';
         }
 
-        function showMessage(message, type = 'info') {
-            // Remove any existing messages first
-            const existingMessages = document.querySelectorAll('.alert');
-            existingMessages.forEach(msg => msg.remove());
+        function showMessage(message, type) {
+            type = type || 'info';
             
-            // Create new message element
-            const msgDiv = document.createElement('div');
-            msgDiv.className = `alert alert-${type}`;
+            var existingMessages = document.querySelectorAll('.alert');
+            for (var i = 0; i < existingMessages.length; i++) {
+                existingMessages[i].remove();
+            }
+            
+            var msgDiv = document.createElement('div');
+            msgDiv.className = 'alert alert-' + type;
             msgDiv.textContent = message;
             
-            // Add to top of current panel or body with safe checks
-            const activePanel = document.querySelector('.panel.active');
+            var activePanel = document.querySelector('.panel.active');
             if (activePanel) {
                 activePanel.insertBefore(msgDiv, activePanel.firstChild);
             } else {
-                const mainApp = document.getElementById('mainApp');
+                var mainApp = document.getElementById('mainApp');
                 if (mainApp) {
                     mainApp.insertBefore(msgDiv, mainApp.firstChild);
                 } else {
@@ -2583,39 +2128,36 @@ async function exportTrackingReport() {
                 }
             }
             
-            // Remove after 5 seconds
-            setTimeout(() => {
+            setTimeout(function() {
                 if (msgDiv && msgDiv.parentNode) {
                     msgDiv.remove();
                 }
             }, 5000);
         }
 
-        // Export functions
         function exportTrackingData() {
             alert('Export functionality would generate CSV file with tracking data');
         }
 
         function importExcel() {
-            const input = document.createElement('input');
+            var input = document.createElement('input');
             input.type = 'file';
             input.accept = '.xlsx,.xls,.csv';
-            input.addEventListener('change', (e) => {
-                const file = e.target.files[0];
+            input.addEventListener('change', function(e) {
+                var file = e.target.files[0];
                 if (file) {
-                    alert(`Would import file: ${file.name}`);
+                    alert('Would import file: ' + file.name);
                 }
             });
             input.click();
         }
 
-        // Placeholder functions for actions - FIXED: Proper function syntax
         function editPatient(id) { 
             alert('Edit patient ' + id + ' - Feature coming soon'); 
         }
         
         function deletePatient(id) { 
-            if(confirm('Delete this patient?')) {
+            if (confirm('Delete this patient?')) {
                 alert('Delete patient ' + id + ' - Feature coming soon'); 
             }
         }
@@ -2625,20 +2167,20 @@ async function exportTrackingReport() {
         }
         
         function deleteSupply(id) { 
-            if(confirm('Delete this supply?')) {
+            if (confirm('Delete this supply?')) {
                 alert('Delete supply ' + id + ' - Feature coming soon'); 
             }
         }
         
         function showSystemReset() { 
-            if(confirm('This will reset all data. Are you sure?')) {
+            if (confirm('This will reset all data. Are you sure?')) {
                 alert('System reset - Feature coming soon'); 
             }
         }
 
-        // Modal close on outside click - FIXED: Proper event handling
+        /* Modal close on outside click */
         window.onclick = function(event) {
-            if (event && event.target && event.target.classList.contains('modal')) {
+            if (event && event.target && event.target.classList && event.target.classList.contains('modal')) {
                 event.target.style.display = 'none';
             }
         };
