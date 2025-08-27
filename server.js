@@ -6,6 +6,26 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(express.json());
+
+// Fix Content Security Policy to allow API calls
+app.use((req, res, next) => {
+    // Remove restrictive CSP that blocks API calls
+    res.removeHeader('Content-Security-Policy');
+    res.removeHeader('X-Content-Security-Policy');
+    res.removeHeader('X-WebKit-CSP');
+    
+    // Set permissive CSP for development
+    res.setHeader('Content-Security-Policy', 
+        "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; " +
+        "connect-src 'self' https:; " +
+        "img-src 'self' data: https:; " +
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
+        "style-src 'self' 'unsafe-inline'"
+    );
+    
+    next();
+});
+
 app.use(express.static(path.join(__dirname)));
 
 // In-memory data storage (temporary)
