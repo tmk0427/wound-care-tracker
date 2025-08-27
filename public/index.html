@@ -1306,97 +1306,329 @@
             });
         }
 
-        async function loadTrackingData() {
-            const patientId = document.getElementById('trackingPatient').value;
-            const month = document.getElementById('trackingMonth').value;
-            
-            if (!patientId || !month) {
-                alert('Please select both patient and month');
-                return;
-            }
+        // IMPROVED TRACKING FUNCTIONALITY
+let currentTrackingData = {};
+let currentPatientId = null;
 
-            try {
-                const data = await apiCall(`/api/tracking/${patientId}/${month}`);
-                renderTrackingTable(data.tracking || []);
-            } catch (error) {
-                console.error('Failed to load tracking data:', error);
-            }
+async function loadTrackingData() {
+    const patientId = document.getElementById('trackingPatient').value;
+    
+    if (!patientId) {
+        showMessage('Please select a patient first', 'error');
+        return;
+    }
+
+    try {
+        currentPatientId = patientId;
+        const data = await apiCall(`/api/tracking/${patientId}`);
+        currentTrackingData = data.tracking || [];
+        
+        renderTrackingGrid();
+        document.getElementById('trackingTableContainer').style.display = 'block';
+        
+    } catch (error) {
+        console.error('Failed to load tracking data:', error);
+        showMessage('Failed to load tracking data', 'error');
+    }
+}
+
+function renderTrackingGrid() {
+    if (!currentTrackingData || currentTrackingData.length === 0) {
+        document.getElementById('trackingTable').innerHTML = 
+            '<p class="text-center">No tracking data found. Start by adding some supplies for this patient.</p>';
+        return;
+    }
+
+    // Group data by supply
+    const suppliesByCode = {};
+    currentTrackingData.forEach(item => {
+        if (!suppliesByCode[item.supply_code]) {
+            suppliesByCode[item.supply_code] = {
+                id: item.supply_id,
+                code: item.supply_code,
+                description: item.supply_description || 'Unknown Supply',
+                cost: parseFloat(item.supply_cost || 0),
+                hcpcs: item.hcpcs || '',
+                days: {}
+            };
         }
+        suppliesByCode[item.supply_code].days[item.day_of_month] = {
+            quantity: item.quantity || 0,
+            wound_dx: item.wound_dx || ''
+        };
+    });
 
-        function renderTrackingTable(trackingData) {
-            const container = document.getElementById('trackingTableContainer');
-            const tableDiv = document.getElementById('trackingTable');
-            
-            if (trackingData.length === 0) {
-                tableDiv.innerHTML = '<p class="text-center">No tracking data found for selected patient and month</p>';
-                container.style.display = 'block';
-                return;
+    // Create tracking grid
+    let tableHTML = `
+        <div style="margin-bottom: 20px;">
+            <button class="btn btn-primary" onclick="showAddSupplyToTracking()">+ Add Supply to Track</button>
+            <button class="btn btn-success" onclick="saveAllTrackingData()">💾 Save All Changes</button>
+        </div>
+        <div style="overflow-x: auto;">
+            <table class="table" style="min-width: 800px;">
+                <thead>
+                    <tr>
+                        <th style="min-width: 80px;">Supply Code</th>
+                        <th style="min-width: 200px;">Description</th>
+                        <th style="min-width: 80px;">HCPCS</th>
+                        <th style="min-width: 80px;">Cost</th>
+    `;
+    
+    // Add day columns
+    for (let day = 1; day <= 31; day++) {
+        tableHTML += `<th style="min-width: 50px; text-align: center;">D${day}</th>`;
+    }
+    
+    tableHTML += `
+                        <th style="min-width: 80px;">Total</th>
+                        <th style="min-width: 150px;">Wound Dx</th>
+                        <th style="min-width: 100px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+
+    // Render supply rows
+    Object.values(suppliesByCode).forEach(supply => {
+        tableHTML += `
+            <tr data-supply-id="${supply.id}">
+                <td><strong>${supply.code}</strong></td>
+                <td>${supply.description}</td>
+                <td>${supply.hcpcs}</td>
+                <td>$${supply.cost.toFixed(2)}</td>
+        `;
+        
+        let total = 0;
+        let woundDx = '';
+        
+        for (let day = 1; day <= 31; day++) {
+            const dayData = supply.days[day] || { quantity: 0, wound_dx: '' };
+            total += dayData.quantity;
+            if (dayData.wound_dx && !woundDx) {
+                woundDx = dayData.wound_dx;
             }
+            
+            tableHTML += `
+                <td style="text-align: center;">
+                    <input type="number" 
+                           value="${dayData.quantity || ''}" 
+                           min="0" 
+                           max="999"
+                           style="width: 50px; text-align: center; border: 1px solid #ddd; border-radius: 4px; padding: 2px;"
+                           onchange="updateTrackingCell(${supply.id}, ${day}, this.value)"
+                           data-supply-id="${supply.id}" 
+                           data-day="${day}">
+                </td>
+            `;
+        }
+        
+        tableHTML += `
+                <td><strong>${total}</strong></td>
+                <td>
+                    <input type="text" 
+                           value="${woundDx}" 
+                           placeholder="Enter diagnosis"
+                           style="width: 140px; padding: 4px; border: 1px solid #ddd; border-radius: 4px;"
+                           onchange="updateWoundDx(${supply.id}, this.value)">
+                </td>
+                <td>
+                    <button class="btn btn-danger btn-small" onclick="removeSupplyFromTracking(${supply.id})">Remove</button>
+                </td>
+            </tr>
+        `;
+    });
 
-            // Create dynamic tracking table with days 1-31
-            let tableHTML = `
+    tableHTML += `
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    document.getElementById('trackingTable').innerHTML = tableHTML;
+}
+
+function updateTrackingCell(supplyId, day, quantity) {
+    // This will be saved when user clicks "Save All Changes"
+    // Just update the visual total for now
+    updateRowTotal(supplyId);
+}
+
+function updateRowTotal(supplyId) {
+    const row = document.querySelector(`tr[data-supply-id="${supplyId}"]`);
+    if (!row) return;
+    
+    let total = 0;
+    const inputs = row.querySelectorAll('input[type="number"]');
+    inputs.forEach(input => {
+        total += parseInt(input.value) || 0;
+    });
+    
+    const totalCell = row.cells[row.cells.length - 3]; // Total column
+    totalCell.innerHTML = `<strong>${total}</strong>`;
+}
+
+function updateWoundDx(supplyId, diagnosis) {
+    // Store the diagnosis - will be saved with saveAllTrackingData()
+}
+
+async function saveAllTrackingData() {
+    if (!currentPatientId) {
+        showMessage('No patient selected', 'error');
+        return;
+    }
+
+    const savePromises = [];
+    const rows = document.querySelectorAll('tr[data-supply-id]');
+    
+    rows.forEach(row => {
+        const supplyId = row.getAttribute('data-supply-id');
+        const woundDxInput = row.querySelector('input[type="text"]');
+        const woundDx = woundDxInput ? woundDxInput.value : '';
+        
+        const quantityInputs = row.querySelectorAll('input[type="number"]');
+        quantityInputs.forEach(input => {
+            const day = input.getAttribute('data-day');
+            const quantity = parseInt(input.value) || 0;
+            
+            if (quantity > 0 || woundDx) { // Only save if there's quantity or diagnosis
+                savePromises.push(
+                    apiCall('/api/tracking', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            patientId: currentPatientId,
+                            supplyId: supplyId,
+                            dayOfMonth: day,
+                            quantity: quantity,
+                            woundDx: woundDx
+                        })
+                    })
+                );
+            }
+        });
+    });
+
+    try {
+        await Promise.all(savePromises);
+        showMessage('All tracking data saved successfully!', 'success');
+        loadTrackingData(); // Refresh the display
+    } catch (error) {
+        console.error('Failed to save tracking data:', error);
+        showMessage('Failed to save some tracking data', 'error');
+    }
+}
+
+function showAddSupplyToTracking() {
+    // Simple implementation - show available supplies
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.style.display = 'block';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add Supply to Track</h3>
+                <span class="close" onclick="this.parentElement.parentElement.parentElement.remove()">&times;</span>
+            </div>
+            <div style="max-height: 400px; overflow-y: auto;">
                 <table class="table">
                     <thead>
                         <tr>
-                            <th>Supply</th>
+                            <th>Code</th>
                             <th>Description</th>
-                            <th>Cost</th>
-            `;
-            
-            // Add day columns
-            for (let day = 1; day <= 31; day++) {
-                tableHTML += `<th>D${day}</th>`;
-            }
-            
-            tableHTML += `
-                            <th>Total</th>
+                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody>
-            `;
-
-            // Group tracking data by supply
-            const suppliesByCode = {};
-            trackingData.forEach(item => {
-                if (!suppliesByCode[item.supply_code]) {
-                    suppliesByCode[item.supply_code] = {
-                        code: item.supply_code,
-                        description: item.supply_description || 'Unknown',
-                        cost: parseFloat(item.supply_cost || 0),
-                        days: {}
-                    };
-                }
-                suppliesByCode[item.supply_code].days[item.day] = item.quantity;
-            });
-
-            // Render rows
-            Object.values(suppliesByCode).forEach(supply => {
-                tableHTML += `
-                    <tr>
-                        <td>${supply.code}</td>
-                        <td>${supply.description}</td>
-                        <td>$${supply.cost.toFixed(2)}</td>
-                `;
-                
-                let total = 0;
-                for (let day = 1; day <= 31; day++) {
-                    const quantity = supply.days[day] || 0;
-                    total += quantity;
-                    tableHTML += `<td>${quantity || ''}</td>`;
-                }
-                
-                tableHTML += `<td><strong>${total}</strong></td></tr>`;
-            });
-
-            tableHTML += `
+                        ${supplies.map(supply => `
+                            <tr>
+                                <td>${supply.code}</td>
+                                <td>${supply.description}</td>
+                                <td>
+                                    <button class="btn btn-primary btn-small" onclick="addSupplyToTracking(${supply.id}); this.parentElement.parentElement.parentElement.parentElement.parentElement.parentElement.remove();">
+                                        Add
+                                    </button>
+                                </td>
+                            </tr>
+                        `).join('')}
                     </tbody>
                 </table>
-            `;
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
 
-            tableDiv.innerHTML = tableHTML;
-            container.style.display = 'block';
-        }
+async function addSupplyToTracking(supplyId) {
+    // Add a supply with 0 quantity for day 1 to initialize tracking
+    try {
+        await apiCall('/api/tracking', {
+            method: 'POST',
+            body: JSON.stringify({
+                patientId: currentPatientId,
+                supplyId: supplyId,
+                dayOfMonth: 1,
+                quantity: 0
+            })
+        });
+        
+        loadTrackingData(); // Refresh to show the new supply
+        showMessage('Supply added to tracking!', 'success');
+    } catch (error) {
+        showMessage('Failed to add supply to tracking', 'error');
+    }
+}
 
+async function removeSupplyFromTracking(supplyId) {
+    if (!confirm('Remove this supply from tracking? This will delete all data for this supply.')) {
+        return;
+    }
+    
+    // This would need a backend route to remove all tracking entries for a supply
+    showMessage('Remove supply functionality needs backend implementation', 'info');
+}
+
+// EXPORT FUNCTIONALITY
+function exportTrackingData() {
+    if (!currentTrackingData || currentTrackingData.length === 0) {
+        showMessage('No tracking data to export', 'error');
+        return;
+    }
+
+    // Create CSV data
+    const csvRows = [];
+    csvRows.push(['Patient', 'Supply Code', 'Supply Description', 'Day', 'Quantity', 'Wound Diagnosis', 'Cost', 'HCPCS']);
+
+    const patient = patients.find(p => p.id == currentPatientId);
+    const patientName = patient ? patient.name : 'Unknown Patient';
+
+    currentTrackingData.forEach(item => {
+        csvRows.push([
+            patientName,
+            item.supply_code || '',
+            item.supply_description || '',
+            item.day_of_month || '',
+            item.quantity || 0,
+            item.wound_dx || '',
+            item.supply_cost || 0,
+            item.hcpcs || ''
+        ]);
+    });
+
+    // Convert to CSV string
+    const csvContent = csvRows.map(row => 
+        row.map(cell => `"${cell}"`).join(',')
+    ).join('\n');
+
+    // Download the file
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `tracking_data_${patientName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+}
         // Admin functions
         async function loadAdminData() {
             if (currentUser.role !== 'admin') return;
@@ -1565,19 +1797,134 @@
             input.click();
         }
 
-        // Placeholder functions for actions
-        function editPatient(id) { alert(`Edit patient ${id} - Feature coming soon`); }
-        function deletePatient(id) { 
-            if(confirm('Delete this patient?')) {
-                alert(`Delete patient ${id} - Feature coming soon`); 
-            }
-        }
-        function editSupply(id) { alert(`Edit supply ${id} - Feature coming soon`); }
-        function deleteSupply(id) { 
-            if(confirm('Delete this supply?')) {
-                alert(`Delete supply ${id} - Feature coming soon`); 
-            }
-        }
+        // PATIENT EDIT FUNCTIONALITY
+let editingPatientId = null;
+
+function editPatient(id) {
+    const patient = patients.find(p => p.id === id);
+    if (!patient) {
+        showMessage('Patient not found', 'error');
+        return;
+    }
+
+    editingPatientId = id;
+    
+    // Pre-fill the form with existing data
+    document.getElementById('editPatientName').value = patient.name;
+    document.getElementById('editPatientMRN').value = patient.mrn || '';
+    
+    document.getElementById('editPatientModal').style.display = 'block';
+}
+
+async function updatePatient() {
+    if (!editingPatientId) return;
+
+    const patientData = {
+        name: document.getElementById('editPatientName').value,
+        mrn: document.getElementById('editPatientMRN').value
+    };
+
+    if (!patientData.name) {
+        showMessage('Patient name is required', 'error');
+        return;
+    }
+
+    try {
+        await apiCall(`/api/patients/${editingPatientId}`, {
+            method: 'PUT',
+            body: JSON.stringify(patientData)
+        });
+
+        closeModal('editPatientModal');
+        editingPatientId = null;
+        loadPatients();
+        showMessage('Patient updated successfully!', 'success');
+    } catch (error) {
+        showMessage('Failed to update patient', 'error');
+    }
+}
+        async function deletePatient(id) {
+    if (!confirm('Are you sure you want to delete this patient? This will also delete all tracking data.')) {
+        return;
+    }
+
+    try {
+        await apiCall(`/api/patients/${id}`, {
+            method: 'DELETE'
+        });
+
+        loadPatients();
+        showMessage('Patient deleted successfully!', 'success');
+    } catch (error) {
+        showMessage('Failed to delete patient', 'error');
+    }
+}
+        // SUPPLY EDIT FUNCTIONALITY
+let editingSupplyId = null;
+
+function editSupply(id) {
+    const supply = supplies.find(s => s.id === id);
+    if (!supply) {
+        showMessage('Supply not found', 'error');
+        return;
+    }
+
+    editingSupplyId = id;
+    
+    // Pre-fill the form with existing data
+    document.getElementById('editSupplyCode').value = supply.code;
+    document.getElementById('editSupplyDescription').value = supply.description;
+    document.getElementById('editSupplyHCPCS').value = supply.hcpcs || '';
+    document.getElementById('editSupplyCost').value = supply.cost || '';
+    
+    document.getElementById('editSupplyModal').style.display = 'block';
+}
+
+async function updateSupply() {
+    if (!editingSupplyId) return;
+
+    const supplyData = {
+        code: document.getElementById('editSupplyCode').value,
+        description: document.getElementById('editSupplyDescription').value,
+        hcpcs: document.getElementById('editSupplyHCPCS').value,
+        cost: document.getElementById('editSupplyCost').value
+    };
+
+    if (!supplyData.code || !supplyData.description) {
+        showMessage('Code and description are required', 'error');
+        return;
+    }
+
+    try {
+        await apiCall(`/api/supplies/${editingSupplyId}`, {
+            method: 'PUT',
+            body: JSON.stringify(supplyData)
+        });
+
+        closeModal('editSupplyModal');
+        editingSupplyId = null;
+        loadSupplies();
+        showMessage('Supply updated successfully!', 'success');
+    } catch (error) {
+        showMessage('Failed to update supply', 'error');
+    }
+}
+        async function deleteSupply(id) {
+    if (!confirm('Are you sure you want to delete this supply?')) {
+        return;
+    }
+
+    try {
+        await apiCall(`/api/supplies/${id}`, {
+            method: 'DELETE'
+        });
+
+        loadSupplies();
+        showMessage('Supply deleted successfully!', 'success');
+    } catch (error) {
+        showMessage('Failed to delete supply', 'error');
+    }
+}
         function showSystemReset() { 
             if(confirm('This will reset all data. Are you sure?')) {
                 alert('System reset - Feature coming soon'); 
