@@ -340,7 +340,7 @@ app.post('/api/auth/register', async (req, res) => {
     }
 });
 
-// Facilities routes - GET is public for registration, others require auth
+// Facilities routes - GET is public for registration form
 app.get('/api/facilities', async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM facilities ORDER BY name');
@@ -351,6 +351,7 @@ app.get('/api/facilities', async (req, res) => {
     }
 });
 
+// Protected facilities routes (admin only)
 app.post('/api/facilities', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { name } = req.body;
@@ -943,11 +944,24 @@ app.use((err, req, res, next) => {
     res.status(500).json({ success: false, error: 'Internal server error' });
 });
 
-// Start server
-app.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`🌐 Access at: https://terence-wound-care-tracker-0ee111d0e54a.herokuapp.com/`);
-    console.log(`📋 Health check: /health`);
-    console.log(`🔧 Debug status: /api/debug/status`);
-    initializeDatabase();
-});
+// Start server and initialize database
+async function startServer() {
+    try {
+        // Initialize database first
+        await initializeDatabase();
+        
+        // Start server
+        app.listen(PORT, () => {
+            console.log(`🚀 Server running on port ${PORT}`);
+            console.log(`🌐 Access at: https://terence-wound-care-tracker-0ee111d0e54a.herokuapp.com/`);
+            console.log(`📋 Health check: /health`);
+            console.log(`🔧 Debug status: /api/debug/status`);
+        });
+    } catch (error) {
+        console.error('❌ Failed to start server:', error);
+        process.exit(1);
+    }
+}
+
+// Start the application
+startServer();
