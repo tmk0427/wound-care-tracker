@@ -769,6 +769,161 @@ app.get('/api/profile', authenticateToken, (req, res) => {
 });
 
 // Admin routes
+app.get('/api/admin/users', authenticateToken, (req, res) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ success: false, error: 'Admin access required' });
+    }
+    
+    db.all(`SELECT id, email, name, role, facility_id, created_at 
+            FROM users ORDER BY name`, [], (err, rows) => {
+        if (err) {
+            console.error('Error fetching admin users:', err);
+            return res.status(500).json({ success: false, error: 'Database error' });
+        }
+        res.json({ success: true, users: rows || [] });
+    });
+});
+
+app.get('/api/admin/dashboard', authenticateToken, (req, res) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ success: false, error: 'Admin access required' });
+    }
+    
+    const queries = {
+        totalUsers: `SELECT COUNT(*) as count FROM users`,
+        totalPatients: `SELECT COUNT(*) as count FROM patients WHERE status = 'active'`,
+        totalSupplies: `SELECT COUNT(*) as count FROM supply_types`,
+        totalFacilities: `SELECT COUNT(*) as count FROM facilities`,
+        totalUsageToday: `SELECT COUNT(*) as count FROM supply_usage WHERE DATE(usage_date) = DATE('now')`,
+        totalUsageWeek: `SELECT COUNT(*) as count FROM supply_usage WHERE DATE(usage_date) >= DATE('now', '-7 days')`,
+        recentUsers: `SELECT email, name, created_at FROM users ORDER BY created_at DESC LIMIT 5`,
+        lowStock: `SELECT COUNT(*) as count FROM supply_inventory si 
+                   JOIN supply_types st ON si.supply_type_id = st.id 
+                   WHERE si.current_stock <= st.reorder_level`
+    };
+
+    Promise.all([
+        new Promise((resolve, reject) => {
+            db.get(queries.totalUsers, [], (err, row) => err ? reject(err) : resolve(row.count));
+        }),
+        new Promise((resolve, reject) => {
+            db.get(queries.totalPatients, [], (err, row) => err ? reject(err) : resolve(row.count));
+        }),
+        new Promise((resolve, reject) => {
+            db.get(queries.totalSupplies, [], (err, row) => err ? reject(err) : resolve(row.count));
+        }),
+        new Promise((resolve, reject) => {
+            db.get(queries.totalFacilities, [], (err, row) => err ? reject(err) : resolve(row.count));
+        }),
+        new Promise((resolve, reject) => {
+            db.get(queries.totalUsageToday, [], (err, row) => err ? reject(err) : resolve(row.count));
+        }),
+        new Promise((resolve, reject) => {
+            db.get(queries.totalUsageWeek, [], (err, row) => err ? reject(err) : resolve(row.count));
+        }),
+        new Promise((resolve, reject) => {
+            db.all(queries.recentUsers, [], (err, rows) => err ? reject(err) : resolve(rows));
+        }),
+        new Promise((resolve, reject) => {
+            db.get(queries.lowStock, [], (err, row) => err ? reject(err) : resolve(row.count));
+        })
+    ]).then(([users, patients, supplies, facilities, usageToday, usageWeek, recentUsers, lowStock]) => {
+        res.json({
+            success: true,
+            dashboard: {
+                total_users: users,
+                total_patients: patients,
+                total_supplies: supplies,
+                total_facilities: facilities,
+                usage_today: usageToday,
+                usage_week: usageWeek,
+                low_stock_alerts: lowStock,
+                recent_users: recentUsers
+            },
+            stats: {
+                total_users: users,
+                total_patients: patients,
+                total_supplies: supplies,
+                total_facilities: facilities,
+                usage_today: usageToday,
+                usage_week: usageWeek,
+                low_stock_alerts: lowStock
+            }
+        });
+    }).catch(err => {
+        console.error('Admin dashboard error:', err);
+        res.status(500).json({ success: false, error: 'Failed to load admin dashboard' });
+    });
+});
+
+app.get('/api/admin/reports', authenticateToken, (req, res) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ success: false, error: 'Admin access required' });
+    }
+    
+    // Return available reports
+    res.json({
+        success: true,
+        reports: [
+            { id: 'usage', name: 'Usage Report', endpoint: '/api/reports/usage' },
+            { id: 'patients', name: 'Patients Export', endpoint: '/api/export/patients' },
+            { id: 'usage_export', name: 'Usage Export', endpoint: '/api/export/usage' },
+            { id: 'inventory', name: 'Inventory Report', endpoint: '/api/inventory' }
+        ]
+    });
+});
+
+app.get('/api/admin/patients', authenticateToken, (req, res) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ success: false, error: 'Admin access required' });
+    }
+    
+    const query = `
+        SELECT p.*, f.name as facility_name,
+               COUNT(su.id) as usage_count,
+               MAX(su.usage_date) as last_usage
+        FROM patients p 
+        LEFT JOIN facilities f ON p.facility_id = f.id
+        LEFT JOIN supply_usage su ON p.id = su.patient_id
+        GROUP BY p.id
+        ORDER BY p.created_at DESC
+    `;
+
+    db.all(query, [], (err, rows) => {
+        if (err) {
+            console.error('Error fetching admin patients:', err);
+            return res.status(500).json({ success: false, error: 'Database error' });
+        }
+        res.json({ success: true, patients: rows || [] });
+    });
+});
+
+app.get('/api/admin/supplies', authenticateToken, (req, res) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ success: false, error: 'Admin access required' });
+    }
+    
+    const query = `
+        SELECT st.*, 
+               AVG(si.current_stock) as avg_stock,
+               SUM(su.quantity_used) as total_usage,
+               COUNT(DISTINCT su.patient_id) as patients_using
+        FROM supply_types st
+        LEFT JOIN supply_inventory si ON st.id = si.supply_type_id
+        LEFT JOIN supply_usage su ON st.id = su.supply_type_id
+        GROUP BY st.id
+        ORDER BY total_usage DESC, st.name
+    `;
+
+    db.all(query, [], (err, rows) => {
+        if (err) {
+            console.error('Error fetching admin supplies:', err);
+            return res.status(500).json({ success: false, error: 'Database error' });
+        }
+        res.json({ success: true, supplies: rows || [] });
+    });
+});
+
 app.get('/api/admin/stats', authenticateToken, (req, res) => {
     if (req.user.role !== 'admin') {
         return res.status(403).json({ success: false, error: 'Admin access required' });
@@ -1158,7 +1313,22 @@ app.get('/', (req, res) => {
                     <span class="method get">GET</span>/api/users - Get all users (admin only)
                 </div>
                 <div class="endpoint">
+                    <span class="method get">GET</span>/api/admin/users - Admin user management
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>/api/admin/dashboard - Admin dashboard data
+                </div>
+                <div class="endpoint">
                     <span class="method get">GET</span>/api/admin/stats - Admin statistics
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>/api/admin/reports - Available reports list
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>/api/admin/patients - Admin patient overview
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>/api/admin/supplies - Admin supply analytics
                 </div>
             </div>
         </div>
@@ -1171,6 +1341,8 @@ app.get('/', (req, res) => {
                 <button class="btn" onclick="testSupplies()">Test Supplies</button>
                 <button class="btn" onclick="testPatients()">Test Patients</button>
                 <button class="btn" onclick="testTracking()">Test Tracking</button>
+                <button class="btn" onclick="testAdminUsers()">Test Admin Users</button>
+                <button class="btn" onclick="testAdminDashboard()">Test Admin Dashboard</button>
                 <div id="testResults" style="margin-top: 1rem;"></div>
             </div>
         </div>
@@ -1268,6 +1440,53 @@ app.get('/', (req, res) => {
             }
         }
         
+        async function testAdminUsers() {
+            if (!token) {
+                document.getElementById('testResults').innerHTML = '<div class="error">❌ Please login first</div>';
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/admin/users', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    document.getElementById('testResults').innerHTML = 
+                        '<div class="success">✅ Admin users loaded: ' + data.users.length + ' users</div>';
+                } else {
+                    document.getElementById('testResults').innerHTML = 
+                        '<div class="error">❌ Admin users failed: ' + (data.error || 'Unknown error') + '</div>';
+                }
+            } catch (error) {
+                document.getElementById('testResults').innerHTML = '<div class="error">❌ Admin users error: ' + error.message + '</div>';
+            }
+        }
+        
+        async function testAdminDashboard() {
+            if (!token) {
+                document.getElementById('testResults').innerHTML = '<div class="error">❌ Please login first</div>';
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/admin/dashboard', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    document.getElementById('testResults').innerHTML = 
+                        '<div class="success">✅ Admin dashboard loaded: ' + 
+                        data.dashboard.total_users + ' users, ' + 
+                        data.dashboard.total_patients + ' patients</div>';
+                }
+            } catch (error) {
+                document.getElementById('testResults').innerHTML = '<div class="error">❌ Admin dashboard error: ' + error.message + '</div>';
+            }
+        }
+        
         async function testPatients() {
             if (!token) {
                 document.getElementById('testResults').innerHTML = '<div class="error">❌ Please login first</div>';
@@ -1295,7 +1514,22 @@ app.get('/', (req, res) => {
         }
     </script>
 </body>
-</html>`);
+</html>    `);
+});
+
+// Catch-all for missing API endpoints (for debugging)
+app.all('/api/*', (req, res) => {
+    console.log(`❓ Missing API endpoint: ${req.method} ${req.path}`);
+    console.log(`   Headers: ${JSON.stringify(req.headers.authorization ? 'Bearer [token]' : 'No auth')}`);
+    console.log(`   Body: ${JSON.stringify(req.body)}`);
+    
+    res.status(404).json({
+        success: false,
+        error: 'API endpoint not found',
+        method: req.method,
+        path: req.path,
+        message: 'This endpoint has not been implemented yet. Check the available endpoints at /'
+    });
 });
 
 // Start server
@@ -1306,10 +1540,11 @@ app.listen(PORT, () => {
     console.log('🏥 ================================');
     console.log(`✅ Server running on port ${PORT}`);
     console.log('✅ Database connected (SQLite)');
-    console.log('✅ 25+ API endpoints enabled');
+    console.log('✅ 30+ API endpoints enabled');
     console.log('🔑 Default login: admin@system.com / admin123');
     console.log('📊 Sample data included: 3 patients, 10 supply types');
-    console.log('🔧 Features: Auth, Dashboard, Patients, Supplies, Tracking, Reports, Export');
+    console.log('🔧 Features: Auth, Dashboard, Patients, Supplies, Tracking, Reports, Export, Admin');
+    console.log('👨‍💼 Admin endpoints: users, dashboard, reports, patients, supplies');
     console.log('🏥 ================================');
     console.log('');
 });
