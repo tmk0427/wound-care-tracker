@@ -356,22 +356,59 @@ app.post('/api/auth/register', (req, res) => {
     });
 });
 
-// Patient routes
+// Patient routes (FIXED)
 app.get('/api/patients', authenticateToken, (req, res) => {
+    console.log('👥 Fetching patients...');
+    
     const query = `
-        SELECT p.*, f.name as facility_name 
+        SELECT 
+            p.id,
+            p.patient_id,
+            p.name,
+            p.room,
+            p.facility_id,
+            p.admission_date,
+            p.wound_type,
+            p.severity,
+            p.status,
+            p.notes,
+            p.created_at,
+            f.name as facility_name
         FROM patients p 
         LEFT JOIN facilities f ON p.facility_id = f.id
-        WHERE p.status = 'active'
+        WHERE p.status = 'active' OR p.status IS NULL
         ORDER BY p.name
     `;
 
     db.all(query, [], (err, rows) => {
         if (err) {
-            console.error('Error fetching patients:', err);
-            return res.status(500).json({ success: false, error: 'Database error' });
+            console.error('❌ Error fetching patients:', err.message);
+            return res.status(500).json({ 
+                success: false, 
+                error: 'Failed to fetch patients',
+                details: err.message 
+            });
         }
-        res.json({ success: true, patients: rows || [] });
+        
+        console.log(`✅ Patients fetched: ${rows.length} records`);
+        
+        // Ensure all patients have required fields
+        const patients = rows.map(patient => ({
+            id: patient.id,
+            patient_id: patient.patient_id || 'N/A',
+            name: patient.name || 'Unknown Patient',
+            room: patient.room || 'N/A',
+            facility_id: patient.facility_id,
+            facility_name: patient.facility_name || 'Unknown Facility',
+            admission_date: patient.admission_date || null,
+            wound_type: patient.wound_type || 'Not specified',
+            severity: patient.severity || 'Not specified',
+            status: patient.status || 'active',
+            notes: patient.notes || '',
+            created_at: patient.created_at
+        }));
+        
+        res.json({ success: true, patients });
     });
 });
 
@@ -432,15 +469,26 @@ app.post('/api/facilities', authenticateToken, (req, res) => {
     });
 });
 
-// Supply routes
+// Supply routes (FIXED)
 app.get('/api/supplies', authenticateToken, (req, res) => {
+    console.log('📦 Fetching supplies...');
+    
     const query = `
-        SELECT st.*, 
-               COALESCE(si.current_stock, 0) as current_stock,
-               COALESCE(si.reserved_stock, 0) as reserved_stock
+        SELECT 
+            st.id,
+            st.name,
+            st.category,
+            st.ar_code,
+            st.unit,
+            st.cost_per_unit,
+            st.reorder_level,
+            st.description,
+            COALESCE(si.current_stock, 0) as current_stock,
+            COALESCE(si.reserved_stock, 0) as reserved_stock,
+            st.created_at
         FROM supply_types st
         LEFT JOIN supply_inventory si ON st.id = si.supply_type_id 
-            AND si.facility_id = ?
+            AND si.facility_id = COALESCE(?, 1)
         ORDER BY st.category, st.name
     `;
 
@@ -448,10 +496,32 @@ app.get('/api/supplies', authenticateToken, (req, res) => {
 
     db.all(query, [facilityId], (err, rows) => {
         if (err) {
-            console.error('Error fetching supplies:', err);
-            return res.status(500).json({ success: false, error: 'Database error' });
+            console.error('❌ Error fetching supplies:', err.message);
+            return res.status(500).json({ 
+                success: false, 
+                error: 'Failed to fetch supplies',
+                details: err.message 
+            });
         }
-        res.json({ success: true, supplies: rows || [] });
+        
+        console.log(`✅ Supplies fetched: ${rows.length} items`);
+        
+        // Ensure all supplies have required fields
+        const supplies = rows.map(supply => ({
+            id: supply.id,
+            name: supply.name || 'Unknown Supply',
+            category: supply.category || 'uncategorized',
+            ar_code: supply.ar_code || '',
+            unit: supply.unit || 'each',
+            cost_per_unit: supply.cost_per_unit || 0,
+            reorder_level: supply.reorder_level || 10,
+            description: supply.description || '',
+            current_stock: supply.current_stock || 0,
+            reserved_stock: supply.reserved_stock || 0,
+            created_at: supply.created_at
+        }));
+        
+        res.json({ success: true, supplies });
     });
 });
 
@@ -512,52 +582,109 @@ app.post('/api/supplies/usage', authenticateToken, (req, res) => {
     );
 });
 
-// Dashboard routes (both /api/dashboard and /api/dashboard/stats)
+// Dashboard routes (FIXED)
 app.get('/api/dashboard', authenticateToken, (req, res) => {
+    console.log('📊 Fetching dashboard data...');
+    
     const facility_id = req.user.facility_id || 1;
 
     const queries = {
-        patients: `SELECT COUNT(*) as count FROM patients WHERE status = 'active' AND (facility_id = ? OR ? IS NULL)`,
+        patients: `SELECT COUNT(*) as count FROM patients WHERE (status = 'active' OR status IS NULL) AND (facility_id = ? OR ? IS NULL OR facility_id IS NULL)`,
         supplies: `SELECT COUNT(*) as count FROM supply_types`,
         lowStock: `SELECT COUNT(*) as count FROM supply_inventory si 
                    JOIN supply_types st ON si.supply_type_id = st.id 
                    WHERE si.facility_id = ? AND si.current_stock <= st.reorder_level`,
         usage: `SELECT COUNT(*) as count FROM supply_usage 
-                WHERE (facility_id = ? OR ? IS NULL) AND DATE(usage_date) = DATE('now')`
+                WHERE (facility_id = ? OR ? IS NULL) AND DATE(usage_date) = DATE('now')`,
+        facilities: `SELECT COUNT(*) as count FROM facilities`,
+        totalUsage: `SELECT COUNT(*) as count FROM supply_usage WHERE facility_id = ? OR ? IS NULL`
     };
 
     Promise.all([
         new Promise((resolve, reject) => {
-            db.get(queries.patients, [facility_id, facility_id], (err, row) => err ? reject(err) : resolve(row.count));
+            db.get(queries.patients, [facility_id, facility_id], (err, row) => {
+                if (err) {
+                    console.error('❌ Patients count error:', err.message);
+                    resolve(0);
+                } else {
+                    resolve(row?.count || 0);
+                }
+            });
         }),
         new Promise((resolve, reject) => {
-            db.get(queries.supplies, [], (err, row) => err ? reject(err) : resolve(row.count));
+            db.get(queries.supplies, [], (err, row) => {
+                if (err) {
+                    console.error('❌ Supplies count error:', err.message);
+                    resolve(0);
+                } else {
+                    resolve(row?.count || 0);
+                }
+            });
         }),
         new Promise((resolve, reject) => {
-            db.get(queries.lowStock, [facility_id], (err, row) => err ? reject(err) : resolve(row.count));
+            db.get(queries.lowStock, [facility_id], (err, row) => {
+                if (err) {
+                    console.error('❌ Low stock count error:', err.message);
+                    resolve(0);
+                } else {
+                    resolve(row?.count || 0);
+                }
+            });
         }),
         new Promise((resolve, reject) => {
-            db.get(queries.usage, [facility_id, facility_id], (err, row) => err ? reject(err) : resolve(row.count));
+            db.get(queries.usage, [facility_id, facility_id], (err, row) => {
+                if (err) {
+                    console.error('❌ Usage today count error:', err.message);
+                    resolve(0);
+                } else {
+                    resolve(row?.count || 0);
+                }
+            });
+        }),
+        new Promise((resolve, reject) => {
+            db.get(queries.facilities, [], (err, row) => {
+                if (err) {
+                    console.error('❌ Facilities count error:', err.message);
+                    resolve(0);
+                } else {
+                    resolve(row?.count || 0);
+                }
+            });
+        }),
+        new Promise((resolve, reject) => {
+            db.get(queries.totalUsage, [facility_id, facility_id], (err, row) => {
+                if (err) {
+                    console.error('❌ Total usage count error:', err.message);
+                    resolve(0);
+                } else {
+                    resolve(row?.count || 0);
+                }
+            });
         })
-    ]).then(([patients, supplies, lowStock, todayUsage]) => {
+    ]).then(([patients, supplies, lowStock, todayUsage, facilities, totalUsage]) => {
+        const dashboardData = {
+            active_patients: patients,
+            total_supplies: supplies,
+            low_stock_alerts: lowStock,
+            today_usage_count: todayUsage,
+            total_facilities: facilities,
+            total_usage: totalUsage
+        };
+        
+        console.log('✅ Dashboard data:', dashboardData);
+        
         res.json({
             success: true,
-            data: {
-                active_patients: patients,
-                total_supplies: supplies,
-                low_stock_alerts: lowStock,
-                today_usage_count: todayUsage
-            },
-            stats: {
-                active_patients: patients,
-                total_supplies: supplies,
-                low_stock_alerts: lowStock,
-                today_usage_count: todayUsage
-            }
+            data: dashboardData,
+            stats: dashboardData
         });
     }).catch(err => {
-        console.error('Dashboard stats error:', err);
-        res.status(500).json({ success: false, error: 'Failed to load stats' });
+        console.error('❌ Dashboard error:', err.message);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to load dashboard data',
+            details: err.message 
+        });
     });
 });
 
@@ -1033,8 +1160,10 @@ app.post('/api/inventory/update', authenticateToken, (req, res) => {
     );
 });
 
-// Tracking route (for usage tracking)
+// Tracking route (FIXED)
 app.get('/api/tracking', authenticateToken, (req, res) => {
+    console.log('📊 Fetching tracking data...');
+    
     const facility_id = req.user.facility_id || 1;
     
     const query = `
@@ -1043,28 +1172,63 @@ app.get('/api/tracking', authenticateToken, (req, res) => {
             su.usage_date,
             su.quantity_used,
             su.notes,
+            p.id as patient_id,
             p.name as patient_name,
-            p.patient_id,
+            p.patient_id as patient_number,
             p.room,
+            st.id as supply_id,
             st.name as supply_name,
             st.ar_code,
             st.category,
-            u.name as user_name
+            st.unit,
+            u.name as user_name,
+            f.name as facility_name
         FROM supply_usage su
-        JOIN patients p ON su.patient_id = p.id
-        JOIN supply_types st ON su.supply_type_id = st.id
+        LEFT JOIN patients p ON su.patient_id = p.id
+        LEFT JOIN supply_types st ON su.supply_type_id = st.id
         LEFT JOIN users u ON su.user_id = u.id
-        WHERE su.facility_id = ?
-        ORDER BY su.usage_date DESC
-        LIMIT 50
+        LEFT JOIN facilities f ON su.facility_id = f.id
+        WHERE su.facility_id = COALESCE(?, 1)
+        ORDER BY su.usage_date DESC, su.id DESC
+        LIMIT 100
     `;
     
     db.all(query, [facility_id], (err, rows) => {
         if (err) {
-            console.error('Error fetching tracking data:', err);
-            return res.status(500).json({ success: false, error: 'Database error' });
+            console.error('❌ Error fetching tracking data:', err.message);
+            return res.status(500).json({ 
+                success: false, 
+                error: 'Failed to fetch tracking data',
+                details: err.message 
+            });
         }
-        res.json({ success: true, tracking: rows || [] });
+        
+        console.log(`✅ Tracking data fetched: ${rows.length} records`);
+        
+        // Ensure all tracking records have required fields
+        const tracking = rows.map(record => ({
+            id: record.id,
+            usage_date: record.usage_date,
+            quantity_used: record.quantity_used || 0,
+            notes: record.notes || '',
+            patient: {
+                id: record.patient_id,
+                name: record.patient_name || 'Unknown Patient',
+                patient_id: record.patient_number || 'N/A',
+                room: record.room || 'N/A'
+            },
+            supply: {
+                id: record.supply_id,
+                name: record.supply_name || 'Unknown Supply',
+                ar_code: record.ar_code || 'N/A',
+                category: record.category || 'uncategorized',
+                unit: record.unit || 'each'
+            },
+            user_name: record.user_name || 'System',
+            facility_name: record.facility_name || 'Unknown Facility'
+        }));
+        
+        res.json({ success: true, tracking });
     });
 });
 
@@ -1126,6 +1290,97 @@ app.get('/api/reports/usage', authenticateToken, (req, res) => {
             return res.status(500).json({ success: false, error: 'Database error' });
         }
         res.json({ success: true, usage: rows || [] });
+    });
+});
+
+// Debug endpoints
+app.get('/api/debug/tables', authenticateToken, (req, res) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ success: false, error: 'Admin access required' });
+    }
+    
+    console.log('🔍 Checking database tables...');
+    
+    db.all(`SELECT name FROM sqlite_master WHERE type='table' ORDER BY name`, [], (err, tables) => {
+        if (err) {
+            console.error('❌ Error fetching tables:', err.message);
+            return res.status(500).json({ 
+                success: false, 
+                error: 'Failed to fetch tables',
+                details: err.message 
+            });
+        }
+        
+        const tableInfo = {};
+        let completed = 0;
+        
+        if (tables.length === 0) {
+            return res.json({ success: true, tables: [], message: 'No tables found' });
+        }
+        
+        tables.forEach(table => {
+            const tableName = table.name;
+            
+            db.get(`SELECT COUNT(*) as count FROM ${tableName}`, [], (err, result) => {
+                if (err) {
+                    tableInfo[tableName] = { error: err.message, count: 0 };
+                } else {
+                    tableInfo[tableName] = { count: result.count, error: null };
+                }
+                
+                completed++;
+                if (completed === tables.length) {
+                    console.log('✅ Table info collected:', tableInfo);
+                    res.json({ 
+                        success: true, 
+                        tables: tables.map(t => t.name),
+                        tableInfo,
+                        totalTables: tables.length
+                    });
+                }
+            });
+        });
+    });
+});
+
+app.get('/api/debug/sample-data', authenticateToken, (req, res) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ success: false, error: 'Admin access required' });
+    }
+    
+    console.log('🔍 Fetching sample data from all tables...');
+    
+    const sampleQueries = {
+        patients: `SELECT * FROM patients LIMIT 3`,
+        supply_types: `SELECT * FROM supply_types LIMIT 5`,
+        facilities: `SELECT * FROM facilities LIMIT 3`,
+        users: `SELECT id, email, name, role, created_at FROM users LIMIT 3`,
+        supply_usage: `SELECT * FROM supply_usage LIMIT 3`
+    };
+    
+    const sampleData = {};
+    let completed = 0;
+    const totalQueries = Object.keys(sampleQueries).length;
+    
+    Object.entries(sampleQueries).forEach(([table, query]) => {
+        db.all(query, [], (err, rows) => {
+            if (err) {
+                console.error(`❌ Error fetching sample from ${table}:`, err.message);
+                sampleData[table] = { error: err.message, data: [] };
+            } else {
+                sampleData[table] = { error: null, data: rows || [], count: rows?.length || 0 };
+            }
+            
+            completed++;
+            if (completed === totalQueries) {
+                console.log('✅ Sample data collected');
+                res.json({ 
+                    success: true, 
+                    sampleData,
+                    timestamp: new Date().toISOString()
+                });
+            }
+        });
     });
 });
 
@@ -1341,8 +1596,8 @@ app.get('/', (req, res) => {
                 <button class="btn" onclick="testSupplies()">Test Supplies</button>
                 <button class="btn" onclick="testPatients()">Test Patients</button>
                 <button class="btn" onclick="testTracking()">Test Tracking</button>
-                <button class="btn" onclick="testAdminUsers()">Test Admin Users</button>
-                <button class="btn" onclick="testAdminDashboard()">Test Admin Dashboard</button>
+                <button class="btn" onclick="testDebugTables()">Debug Tables</button>
+                <button class="btn" onclick="testSampleData()">Sample Data</button>
                 <div id="testResults" style="margin-top: 1rem;"></div>
             </div>
         </div>
@@ -1464,26 +1719,84 @@ app.get('/', (req, res) => {
             }
         }
         
-        async function testAdminDashboard() {
+        async function testTracking() {
             if (!token) {
                 document.getElementById('testResults').innerHTML = '<div class="error">❌ Please login first</div>';
                 return;
             }
             
             try {
-                const response = await fetch('/api/admin/dashboard', {
+                const response = await fetch('/api/tracking', {
                     headers: { 'Authorization': 'Bearer ' + token }
                 });
                 
                 const data = await response.json();
                 if (data.success) {
                     document.getElementById('testResults').innerHTML = 
-                        '<div class="success">✅ Admin dashboard loaded: ' + 
-                        data.dashboard.total_users + ' users, ' + 
-                        data.dashboard.total_patients + ' patients</div>';
+                        '<div class="success">✅ Tracking data loaded: ' + data.tracking.length + ' usage records</div>';
+                } else {
+                    document.getElementById('testResults').innerHTML = 
+                        '<div class="error">❌ Tracking failed: ' + (data.error || 'Unknown error') + 
+                        (data.details ? '<br>Details: ' + data.details : '') + '</div>';
                 }
             } catch (error) {
-                document.getElementById('testResults').innerHTML = '<div class="error">❌ Admin dashboard error: ' + error.message + '</div>';
+                document.getElementById('testResults').innerHTML = '<div class="error">❌ Tracking error: ' + error.message + '</div>';
+            }
+        }
+        
+        async function testDebugTables() {
+            if (!token) {
+                document.getElementById('testResults').innerHTML = '<div class="error">❌ Please login first</div>';
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/debug/tables', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    let tableInfo = '';
+                    for (const [table, info] of Object.entries(data.tableInfo)) {
+                        tableInfo += `${table}: ${info.count} records${info.error ? ' (ERROR: ' + info.error + ')' : ''}<br>`;
+                    }
+                    document.getElementById('testResults').innerHTML = 
+                        '<div class="success">✅ Database Tables:<br>' + tableInfo + '</div>';
+                } else {
+                    document.getElementById('testResults').innerHTML = 
+                        '<div class="error">❌ Debug tables failed: ' + (data.error || 'Unknown error') + '</div>';
+                }
+            } catch (error) {
+                document.getElementById('testResults').innerHTML = '<div class="error">❌ Debug tables error: ' + error.message + '</div>';
+            }
+        }
+        
+        async function testSampleData() {
+            if (!token) {
+                document.getElementById('testResults').innerHTML = '<div class="error">❌ Please login first</div>';
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/debug/sample-data', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    let sampleInfo = 'Sample Data:<br>';
+                    for (const [table, info] of Object.entries(data.sampleData)) {
+                        sampleInfo += `📊 ${table}: ${info.count} samples${info.error ? ' (ERROR)' : ''}<br>`;
+                    }
+                    document.getElementById('testResults').innerHTML = 
+                        '<div class="success">✅ ' + sampleInfo + '</div>';
+                } else {
+                    document.getElementById('testResults').innerHTML = 
+                        '<div class="error">❌ Sample data failed: ' + (data.error || 'Unknown error') + '</div>';
+                }
+            } catch (error) {
+                document.getElementById('testResults').innerHTML = '<div class="error">❌ Sample data error: ' + error.message + '</div>';
             }
         }
         
@@ -1540,11 +1853,12 @@ app.listen(PORT, () => {
     console.log('🏥 ================================');
     console.log(`✅ Server running on port ${PORT}`);
     console.log('✅ Database connected (SQLite)');
-    console.log('✅ 30+ API endpoints enabled');
+    console.log('✅ 30+ API endpoints enabled (with debugging)');
     console.log('🔑 Default login: admin@system.com / admin123');
-    console.log('📊 Sample data included: 3 patients, 10 supply types');
+    console.log('📊 Sample data: 3 patients, 10 supply types');
     console.log('🔧 Features: Auth, Dashboard, Patients, Supplies, Tracking, Reports, Export, Admin');
-    console.log('👨‍💼 Admin endpoints: users, dashboard, reports, patients, supplies');
+    console.log('🐛 Debug endpoints: /api/debug/tables, /api/debug/sample-data');
+    console.log('📝 Detailed error logging enabled');
     console.log('🏥 ================================');
     console.log('');
 });
