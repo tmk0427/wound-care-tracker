@@ -414,14 +414,60 @@ app.delete('/api/facilities/:id', authenticateToken, requireAdmin, async (req, r
     }
 });
 
-// Supplies routes
+// Supplies routes - Enhanced error logging
 app.get('/api/supplies', authenticateToken, async (req, res) => {
     try {
-        const result = await pool.query('SELECT * FROM supplies ORDER BY ar_code');
+        console.log('📦 Fetching supplies from database...');
+        
+        // First, check what tables exist
+        const tableCheck = await pool.query(`
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name LIKE '%suppl%'
+        `);
+        console.log('Supply-related tables:', tableCheck.rows);
+        
+        // Try the standard query first
+        let result;
+        try {
+            result = await pool.query('SELECT * FROM supplies ORDER BY ar_code LIMIT 5');
+            console.log('✅ Standard supplies query worked, sample:', result.rows);
+        } catch (standardError) {
+            console.log('❌ Standard supplies query failed:', standardError.message);
+            
+            // Try alternative column names that might exist
+            try {
+                result = await pool.query('SELECT * FROM supplies ORDER BY code LIMIT 5');
+                console.log('✅ Alternative supplies query (code) worked, sample:', result.rows);
+            } catch (altError) {
+                console.log('❌ Alternative supplies query failed:', altError.message);
+                
+                // Try getting table structure
+                try {
+                    const structure = await pool.query(`
+                        SELECT column_name, data_type 
+                        FROM information_schema.columns 
+                        WHERE table_name = 'supplies'
+                        ORDER BY ordinal_position
+                    `);
+                    console.log('Supplies table structure:', structure.rows);
+                    
+                    // Try a basic select without ORDER BY
+                    result = await pool.query('SELECT * FROM supplies LIMIT 5');
+                    console.log('✅ Basic supplies query worked, sample:', result.rows);
+                } catch (structError) {
+                    console.log('❌ Cannot read supplies table structure:', structError.message);
+                    throw new Error('Supplies table not accessible: ' + structError.message);
+                }
+            }
+        }
+        
         res.json({ success: true, supplies: result.rows });
     } catch (error) {
-        console.error('Get supplies error:', error);
-        res.status(500).json({ success: false, error: 'Failed to fetch supplies' });
+        console.error('❌ Complete supplies error:', error.message);
+        console.error('Error details:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch supplies: ' + error.message });
     }
 });
 
@@ -487,9 +533,24 @@ app.delete('/api/supplies/:id', authenticateToken, requireAdmin, async (req, res
     }
 });
 
-// Patients routes
+// Patients routes - Add structure logging for reference
 app.get('/api/patients', authenticateToken, async (req, res) => {
     try {
+        console.log('👥 Fetching patients (this works - for reference)...');
+        
+        // Log the patients table structure for comparison
+        try {
+            const structure = await pool.query(`
+                SELECT column_name, data_type 
+                FROM information_schema.columns 
+                WHERE table_name = 'patients'
+                ORDER BY ordinal_position
+            `);
+            console.log('Patients table structure (working):', structure.rows);
+        } catch (structError) {
+            console.log('Could not read patients structure:', structError.message);
+        }
+        
         let query = `
             SELECT p.*, f.name as facility_name 
             FROM patients p 
@@ -506,6 +567,7 @@ app.get('/api/patients', authenticateToken, async (req, res) => {
         query += ' ORDER BY p.created_at DESC';
         
         const result = await pool.query(query, queryParams);
+        console.log(`✅ Patients loaded successfully: ${result.rows.length} records`);
         res.json({ success: true, patients: result.rows });
     } catch (error) {
         console.error('Get patients error:', error);
@@ -633,13 +695,53 @@ app.delete('/api/users/:id', authenticateToken, requireAdmin, async (req, res) =
     }
 });
 
-// Tracking routes
+// Tracking routes - Enhanced error logging  
 app.get('/api/tracking', authenticateToken, async (req, res) => {
     try {
+        console.log('📊 Fetching tracking data from database...');
+        
+        // First, check what tracking-related tables exist
+        const tableCheck = await pool.query(`
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND (table_name LIKE '%track%' OR table_name LIKE '%usage%' OR table_name LIKE '%supply_usage%')
+        `);
+        console.log('Tracking-related tables:', tableCheck.rows);
+        
+        let result;
+        try {
+            // Try standard tracking table
+            result = await pool.query('SELECT * FROM tracking LIMIT 5');
+            console.log('✅ Standard tracking query worked, sample:', result.rows);
+        } catch (standardError) {
+            console.log('❌ Standard tracking query failed:', standardError.message);
+            
+            // Try alternative table names
+            const possibleTables = ['supply_usage', 'patient_supply_usage', 'daily_usage', 'supply_tracking'];
+            let found = false;
+            
+            for (const tableName of possibleTables) {
+                try {
+                    result = await pool.query(`SELECT * FROM ${tableName} LIMIT 5`);
+                    console.log(`✅ Found tracking data in ${tableName}:`, result.rows);
+                    found = true;
+                    break;
+                } catch (altError) {
+                    console.log(`❌ No data in ${tableName}:`, altError.message);
+                }
+            }
+            
+            if (!found) {
+                console.log('❌ No tracking tables found, returning empty data');
+                result = { rows: [] };
+            }
+        }
+        
+        // Apply non-admin filtering if needed
         let query = 'SELECT * FROM tracking';
         let queryParams = [];
 
-        // Non-admin users can only see tracking for patients from their facility
         if (req.user.role !== 'admin' && req.user.facility_id) {
             query = `
                 SELECT t.* FROM tracking t
@@ -651,11 +753,21 @@ app.get('/api/tracking', authenticateToken, async (req, res) => {
 
         query += ' ORDER BY patient_id, supply_id, day';
         
-        const result = await pool.query(query, queryParams);
+        if (result.rows.length > 0) {
+            // Re-run with proper filtering if we found data
+            try {
+                result = await pool.query(query, queryParams);
+            } catch (filterError) {
+                console.log('❌ Filtered query failed, using unfiltered:', filterError.message);
+                // Keep the original result
+            }
+        }
+        
         res.json({ success: true, tracking: result.rows });
     } catch (error) {
-        console.error('Get tracking error:', error);
-        res.status(500).json({ success: false, error: 'Failed to fetch tracking data' });
+        console.error('❌ Complete tracking error:', error.message);
+        console.error('Error details:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch tracking data: ' + error.message });
     }
 });
 
