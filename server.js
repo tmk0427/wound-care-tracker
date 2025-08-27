@@ -380,6 +380,74 @@ app.get('/api/debug', (req, res) => {
     });
 });
 
+// Add new patient
+app.post('/api/patients', authenticateToken, (req, res) => {
+    console.log('👤 Adding new patient...');
+    
+    const { patient_id, name, room, facility_id, admission_date, wound_type, severity, notes } = req.body;
+
+    if (!patient_id || !name) {
+        return res.status(400).json({ success: false, error: 'Patient ID and name required' });
+    }
+
+    const query = `
+        INSERT INTO patients (patient_id, name, room, facility_id, admission_date, wound_type, severity, notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    db.run(query, [patient_id, name, room, facility_id || 1, admission_date, wound_type, severity, notes],
+        function(err) {
+            if (err) {
+                console.error('❌ Patient creation error:', err.message);
+                if (err.message.includes('UNIQUE constraint failed')) {
+                    return res.status(409).json({ success: false, error: 'Patient ID already exists' });
+                }
+                return res.status(500).json({ success: false, error: 'Failed to create patient' });
+            }
+
+            console.log('✅ Patient created with ID:', this.lastID);
+            res.status(201).json({
+                success: true,
+                patient: { id: this.lastID, patient_id, name, room, facility_id }
+            });
+        }
+    );
+});
+
+// Add new supply
+app.post('/api/supplies', authenticateToken, (req, res) => {
+    console.log('📦 Adding new supply...');
+    
+    const { name, category, ar_code, unit, cost_per_unit, reorder_level, description } = req.body;
+
+    if (!name || !category) {
+        return res.status(400).json({ success: false, error: 'Name and category required' });
+    }
+
+    const query = `
+        INSERT INTO supply_types (name, category, ar_code, unit, cost_per_unit, reorder_level, description)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    db.run(query, [name, category, ar_code, unit || 'each', cost_per_unit || 0, reorder_level || 10, description || ''],
+        function(err) {
+            if (err) {
+                console.error('❌ Supply creation error:', err.message);
+                if (err.message.includes('UNIQUE constraint failed')) {
+                    return res.status(409).json({ success: false, error: 'AR code already exists' });
+                }
+                return res.status(500).json({ success: false, error: 'Failed to create supply' });
+            }
+
+            console.log('✅ Supply created with ID:', this.lastID);
+            res.status(201).json({
+                success: true,
+                supply: { id: this.lastID, name, category, ar_code }
+            });
+        }
+    );
+});
+
 // Test token endpoint
 app.get('/api/test-token', authenticateToken, (req, res) => {
     console.log('🔧 Token test for user:', req.user);
