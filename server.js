@@ -1,67 +1,341 @@
 const express = require('express');
+const sqlite3 = require('sqlite3').verbose();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { Pool } = require('pg');
-const multer = require('multer');
-const csv = require('csv-parser');
+const cors = require('cors');
 const path = require('path');
-const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
-
-// Database connection
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-});
-
-// Test database connection
-pool.connect((err, client, release) => {
-    if (err) {
-        console.error('❌ Database connection failed:', err);
-    } else {
-        console.log('✅ Database connected successfully');
-        release();
-    }
-});
+const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this-in-production';
 
 // Middleware
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(cors());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.static(path.join(__dirname)));
 
-// CORS middleware
-app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-    if (req.method === 'OPTIONS') {
-        res.sendStatus(200);
+// Database initialization
+const db = new sqlite3.Database('./wound_care.db', (err) => {
+    if (err) {
+        console.error('❌ Error opening database:', err);
     } else {
-        next();
+        console.log('✅ Connected to SQLite database');
+        initializeDatabase();
     }
 });
 
-// File upload configuration
-const upload = multer({
-    dest: 'uploads/',
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-});
-
-// Health check and debug routes
-app.get('/health', (req, res) => {
-    res.json({ status: 'OK', timestamp: new Date().toISOString() });
-});
-
-app.get('/api/debug/status', (req, res) => {
-    res.json({ 
-        success: true, 
-        server: 'running', 
-        database: 'connected',
-        timestamp: new Date().toISOString()
+// Database helper functions  
+function runQuery(query, params = []) {
+    return new Promise((resolve, reject) => {
+        db.run(query, params, function(err) {
+            if (err) {
+                console.error('Database run error:', err);
+                reject(err);
+            } else {
+                resolve({ id: this.lastID, changes: this.changes });
+            }
+        });
     });
-});
+}
+
+function getQuery(query, params = []) {
+    return new Promise((resolve, reject) => {
+        db.get(query, params, (err, row) => {
+            if (err) {
+                console.error('Database get error:', err);
+                reject(err);
+            } else {
+                resolve(row);
+            }
+        });
+    });
+}
+
+function getAllQuery(query, params = []) {
+    return new Promise((resolve, reject) => {
+        db.all(query, params, (err, rows) => {
+            if (err) {
+                console.error('Database getAll error:', err);
+                reject(err);
+            } else {
+                resolve(rows || []);
+            }
+        });
+    });
+}
+
+async function getCount(table, whereClause = '') {
+    try {
+        const query = `SELECT COUNT(*) as count FROM ${table} ${whereClause}`;
+        const result = await getQuery(query);
+        return result ? result.count : 0;
+    } catch (error) {
+        console.error(`Error counting ${table}:`, error);
+        return 0;
+    }
+}
+
+// Initialize database tables and data
+async function initializeDatabase() {
+    try {
+        console.log('🔧 Initializing database tables...');
+
+        // Create facilities table
+        await runQuery(`
+            CREATE TABLE IF NOT EXISTS facilities (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        // Create supplies table
+        await runQuery(`
+            CREATE TABLE IF NOT EXISTS supplies (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                code INTEGER NOT NULL UNIQUE,
+                description TEXT NOT NULL,
+                hcpcs TEXT,
+                cost DECIMAL(10,2) DEFAULT 0.00,
+                is_custom BOOLEAN DEFAULT 1,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        // Create users table
+        await runQuery(`
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE,
+                password TEXT NOT NULL,
+                role TEXT DEFAULT 'user' CHECK(role IN ('admin', 'user')),
+                facility_id INTEGER,
+                is_approved BOOLEAN DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (facility_id) REFERENCES facilities (id)
+            )
+        `);
+
+        // Create patients table
+        await runQuery(`
+            CREATE TABLE IF NOT EXISTS patients (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                month TEXT NOT NULL,
+                mrn TEXT,
+                facility_id INTEGER NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (facility_id) REFERENCES facilities (id)
+            )
+        `);
+
+        // Create tracking_data table
+        await runQuery(`
+            CREATE TABLE IF NOT EXISTS tracking_data (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                patient_id INTEGER NOT NULL,
+                supply_code INTEGER NOT NULL,
+                day INTEGER NOT NULL,
+                quantity INTEGER DEFAULT 0,
+                month TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (patient_id) REFERENCES patients (id) ON DELETE CASCADE,
+                FOREIGN KEY (supply_code) REFERENCES supplies (code)
+            )
+        `);
+
+        // Initialize default admin user if needed
+        const adminCount = await getCount('users', 'WHERE role = "admin"');
+        if (adminCount === 0) {
+            console.log('👤 Creating default admin user...');
+            const hashedPassword = await bcrypt.hash('admin123', 10);
+            
+            await runQuery(
+                'INSERT INTO users (name, email, password, role, is_approved) VALUES (?, ?, ?, ?, ?)',
+                ['System Administrator', 'admin@system.com', hashedPassword, 'admin', 1]
+            );
+            console.log('✅ Default admin user created');
+        }
+
+        // Add missing supplies if database is incomplete
+        await initializeMissingSupplies();
+        
+        console.log('🎉 Database initialization completed successfully!');
+        
+    } catch (error) {
+        console.error('❌ Database initialization failed:', error);
+        throw error;
+    }
+}
+
+// Initialize missing supplies from the AR list
+async function initializeMissingSupplies() {
+    try {
+        console.log('📦 Checking for missing AR supplies...');
+        
+        // Complete AR Code list from your document
+        const arSupplies = [
+            { code: 272, description: 'Med/Surgical Supplies', hcpcs: 'B4149', cost: 0.00 },
+            { code: 400, description: 'HME filter holder for trach or vent', hcpcs: 'A7507', cost: 3.49 },
+            { code: 401, description: 'HME housing & adhesive', hcpcs: 'A7509', cost: 1.97 },
+            { code: 402, description: 'HMES/trach valve adhesive disk', hcpcs: 'A7506', cost: 0.45 },
+            { code: 403, description: 'HMES filter holder or cap for tracheostoma', hcpcs: 'A7503', cost: 15.85 },
+            { code: 404, description: 'HMES filter', hcpcs: 'A7504', cost: 0.95 },
+            { code: 405, description: 'HMES/trach valve housing', hcpcs: 'A7505', cost: 6.55 },
+            { code: 406, description: 'HME housing w/adhesive filter', hcpcs: 'A7508', cost: 4.01 },
+            { code: 407, description: 'Lubricant per oz to insert trach', hcpcs: 'A4402', cost: 1.90 },
+            { code: 408, description: 'Piston irrigation syringe irrigation trach ostomy, uro', hcpcs: 'A4322', cost: 4.16 },
+            { code: 409, description: 'Sterile saline 10ml and 15ml bullets', hcpcs: 'A4216', cost: 0.62 },
+            { code: 410, description: 'Sterile saline 100ml, 1000ml, 120ml, 250ml and 500ml', hcpcs: 'A4217', cost: 4.38 },
+            { code: 411, description: 'Closed suction catheter for trach', hcpcs: 'A4605', cost: 22.92 },
+            { code: 412, description: 'Open suction catheter for trach', hcpcs: 'A4624', cost: 3.69 },
+            { code: 413, description: 'Tracheal suction catheter closed system (yankauers/ballards)', hcpcs: 'A4605', cost: 22.92 },
+            { code: 414, description: 'Tracheostoma filter', hcpcs: 'A4481', cost: 0.50 },
+            { code: 415, description: 'Tracheostomy inner cannula', hcpcs: 'A4623', cost: 8.74 },
+            { code: 416, description: 'Trach kit new trach', hcpcs: 'A4625', cost: 9.68 },
+            { code: 417, description: 'Trach mask', hcpcs: 'A7525', cost: 2.79 },
+            { code: 418, description: 'Trach/laryn tube non-cuffed', hcpcs: 'A7520', cost: 66.33 },
+            { code: 419, description: 'Tracheostoma stent/stud/button', hcpcs: 'A7524', cost: 108.17 },
+            { code: 420, description: 'Trach ties', hcpcs: 'A7526', cost: 4.74 },
+            { code: 421, description: 'Trach/laryn tube cuffed', hcpcs: 'A7521', cost: 65.73 },
+            { code: 422, description: 'Trach/laryn tube plug/stop', hcpcs: 'A7527', cost: 5.00 },
+            { code: 423, description: 'Trach kit established trach', hcpcs: 'A4629', cost: 6.58 },
+            { code: 424, description: 'Tracheostomy speaking valve', hcpcs: 'L8501', cost: 175.90 },
+            { code: 425, description: 'Yankauer oropharyngeal', hcpcs: 'A4628', cost: 5.23 },
+            { code: 600, description: 'Sterile Gauze sponge 2x2 up to 4x4, EACH 2 in package', hcpcs: 'A6251', cost: 2.78 },
+            { code: 601, description: 'Sterile gauze sponge greater than 4x4, each', hcpcs: 'A6252', cost: 4.55 },
+            { code: 602, description: 'ABD dressing non bordered 16 sq inches', hcpcs: 'A6251', cost: 2.78 },
+            { code: 603, description: 'ABD dressing non bordered greater than 48 sq inches', hcpcs: 'A6253', cost: 8.85 },
+            { code: 604, description: 'ABD dressing non bordered 48 sq inches', hcpcs: 'A6252', cost: 4.55 },
+            { code: 605, description: 'ABD dressing bordered up to 16 sq inches', hcpcs: 'A6254', cost: 1.67 },
+            { code: 606, description: 'ABD dressing bordered 18 sq inches or greater', hcpcs: 'A6255', cost: 4.25 },
+            { code: 607, description: 'Adhesive remover wipes', hcpcs: 'A4456', cost: 0.34 },
+            { code: 608, description: 'Alginate/Fiber gelling sterile 4x4 each', hcpcs: 'A6196', cost: 10.28 },
+            { code: 609, description: 'Alginate fiber gelling sterile dressing up to 6x6 each', hcpcs: 'A6197', cost: 22.98 },
+            { code: 610, description: 'AMB antimicrobial drain sponges', hcpcs: 'A6222', cost: 2.98 },
+            { code: 611, description: 'Any tape each 18" (framed 4x4) or steri strips', hcpcs: 'A4452', cost: 0.53 },
+            { code: 612, description: 'Irrigation tubing set for continuous bladder irrigation tubing used with 3 way indwelling foley cath', hcpcs: 'A4355', cost: 12.46 },
+            { code: 613, description: 'Border gauze island dressing medium 6x6 incision & 4x10 each', hcpcs: 'A6220', cost: 3.62 },
+            { code: 614, description: 'Border gauze island dressing small 2x2, 3x3, 4x4 each', hcpcs: 'A6219', cost: 1.33 },
+            { code: 615, description: 'calcium alginate rope per 6"', hcpcs: 'A6199', cost: 7.37 },
+            { code: 616, description: 'cath foley 2 way all', hcpcs: 'A4344', cost: 19.01 },
+            { code: 617, description: 'Cah foley 3 way cont\' irrigation', hcpcs: 'A4346', cost: 23.26 },
+            { code: 618, description: 'Intermittent urinary cath with insertion supplies', hcpcs: 'A4353', cost: 9.77 },
+            { code: 619, description: 'Cath insert tray w/drain bag', hcpcs: 'A4354', cost: 16.50 },
+            { code: 620, description: 'Cath insert tray without drain bag', hcpcs: 'A4310', cost: 10.79 },
+            { code: 621, description: 'Coflex compression bandage second layer per yard', hcpcs: 'A6452', cost: 8.24 },
+            { code: 622, description: 'Coflex zinc impregnated bandage per yard', hcpcs: 'A6456', cost: 1.75 },
+            { code: 623, description: 'Collagen dressing 16 inches', hcpcs: 'A6021', cost: 29.38 },
+            { code: 624, description: 'Collagen dressing more than 48 inches', hcpcs: 'A6023', cost: 265.90 },
+            { code: 625, description: 'Collagen gel or paste per gm', hcpcs: 'A6011', cost: 3.19 },
+            { code: 626, description: 'Collagen powder per 1 gm', hcpcs: 'A6010', cost: 43.27 },
+            { code: 627, description: 'Colostomy bag closed no barrier', hcpcs: 'A5052', cost: 2.08 },
+            { code: 628, description: 'Composite bordered 16 sq inches or less (2x2, 4x4) each', hcpcs: 'A6203', cost: 4.71 },
+            { code: 629, description: 'Composite dressing greater than 16 sq inches (6x6)', hcpcs: 'A6204', cost: 8.69 },
+            { code: 630, description: 'Compression bandage 3" width per yard', hcpcs: 'A6448', cost: 1.61 },
+            { code: 631, description: 'Condom catheter', hcpcs: 'A4326', cost: 15.07 },
+            { code: 632, description: 'Drain bag', hcpcs: 'A4358', cost: 9.07 },
+            { code: 633, description: 'Drain bag bedside', hcpcs: 'A4357', cost: 11.53 },
+            { code: 634, description: 'Foam non bordered dressing medium 6x6, each Mepilex, Allevyn, xeroform', hcpcs: 'A6210', cost: 27.84 },
+            { code: 635, description: 'Foam non bordered large dressing more than 48 sq inches large Mepilex, Allevyn, Xeroform, Optifoam', hcpcs: 'A6211', cost: 41.04 },
+            { code: 636, description: 'Gauze stretch per yard>3"<5" Kerlix', hcpcs: 'A6449', cost: 2.45 },
+            { code: 637, description: 'Gradient wrap (Circaid/Sigvaris) each', hcpcs: 'A6545', cost: 119.03 },
+            { code: 638, description: 'High compression bandage per yard', hcpcs: 'A6452', cost: 8.24 },
+            { code: 639, description: 'Honey gel per oz', hcpcs: 'A6248', cost: 22.70 },
+            { code: 640, description: 'Hydrocolloid dressing pad 16 sq inches non bordered', hcpcs: 'A6234', cost: 9.15 },
+            { code: 641, description: 'Hydrocolloid dressing large 6x6 non bordered', hcpcs: 'A6235', cost: 23.50 },
+            { code: 642, description: 'Hydrocolloid bordered dressing 6x6 each', hcpcs: 'A6238', cost: 31.86 },
+            { code: 643, description: 'Hydrocolloid bordered dressing 4x4 each', hcpcs: 'A6237', cost: 11.05 },
+            { code: 644, description: 'Hydrogel dressing pad 4x4 each', hcpcs: 'A6242', cost: 8.46 },
+            { code: 645, description: 'Hydrofiber rope per 6"', hcpcs: 'A6199', cost: 7.37 },
+            { code: 646, description: 'Hydrogel per oz', hcpcs: 'A6248', cost: 22.70 },
+            { code: 647, description: 'Hydrogel dressing greater than 4x4', hcpcs: 'A6243', cost: 17.22 },
+            { code: 648, description: 'Saline impregnated gauze sponge >16 sq inches', hcpcs: 'A6252', cost: 4.55 },
+            { code: 649, description: 'I0doform packing strip per yard', hcpcs: 'A6266', cost: 2.67 },
+            { code: 650, description: 'Iodosorb gel (antimicrobial) per oz', hcpcs: 'A6248', cost: 22.70 },
+            { code: 651, description: 'Irrigation syringe/bulb/piston', hcpcs: 'A4322', cost: 4.16 },
+            { code: 652, description: 'Irrigation tray any purpose', hcpcs: 'A4320', cost: 6.59 },
+            { code: 653, description: 'Kerlex roll gauze 3" to 5" per yard 4.1 yrd roll = 4 units', hcpcs: 'A6449', cost: 2.45 },
+            { code: 654, description: 'Light compression elastic, woven bandage 3 to 5" w(ACE) per yard', hcpcs: 'A6449', cost: 2.45 },
+            { code: 655, description: 'Male cath any type', hcpcs: 'A4326', cost: 15.07 },
+            { code: 656, description: 'Manuka honey 4x4 each', hcpcs: 'A6242', cost: 8.46 },
+            { code: 657, description: 'Negative pressure wound therapy dressing set', hcpcs: 'A6550', cost: 30.52 },
+            { code: 658, description: 'Ostomy adhesive per oz', hcpcs: 'A4364', cost: 3.49 },
+            { code: 659, description: 'Ostomy belt', hcpcs: 'A4367', cost: 10.28 },
+            { code: 660, description: 'Ostomy face plate', hcpcs: 'A4361', cost: 22.55 },
+            { code: 661, description: 'Ostomy pouch w/faceplate', hcpcs: 'A4375', cost: 23.99 },
+            { code: 662, description: 'Ostomy skin barrier powder per oz', hcpcs: 'A4371', cost: 5.10 },
+            { code: 663, description: 'Ostomy skin barrier solid', hcpcs: 'A4362', cost: 4.12 },
+            { code: 664, description: 'Ostomy skin barrier w/flange', hcpcs: 'A4373', cost: 8.76 },
+            { code: 665, description: 'Padding bandage per yard use with coflex', hcpcs: 'A6441', cost: 0.95 },
+            { code: 666, description: 'Perianal fecal collection pouch', hcpcs: 'A4330', cost: 10.01 },
+            { code: 667, description: 'Petrolatum dressing 5x9 xeroform', hcpcs: 'A6223', cost: 3.39 },
+            { code: 668, description: 'Petro impregnated gauze sponge 4x4', hcpcs: 'A6222', cost: 2.98 },
+            { code: 669, description: 'Piston irrigation syringe', hcpcs: 'A4322', cost: 4.16 },
+            { code: 670, description: 'Plain 4x4 alginate gelling dressing each', hcpcs: 'A6196', cost: 10.28 },
+            { code: 671, description: 'Puracol dressing 4x4', hcpcs: 'A6203', cost: 4.71 },
+            { code: 672, description: 'Sterile saline 10ml and 15ml bullets', hcpcs: 'A4216', cost: 0.62 },
+            { code: 673, description: 'Sterile saline 100ml, 120ml, 250ml, 500ml and 1000ml', hcpcs: 'A4217', cost: 4.38 },
+            { code: 674, description: 'Silver 4x4 alginate gelling dressing each', hcpcs: 'A6196', cost: 10.28 },
+            { code: 675, description: 'Skin prep wipe each', hcpcs: 'A5120', cost: 0.34 },
+            { code: 676, description: 'Split gauze each 2 per package', hcpcs: 'A6251', cost: 2.78 },
+            { code: 677, description: 'Steri strips per 18 inches', hcpcs: 'A4452', cost: 0.53 },
+            { code: 678, description: 'Super absorbent sterile dressing', hcpcs: 'A6251', cost: 2.78 },
+            { code: 679, description: 'Transparent film Tegaderm/opsite 16" or less', hcpcs: 'A6257', cost: 2.14 },
+            { code: 680, description: 'Tegaderm opsite composite film 48"', hcpcs: 'A6204', cost: 8.69 },
+            { code: 681, description: 'Tubular dressing non elastic any width per yard', hcpcs: 'A6457', cost: 1.59 },
+            { code: 682, description: 'Wound drain collector pouch', hcpcs: 'A6154', cost: 20.09 },
+            { code: 683, description: 'Xero/Optifoam/Mepilex 48"', hcpcs: 'A6211', cost: 41.04 },
+            { code: 684, description: 'Mesalt cleansing dressing with 20% sodium chloride 1.1 yr', hcpcs: 'A6266', cost: 2.67 },
+            { code: 685, description: 'Plurogel burn and wound dressing per oz', hcpcs: 'A4649', cost: 22.70 },
+            { code: 686, description: 'Sorbex wound dressing 6x9 more than 48 sq in non adherent pansement', hcpcs: 'A6253', cost: 8.85 },
+            { code: 687, description: 'Coban 3" wide per yard', hcpcs: 'A6452', cost: 8.24 },
+            { code: 688, description: 'Black granufoam more than 48 sq inches', hcpcs: 'A6211', cost: 41.04 },
+            { code: 689, description: 'Hydrofera Blue 4x4 or less', hcpcs: 'A6209', cost: 10.20 },
+            { code: 690, description: 'Hydrofera Blue greater than 48 sq inches 6x6 8x8', hcpcs: 'A6211', cost: 41.04 },
+            { code: 691, description: 'oil emulsion impregnated gauze', hcpcs: 'A6222', cost: 2.98 },
+            { code: 692, description: 'Optiview transparent dressing', hcpcs: 'A6259', cost: 15.28 },
+            { code: 706, description: 'silicone foam border dressing 2x2,4x4,6x6', hcpcs: 'A6132', cost: 13.57 },
+            { code: 707, description: 'Silicone foam border dressing 6x6 or greater', hcpcs: 'A6214', cost: 14.39 },
+            { code: 708, description: 'Calcium alginate dressing 2x2,4x4', hcpcs: 'A6196', cost: 10.28 },
+            { code: 709, description: 'Calcium alginate dressing 6x6', hcpcs: 'A6197', cost: 22.98 }
+        ];
+
+        let addedCount = 0;
+        for (const supply of arSupplies) {
+            try {
+                // Check if supply already exists
+                const existing = await getQuery('SELECT id FROM supplies WHERE code = ?', [supply.code]);
+                
+                if (!existing) {
+                    await runQuery(
+                        'INSERT INTO supplies (code, description, hcpcs, cost, is_custom) VALUES (?, ?, ?, ?, ?)',
+                        [supply.code, supply.description, supply.hcpcs, supply.cost, 0]
+                    );
+                    addedCount++;
+                }
+            } catch (error) {
+                console.error(`Error adding supply ${supply.code}:`, error.message);
+                // Continue with next supply
+            }
+        }
+        
+        if (addedCount > 0) {
+            console.log(`✅ Added ${addedCount} missing AR supplies`);
+        } else {
+            console.log('ℹ️ All AR supplies already present');
+        }
+        
+    } catch (error) {
+        console.error('❌ Failed to initialize missing supplies:', error);
+    }
+}
 
 // Authentication middleware
 const authenticateToken = (req, res, next) => {
@@ -74,14 +348,15 @@ const authenticateToken = (req, res, next) => {
 
     jwt.verify(token, JWT_SECRET, (err, user) => {
         if (err) {
-            return res.status(403).json({ success: false, error: 'Invalid or expired token' });
+            console.error('JWT verification failed:', err);
+            return res.status(403).json({ success: false, error: 'Invalid token' });
         }
         req.user = user;
         next();
     });
 };
 
-// Admin-only middleware
+// Admin middleware
 const requireAdmin = (req, res, next) => {
     if (req.user.role !== 'admin') {
         return res.status(403).json({ success: false, error: 'Admin access required' });
@@ -89,197 +364,39 @@ const requireAdmin = (req, res, next) => {
     next();
 };
 
-// Initialize database tables
-async function initializeDatabase() {
-    const tables = [
-        // Facilities table
-        `CREATE TABLE IF NOT EXISTS facilities (
-            id SERIAL PRIMARY KEY,
-            name TEXT NOT NULL UNIQUE,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )`,
-        
-        // Users table
-        `CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            name TEXT NOT NULL,
-            email TEXT NOT NULL UNIQUE,
-            password TEXT NOT NULL,
-            role TEXT DEFAULT 'user' CHECK(role IN ('user', 'admin')),
-            facility_id INTEGER REFERENCES facilities(id),
-            approved BOOLEAN DEFAULT FALSE,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )`,
-        
-        // Supplies table
-        `CREATE TABLE IF NOT EXISTS supplies (
-            id SERIAL PRIMARY KEY,
-            ar_code TEXT NOT NULL UNIQUE,
-            description TEXT NOT NULL,
-            hcpcs TEXT,
-            cost DECIMAL(10,2) DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )`,
-        
-        // Patients table
-        `CREATE TABLE IF NOT EXISTS patients (
-            id SERIAL PRIMARY KEY,
-            name TEXT NOT NULL,
-            mrn TEXT,
-            month TEXT NOT NULL,
-            facility_id INTEGER REFERENCES facilities(id),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )`,
-        
-        // Tracking table
-        `CREATE TABLE IF NOT EXISTS tracking (
-            id SERIAL PRIMARY KEY,
-            patient_id INTEGER REFERENCES patients(id) ON DELETE CASCADE,
-            supply_id INTEGER REFERENCES supplies(id) ON DELETE CASCADE,
-            day INTEGER NOT NULL CHECK(day >= 1 AND day <= 31),
-            quantity INTEGER DEFAULT 0,
-            month TEXT NOT NULL,
-            wound_dx TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(patient_id, supply_id, day)
-        )`
-    ];
+// ===== ROUTES =====
 
-    try {
-        for (const table of tables) {
-            await pool.query(table);
-        }
-        console.log('✅ Database tables initialized');
-        
-        // Create default admin user and facilities
-        await createDefaultData();
-    } catch (error) {
-        console.error('❌ Database initialization failed:', error);
-    }
-}
+// Serve main HTML file
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
 
-// Create default data
-async function createDefaultData() {
-    try {
-        // Create default facilities if none exist
-        const facilitiesCount = await pool.query('SELECT COUNT(*) FROM facilities');
-        if (parseInt(facilitiesCount.rows[0].count) === 0) {
-            const defaultFacilities = [
-                'Main Hospital',
-                'North Clinic', 
-                'South Medical Center',
-                'East Outpatient'
-            ];
-            
-            for (const facility of defaultFacilities) {
-                await pool.query('INSERT INTO facilities (name) VALUES ($1)', [facility]);
-            }
-            console.log('✅ Default facilities created');
-        }
+// Health check
+app.get('/health', (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
 
-        // Create default admin user if none exists, or ensure existing admin password is properly hashed
-        const adminCount = await pool.query("SELECT COUNT(*) FROM users WHERE role = 'admin'");
-        if (parseInt(adminCount.rows[0].count) === 0) {
-            const hashedPassword = await bcrypt.hash('admin123', 12);
-            const firstFacility = await pool.query('SELECT id FROM facilities ORDER BY id LIMIT 1');
-            
-            await pool.query(
-                'INSERT INTO users (name, email, password, role, facility_id, approved) VALUES ($1, $2, $3, $4, $5, $6)',
-                ['Admin User', 'admin@hospital.com', hashedPassword, 'admin', firstFacility.rows[0].id, true]
-            );
-            console.log('✅ Default admin created: admin@hospital.com / admin123');
-        } else {
-            // Check if admin@system.com exists and update password if needed
-            const systemAdmin = await pool.query("SELECT * FROM users WHERE email = 'admin@system.com' AND role = 'admin'");
-            if (systemAdmin.rows.length > 0) {
-                const user = systemAdmin.rows[0];
-                // Test if password is properly hashed by trying to compare
-                try {
-                    const isValidHash = await bcrypt.compare('admin123', user.password);
-                    if (!isValidHash) {
-                        // Password might not be properly hashed, update it
-                        const hashedPassword = await bcrypt.hash('admin123', 12);
-                        await pool.query(
-                            'UPDATE users SET password = $1 WHERE email = $2',
-                            [hashedPassword, 'admin@system.com']
-                        );
-                        console.log('✅ Updated admin@system.com password hash');
-                    }
-                } catch (error) {
-                    // Password definitely not properly hashed, update it
-                    const hashedPassword = await bcrypt.hash('admin123', 12);
-                    await pool.query(
-                        'UPDATE users SET password = $1 WHERE email = $2',
-                        [hashedPassword, 'admin@system.com']
-                    );
-                    console.log('✅ Fixed admin@system.com password hash');
-                }
-                console.log('✅ Existing admin found: admin@system.com / admin123');
-            }
-        }
+// ===== AUTH ROUTES =====
 
-        // Create default supplies if none exist
-        const suppliesCount = await pool.query('SELECT COUNT(*) FROM supplies');
-        if (parseInt(suppliesCount.rows[0].count) === 0) {
-            const defaultSupplies = [
-                { ar_code: 'AR001', description: 'Wound Cleanser', hcpcs: 'A6260', cost: 12.50 },
-                { ar_code: 'AR002', description: 'Gauze Dressing 4x4', hcpcs: 'A6402', cost: 3.25 },
-                { ar_code: 'AR003', description: 'Medical Tape', hcpcs: 'A4450', cost: 8.75 },
-                { ar_code: 'AR004', description: 'Hydrogel Dressing', hcpcs: 'A6248', cost: 15.00 },
-                { ar_code: 'AR005', description: 'Foam Dressing', hcpcs: 'A6209', cost: 22.50 }
-            ];
-            
-            for (const supply of defaultSupplies) {
-                await pool.query(
-                    'INSERT INTO supplies (ar_code, description, hcpcs, cost) VALUES ($1, $2, $3, $4)',
-                    [supply.ar_code, supply.description, supply.hcpcs, supply.cost]
-                );
-            }
-            console.log('✅ Default supplies created');
-        }
-    } catch (error) {
-        console.error('❌ Error creating default data:', error);
-    }
-}
-
-// Authentication routes
 app.post('/api/auth/login', async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        if (!email || !password) {
-            return res.status(400).json({ success: false, error: 'Email and password required' });
+        const user = await getQuery(
+            'SELECT u.*, f.name as facility_name FROM users u LEFT JOIN facilities f ON u.facility_id = f.id WHERE u.email = ?',
+            [email]
+        );
+
+        if (!user || !await bcrypt.compare(password, user.password)) {
+            return res.status(401).json({ success: false, message: 'Invalid credentials' });
         }
 
-        const userResult = await pool.query(`
-            SELECT u.*, f.name as facility_name 
-            FROM users u 
-            LEFT JOIN facilities f ON u.facility_id = f.id 
-            WHERE u.email = $1
-        `, [email]);
-
-        if (userResult.rows.length === 0) {
-            return res.status(401).json({ success: false, error: 'Invalid credentials' });
-        }
-
-        const user = userResult.rows[0];
-
-        if (!user.approved && user.role !== 'admin') {
-            return res.status(401).json({ success: false, error: 'Account pending approval' });
-        }
-
-        const isValidPassword = await bcrypt.compare(password, user.password);
-        if (!isValidPassword) {
-            return res.status(401).json({ success: false, error: 'Invalid credentials' });
+        if (!user.is_approved) {
+            return res.status(403).json({ success: false, message: 'Account pending approval' });
         }
 
         const token = jwt.sign(
-            { id: user.id, email: user.email, role: user.role, facility_id: user.facility_id },
+            { id: user.id, email: user.email, role: user.role },
             JWT_SECRET,
             { expiresIn: '24h' }
         );
@@ -296,778 +413,351 @@ app.post('/api/auth/login', async (req, res) => {
                 facility_name: user.facility_name
             }
         });
+
     } catch (error) {
         console.error('Login error:', error);
-        res.status(500).json({ success: false, error: 'Login failed' });
+        res.status(500).json({ success: false, message: 'Server error' });
     }
 });
 
-app.post('/api/auth/register', async (req, res) => {
-    try {
-        const { name, email, password, facility_id } = req.body;
+// ===== FACILITY ROUTES =====
 
-        if (!name || !email || !password || !facility_id) {
-            return res.status(400).json({ success: false, error: 'All fields required' });
-        }
-
-        if (password.length < 6) {
-            return res.status(400).json({ success: false, error: 'Password must be at least 6 characters' });
-        }
-
-        // Check if user already exists
-        const existingUser = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
-        if (existingUser.rows.length > 0) {
-            return res.status(400).json({ success: false, error: 'User already exists' });
-        }
-
-        // Hash password
-        const hashedPassword = await bcrypt.hash(password, 12);
-
-        // Create user
-        const result = await pool.query(
-            'INSERT INTO users (name, email, password, facility_id) VALUES ($1, $2, $3, $4) RETURNING id',
-            [name, email, hashedPassword, facility_id]
-        );
-
-        res.status(201).json({ 
-            success: true, 
-            message: 'Registration successful. Please wait for admin approval.',
-            userId: result.rows[0].id
-        });
-    } catch (error) {
-        console.error('Registration error:', error);
-        res.status(500).json({ success: false, error: 'Registration failed' });
-    }
-});
-
-// Facilities routes - GET is public for registration form
 app.get('/api/facilities', async (req, res) => {
     try {
-        const result = await pool.query('SELECT * FROM facilities ORDER BY name');
-        res.json({ success: true, facilities: result.rows });
+        console.log('🏢 Fetching facilities...');
+        const facilities = await getAllQuery('SELECT * FROM facilities ORDER BY name ASC');
+        console.log(`✅ Found ${facilities.length} facilities`);
+        res.json({ success: true, facilities });
     } catch (error) {
-        console.error('Get facilities error:', error);
+        console.error('❌ Error fetching facilities:', error);
         res.status(500).json({ success: false, error: 'Failed to fetch facilities' });
     }
 });
 
-// Protected facilities routes (admin only)
 app.post('/api/facilities', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { name } = req.body;
-
-        if (!name || !name.trim()) {
-            return res.status(400).json({ success: false, error: 'Facility name required' });
+        
+        if (!name) {
+            return res.status(400).json({ success: false, error: 'Facility name is required' });
         }
 
-        const result = await pool.query(
-            'INSERT INTO facilities (name) VALUES ($1) RETURNING *',
-            [name.trim()]
+        const result = await runQuery(
+            'INSERT INTO facilities (name) VALUES (?)',
+            [name]
         );
 
-        res.status(201).json({ success: true, facility: result.rows[0] });
+        console.log(`✅ Created facility: ${name}`);
+        res.json({ success: true, facility: { id: result.id, name } });
+
     } catch (error) {
-        if (error.code === '23505') {
-            res.status(400).json({ success: false, error: 'Facility already exists' });
-        } else {
-            console.error('Create facility error:', error);
-            res.status(500).json({ success: false, error: 'Failed to create facility' });
-        }
+        console.error('❌ Error creating facility:', error);
+        res.status(500).json({ success: false, error: 'Failed to create facility' });
     }
 });
 
-app.put('/api/facilities/:id', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { name } = req.body;
+// ===== SUPPLY ROUTES =====
 
-        const result = await pool.query(
-            'UPDATE facilities SET name = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
-            [name, id]
-        );
-
-        if (result.rows.length === 0) {
-            return res.status(404).json({ success: false, error: 'Facility not found' });
-        }
-
-        res.json({ success: true, facility: result.rows[0] });
-    } catch (error) {
-        console.error('Update facility error:', error);
-        res.status(500).json({ success: false, error: 'Failed to update facility' });
-    }
-});
-
-app.delete('/api/facilities/:id', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const { id } = req.params;
-        
-        const result = await pool.query('DELETE FROM facilities WHERE id = $1 RETURNING *', [id]);
-        
-        if (result.rows.length === 0) {
-            return res.status(404).json({ success: false, error: 'Facility not found' });
-        }
-
-        res.json({ success: true, message: 'Facility deleted successfully' });
-    } catch (error) {
-        console.error('Delete facility error:', error);
-        res.status(500).json({ success: false, error: 'Failed to delete facility' });
-    }
-});
-
-// Supplies routes - Enhanced error logging
 app.get('/api/supplies', authenticateToken, async (req, res) => {
     try {
-        console.log('📦 Fetching supplies from database...');
-        
-        // First, check what tables exist
-        const tableCheck = await pool.query(`
-            SELECT table_name 
-            FROM information_schema.tables 
-            WHERE table_schema = 'public' 
-            AND table_name LIKE '%suppl%'
-        `);
-        console.log('Supply-related tables:', tableCheck.rows);
-        
-        // Try the standard query first
-        let result;
-        try {
-            result = await pool.query('SELECT * FROM supplies ORDER BY ar_code LIMIT 5');
-            console.log('✅ Standard supplies query worked, sample:', result.rows);
-        } catch (standardError) {
-            console.log('❌ Standard supplies query failed:', standardError.message);
-            
-            // Try alternative column names that might exist
-            try {
-                result = await pool.query('SELECT * FROM supplies ORDER BY code LIMIT 5');
-                console.log('✅ Alternative supplies query (code) worked, sample:', result.rows);
-            } catch (altError) {
-                console.log('❌ Alternative supplies query failed:', altError.message);
-                
-                // Try getting table structure
-                try {
-                    const structure = await pool.query(`
-                        SELECT column_name, data_type 
-                        FROM information_schema.columns 
-                        WHERE table_name = 'supplies'
-                        ORDER BY ordinal_position
-                    `);
-                    console.log('Supplies table structure:', structure.rows);
-                    
-                    // Try a basic select without ORDER BY
-                    result = await pool.query('SELECT * FROM supplies LIMIT 5');
-                    console.log('✅ Basic supplies query worked, sample:', result.rows);
-                } catch (structError) {
-                    console.log('❌ Cannot read supplies table structure:', structError.message);
-                    throw new Error('Supplies table not accessible: ' + structError.message);
-                }
-            }
-        }
-        
-        res.json({ success: true, supplies: result.rows });
+        console.log('📦 Fetching supplies...');
+        const supplies = await getAllQuery('SELECT * FROM supplies ORDER BY code ASC');
+        console.log(`✅ Found ${supplies.length} supplies`);
+        res.json({ success: true, supplies });
     } catch (error) {
-        console.error('❌ Complete supplies error:', error.message);
-        console.error('Error details:', error);
-        res.status(500).json({ success: false, error: 'Failed to fetch supplies: ' + error.message });
+        console.error('❌ Error fetching supplies:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch supplies' });
     }
 });
 
-app.post('/api/supplies', authenticateToken, requireAdmin, async (req, res) => {
+app.post('/api/supplies', authenticateToken, async (req, res) => {
     try {
-        const { ar_code, description, hcpcs, cost } = req.body;
-
-        if (!ar_code || !description) {
-            return res.status(400).json({ success: false, error: 'AR code and description required' });
+        const { code, description, hcpcs, cost } = req.body;
+        
+        if (!code || !description) {
+            return res.status(400).json({ success: false, error: 'Code and description are required' });
         }
 
-        const result = await pool.query(
-            'INSERT INTO supplies (ar_code, description, hcpcs, cost) VALUES ($1, $2, $3, $4) RETURNING *',
-            [ar_code, description, hcpcs || null, parseFloat(cost) || 0]
+        const result = await runQuery(
+            'INSERT INTO supplies (code, description, hcpcs, cost, is_custom) VALUES (?, ?, ?, ?, ?)',
+            [code, description, hcpcs || '', parseFloat(cost) || 0, 1]
         );
 
-        res.status(201).json({ success: true, supply: result.rows[0] });
+        console.log(`✅ Created supply: ${code} - ${description}`);
+        res.json({ success: true, supply: { id: result.id, code, description, hcpcs, cost } });
+
     } catch (error) {
-        if (error.code === '23505') {
-            res.status(400).json({ success: false, error: 'AR code already exists' });
-        } else {
-            console.error('Create supply error:', error);
-            res.status(500).json({ success: false, error: 'Failed to create supply' });
-        }
+        console.error('❌ Error creating supply:', error);
+        res.status(500).json({ success: false, error: 'Failed to create supply' });
     }
 });
 
-app.put('/api/supplies/:id', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { ar_code, description, hcpcs, cost } = req.body;
+// ===== PATIENT ROUTES =====
 
-        const result = await pool.query(
-            'UPDATE supplies SET ar_code = $1, description = $2, hcpcs = $3, cost = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5 RETURNING *',
-            [ar_code, description, hcpcs, parseFloat(cost) || 0, id]
-        );
-
-        if (result.rows.length === 0) {
-            return res.status(404).json({ success: false, error: 'Supply not found' });
-        }
-
-        res.json({ success: true, supply: result.rows[0] });
-    } catch (error) {
-        console.error('Update supply error:', error);
-        res.status(500).json({ success: false, error: 'Failed to update supply' });
-    }
-});
-
-app.delete('/api/supplies/:id', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const { id } = req.params;
-        
-        const result = await pool.query('DELETE FROM supplies WHERE id = $1 RETURNING *', [id]);
-        
-        if (result.rows.length === 0) {
-            return res.status(404).json({ success: false, error: 'Supply not found' });
-        }
-
-        res.json({ success: true, message: 'Supply deleted successfully' });
-    } catch (error) {
-        console.error('Delete supply error:', error);
-        res.status(500).json({ success: false, error: 'Failed to delete supply' });
-    }
-});
-
-// Patients routes - Add structure logging for reference
 app.get('/api/patients', authenticateToken, async (req, res) => {
     try {
-        console.log('👥 Fetching patients (this works - for reference)...');
-        
-        // Log the patients table structure for comparison
-        try {
-            const structure = await pool.query(`
-                SELECT column_name, data_type 
-                FROM information_schema.columns 
-                WHERE table_name = 'patients'
-                ORDER BY ordinal_position
-            `);
-            console.log('Patients table structure (working):', structure.rows);
-        } catch (structError) {
-            console.log('Could not read patients structure:', structError.message);
-        }
+        const { facility_id, month } = req.query;
         
         let query = `
             SELECT p.*, f.name as facility_name 
             FROM patients p 
-            LEFT JOIN facilities f ON p.facility_id = f.id 
+            LEFT JOIN facilities f ON p.facility_id = f.id
         `;
-        let queryParams = [];
+        let params = [];
+        let conditions = [];
 
-        // Non-admin users can only see patients from their facility
-        if (req.user.role !== 'admin' && req.user.facility_id) {
-            query += ' WHERE p.facility_id = $1';
-            queryParams.push(req.user.facility_id);
+        if (facility_id) {
+            conditions.push('p.facility_id = ?');
+            params.push(facility_id);
         }
 
-        query += ' ORDER BY p.created_at DESC';
-        
-        const result = await pool.query(query, queryParams);
-        console.log(`✅ Patients loaded successfully: ${result.rows.length} records`);
-        res.json({ success: true, patients: result.rows });
+        if (month) {
+            conditions.push('p.month = ?');
+            params.push(month);
+        }
+
+        if (conditions.length > 0) {
+            query += ' WHERE ' + conditions.join(' AND ');
+        }
+
+        query += ' ORDER BY p.name ASC';
+
+        console.log('👤 Fetching patients...');
+        const patients = await getAllQuery(query, params);
+        console.log(`✅ Found ${patients.length} patients`);
+        res.json({ success: true, patients });
+
     } catch (error) {
-        console.error('Get patients error:', error);
+        console.error('❌ Error fetching patients:', error);
         res.status(500).json({ success: false, error: 'Failed to fetch patients' });
     }
 });
 
 app.post('/api/patients', authenticateToken, async (req, res) => {
     try {
-        const { name, mrn, facility_id, month } = req.body;
-
-        if (!name || !facility_id || !month) {
-            return res.status(400).json({ success: false, error: 'Name, facility, and month required' });
+        const { name, month, mrn, facility_id } = req.body;
+        
+        if (!name || !month || !facility_id) {
+            return res.status(400).json({ success: false, error: 'Name, month, and facility are required' });
         }
 
-        // Non-admin users can only add patients to their facility
-        const finalFacilityId = req.user.role === 'admin' ? facility_id : req.user.facility_id;
-
-        const result = await pool.query(
-            'INSERT INTO patients (name, mrn, facility_id, month) VALUES ($1, $2, $3, $4) RETURNING *',
-            [name, mrn || null, finalFacilityId, month]
+        const result = await runQuery(
+            'INSERT INTO patients (name, month, mrn, facility_id) VALUES (?, ?, ?, ?)',
+            [name, month, mrn || '', facility_id]
         );
 
-        res.status(201).json({ success: true, patient: result.rows[0] });
+        console.log(`✅ Created patient: ${name} (${month})`);
+        res.json({ success: true, patient: { id: result.id, name, month, mrn, facility_id } });
+
     } catch (error) {
-        console.error('Create patient error:', error);
+        console.error('❌ Error creating patient:', error);
         res.status(500).json({ success: false, error: 'Failed to create patient' });
     }
 });
 
-app.put('/api/patients/:id', authenticateToken, async (req, res) => {
+// ===== TRACKING ROUTES =====
+
+app.get('/api/tracking/:patientId/:month', authenticateToken, async (req, res) => {
     try {
-        const { id } = req.params;
-        const { name, mrn } = req.body;
+        const { patientId, month } = req.params;
+        
+        console.log(`📈 Fetching tracking data for patient ${patientId}, month ${month}`);
+        
+        const tracking = await getAllQuery(`
+            SELECT t.*, s.description as supply_description, s.cost as supply_cost
+            FROM tracking_data t
+            LEFT JOIN supplies s ON t.supply_code = s.code
+            WHERE t.patient_id = ? AND t.month = ?
+            ORDER BY t.supply_code ASC, t.day ASC
+        `, [patientId, month]);
 
-        const result = await pool.query(
-            'UPDATE patients SET name = $1, mrn = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3 RETURNING *',
-            [name, mrn, id]
-        );
+        console.log(`✅ Found ${tracking.length} tracking records`);
+        res.json({ success: true, tracking });
 
-        if (result.rows.length === 0) {
-            return res.status(404).json({ success: false, error: 'Patient not found' });
-        }
-
-        res.json({ success: true, patient: result.rows[0] });
     } catch (error) {
-        console.error('Update patient error:', error);
-        res.status(500).json({ success: false, error: 'Failed to update patient' });
+        console.error('❌ Error fetching tracking data:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch tracking data' });
     }
 });
 
-app.delete('/api/patients/:id', authenticateToken, async (req, res) => {
-    try {
-        const { id } = req.params;
-        
-        const result = await pool.query('DELETE FROM patients WHERE id = $1 RETURNING *', [id]);
-        
-        if (result.rows.length === 0) {
-            return res.status(404).json({ success: false, error: 'Patient not found' });
-        }
-
-        res.json({ success: true, message: 'Patient deleted successfully' });
-    } catch (error) {
-        console.error('Delete patient error:', error);
-        res.status(500).json({ success: false, error: 'Failed to delete patient' });
-    }
-});
-
-// Users routes (admin only)
-app.get('/api/users', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const result = await pool.query(`
-            SELECT u.*, f.name as facility_name 
-            FROM users u 
-            LEFT JOIN facilities f ON u.facility_id = f.id 
-            ORDER BY u.created_at DESC
-        `);
-        res.json({ success: true, users: result.rows });
-    } catch (error) {
-        console.error('Get users error:', error);
-        res.status(500).json({ success: false, error: 'Failed to fetch users' });
-    }
-});
-
-app.put('/api/users/:id', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { name, email, role, facility_id, approved } = req.body;
-
-        const result = await pool.query(
-            'UPDATE users SET name = $1, email = $2, role = $3, facility_id = $4, approved = $5, updated_at = CURRENT_TIMESTAMP WHERE id = $6 RETURNING *',
-            [name, email, role, facility_id, approved, id]
-        );
-
-        if (result.rows.length === 0) {
-            return res.status(404).json({ success: false, error: 'User not found' });
-        }
-
-        res.json({ success: true, user: result.rows[0] });
-    } catch (error) {
-        console.error('Update user error:', error);
-        res.status(500).json({ success: false, error: 'Failed to update user' });
-    }
-});
-
-app.delete('/api/users/:id', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const { id } = req.params;
-        
-        // Prevent deleting yourself
-        if (parseInt(id) === req.user.id) {
-            return res.status(400).json({ success: false, error: 'Cannot delete your own account' });
-        }
-        
-        const result = await pool.query('DELETE FROM users WHERE id = $1 RETURNING *', [id]);
-        
-        if (result.rows.length === 0) {
-            return res.status(404).json({ success: false, error: 'User not found' });
-        }
-
-        res.json({ success: true, message: 'User deleted successfully' });
-    } catch (error) {
-        console.error('Delete user error:', error);
-        res.status(500).json({ success: false, error: 'Failed to delete user' });
-    }
-});
-
-// Tracking routes - Enhanced error logging  
 app.get('/api/tracking', authenticateToken, async (req, res) => {
     try {
-        console.log('📊 Fetching tracking data from database...');
+        const { facility_id, month } = req.query;
         
-        // First, check what tracking-related tables exist
-        const tableCheck = await pool.query(`
-            SELECT table_name 
-            FROM information_schema.tables 
-            WHERE table_schema = 'public' 
-            AND (table_name LIKE '%track%' OR table_name LIKE '%usage%' OR table_name LIKE '%supply_usage%')
-        `);
-        console.log('Tracking-related tables:', tableCheck.rows);
-        
-        let result;
-        try {
-            // Try standard tracking table
-            result = await pool.query('SELECT * FROM tracking LIMIT 5');
-            console.log('✅ Standard tracking query worked, sample:', result.rows);
-        } catch (standardError) {
-            console.log('❌ Standard tracking query failed:', standardError.message);
-            
-            // Try alternative table names
-            const possibleTables = ['supply_usage', 'patient_supply_usage', 'daily_usage', 'supply_tracking'];
-            let found = false;
-            
-            for (const tableName of possibleTables) {
-                try {
-                    result = await pool.query(`SELECT * FROM ${tableName} LIMIT 5`);
-                    console.log(`✅ Found tracking data in ${tableName}:`, result.rows);
-                    found = true;
-                    break;
-                } catch (altError) {
-                    console.log(`❌ No data in ${tableName}:`, altError.message);
-                }
-            }
-            
-            if (!found) {
-                console.log('❌ No tracking tables found, returning empty data');
-                result = { rows: [] };
-            }
-        }
-        
-        // Apply non-admin filtering if needed
-        let query = 'SELECT * FROM tracking';
-        let queryParams = [];
+        let query = `
+            SELECT t.*, p.name as patient_name, p.facility_id, f.name as facility_name,
+                   s.description as supply_description, s.cost as supply_cost
+            FROM tracking_data t
+            LEFT JOIN patients p ON t.patient_id = p.id
+            LEFT JOIN facilities f ON p.facility_id = f.id
+            LEFT JOIN supplies s ON t.supply_code = s.code
+        `;
+        let params = [];
+        let conditions = [];
 
-        if (req.user.role !== 'admin' && req.user.facility_id) {
-            query = `
-                SELECT t.* FROM tracking t
-                JOIN patients p ON t.patient_id = p.id
-                WHERE p.facility_id = $1
-            `;
-            queryParams.push(req.user.facility_id);
+        if (facility_id) {
+            conditions.push('p.facility_id = ?');
+            params.push(facility_id);
         }
 
-        query += ' ORDER BY patient_id, supply_id, day';
-        
-        if (result.rows.length > 0) {
-            // Re-run with proper filtering if we found data
-            try {
-                result = await pool.query(query, queryParams);
-            } catch (filterError) {
-                console.log('❌ Filtered query failed, using unfiltered:', filterError.message);
-                // Keep the original result
-            }
+        if (month) {
+            conditions.push('t.month = ?');
+            params.push(month);
         }
-        
-        res.json({ success: true, tracking: result.rows });
+
+        if (conditions.length > 0) {
+            query += ' WHERE ' + conditions.join(' AND ');
+        }
+
+        query += ' ORDER BY f.name ASC, p.name ASC, t.supply_code ASC, t.day ASC';
+
+        console.log('📈 Fetching all tracking data...');
+        const tracking = await getAllQuery(query, params);
+        console.log(`✅ Found ${tracking.length} tracking records`);
+        res.json({ success: true, tracking });
+
     } catch (error) {
-        console.error('❌ Complete tracking error:', error.message);
-        console.error('Error details:', error);
-        res.status(500).json({ success: false, error: 'Failed to fetch tracking data: ' + error.message });
+        console.error('❌ Error fetching tracking data:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch tracking data' });
     }
 });
 
 app.post('/api/tracking', authenticateToken, async (req, res) => {
     try {
-        const { patient_id, supply_id, day, quantity, month, wound_dx } = req.body;
-
-        if (!patient_id || !supply_id || !day || !month) {
-            return res.status(400).json({ success: false, error: 'Patient, supply, day, and month required' });
+        const { patient_id, supply_code, day, quantity, month } = req.body;
+        
+        if (!patient_id || !supply_code || !day || !month) {
+            return res.status(400).json({ success: false, error: 'Missing required fields' });
         }
 
-        const result = await pool.query(`
-            INSERT INTO tracking (patient_id, supply_id, day, quantity, month, wound_dx) 
-            VALUES ($1, $2, $3, $4, $5, $6) 
-            ON CONFLICT (patient_id, supply_id, day) 
-            DO UPDATE SET quantity = $4, wound_dx = $6, updated_at = CURRENT_TIMESTAMP
-            RETURNING *
-        `, [patient_id, supply_id, day, quantity || 0, month, wound_dx || null]);
+        // Upsert tracking data
+        const existingRecord = await getQuery(
+            'SELECT id FROM tracking_data WHERE patient_id = ? AND supply_code = ? AND day = ? AND month = ?',
+            [patient_id, supply_code, day, month]
+        );
 
-        res.json({ success: true, tracking: result.rows[0] });
+        if (existingRecord) {
+            await runQuery(
+                'UPDATE tracking_data SET quantity = ? WHERE id = ?',
+                [quantity, existingRecord.id]
+            );
+        } else {
+            await runQuery(
+                'INSERT INTO tracking_data (patient_id, supply_code, day, quantity, month) VALUES (?, ?, ?, ?, ?)',
+                [patient_id, supply_code, day, quantity, month]
+            );
+        }
+
+        console.log(`✅ Saved tracking data: Patient ${patient_id}, Supply ${supply_code}, Day ${day}, Qty ${quantity}`);
+        res.json({ success: true });
+
     } catch (error) {
-        console.error('Save tracking error:', error);
+        console.error('❌ Error saving tracking data:', error);
         res.status(500).json({ success: false, error: 'Failed to save tracking data' });
     }
 });
 
-app.post('/api/tracking/wound-dx', authenticateToken, async (req, res) => {
-    try {
-        const { patient_id, supply_id, wound_dx } = req.body;
+// ===== ADMIN ROUTES =====
 
-        await pool.query(
-            'UPDATE tracking SET wound_dx = $1, updated_at = CURRENT_TIMESTAMP WHERE patient_id = $2 AND supply_id = $3',
-            [wound_dx, patient_id, supply_id]
+app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        console.log('👥 Fetching users...');
+        const users = await getAllQuery(`
+            SELECT u.*, f.name as facility_name 
+            FROM users u 
+            LEFT JOIN facilities f ON u.facility_id = f.id 
+            ORDER BY u.name ASC
+        `);
+        console.log(`✅ Found ${users.length} users`);
+        res.json({ success: true, users });
+    } catch (error) {
+        console.error('❌ Error fetching users:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch users' });
+    }
+});
+
+app.post('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { name, email, password, role, facility_id } = req.body;
+        
+        if (!name || !email || !password) {
+            return res.status(400).json({ success: false, error: 'Name, email, and password are required' });
+        }
+
+        const existingUser = await getQuery('SELECT id FROM users WHERE email = ?', [email]);
+        if (existingUser) {
+            return res.status(400).json({ success: false, error: 'Email already exists' });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+        
+        const result = await runQuery(
+            'INSERT INTO users (name, email, password, role, facility_id, is_approved) VALUES (?, ?, ?, ?, ?, ?)',
+            [name, email, hashedPassword, role || 'user', facility_id || null, 1]
         );
 
-        res.json({ success: true, message: 'Wound diagnosis saved' });
+        console.log(`✅ Created user: ${name} (${email})`);
+        res.json({ success: true, user: { id: result.id, name, email, role: role || 'user' } });
+
     } catch (error) {
-        console.error('Save wound dx error:', error);
-        res.status(500).json({ success: false, error: 'Failed to save wound diagnosis' });
+        console.error('❌ Error creating user:', error);
+        res.status(500).json({ success: false, error: 'Failed to create user' });
     }
 });
 
-// Reports routes
-app.get('/api/reports/itemized', authenticateToken, async (req, res) => {
+app.put('/api/admin/users/:id/approve', authenticateToken, requireAdmin, async (req, res) => {
     try {
-        const { facility_id, month } = req.query;
+        const { id } = req.params;
         
-        let query = `
-            SELECT 
-                p.name as patient_name,
-                p.mrn,
-                p.month,
-                f.name as facility_name,
-                s.ar_code,
-                s.description,
-                s.hcpcs,
-                COALESCE(SUM(t.quantity), 0) as units,
-                s.cost as unit_cost,
-                COALESCE(SUM(t.quantity), 0) * COALESCE(s.cost, 0) as total_cost,
-                MAX(t.wound_dx) as wound_dx
-            FROM patients p
-            LEFT JOIN facilities f ON p.facility_id = f.id
-            LEFT JOIN tracking t ON p.id = t.patient_id
-            LEFT JOIN supplies s ON t.supply_id = s.id
-        `;
-        
-        let whereConditions = [];
-        let queryParams = [];
-        let paramIndex = 1;
+        await runQuery('UPDATE users SET is_approved = ? WHERE id = ?', [1, id]);
+        console.log(`✅ Approved user ID: ${id}`);
+        res.json({ success: true });
 
-        // Non-admin users can only see their facility data
-        if (req.user.role !== 'admin' && req.user.facility_id) {
-            whereConditions.push(`p.facility_id = $${paramIndex}`);
-            queryParams.push(req.user.facility_id);
-            paramIndex++;
-        } else if (facility_id) {
-            whereConditions.push(`p.facility_id = $${paramIndex}`);
-            queryParams.push(facility_id);
-            paramIndex++;
-        }
-
-        if (month) {
-            whereConditions.push(`p.month = $${paramIndex}`);
-            queryParams.push(month);
-            paramIndex++;
-        }
-
-        if (whereConditions.length > 0) {
-            query += ' WHERE ' + whereConditions.join(' AND ');
-        }
-
-        query += `
-            GROUP BY p.id, p.name, p.mrn, p.month, f.name, s.id, s.ar_code, s.description, s.hcpcs, s.cost
-            HAVING COALESCE(SUM(t.quantity), 0) > 0
-            ORDER BY p.name, s.ar_code
-        `;
-
-        const result = await pool.query(query, queryParams);
-        res.json({ success: true, report: result.rows });
     } catch (error) {
-        console.error('Generate report error:', error);
-        res.status(500).json({ success: false, error: 'Failed to generate report' });
+        console.error('❌ Error approving user:', error);
+        res.status(500).json({ success: false, error: 'Failed to approve user' });
     }
 });
 
-app.get('/api/reports/csv', authenticateToken, async (req, res) => {
+app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
     try {
-        const { facility_id, month } = req.query;
+        const { id } = req.params;
         
-        // Same query as itemized report
-        let query = `
-            SELECT 
-                p.name as patient_name,
-                p.mrn,
-                p.month,
-                f.name as facility_name,
-                s.ar_code,
-                s.description,
-                s.hcpcs,
-                COALESCE(SUM(t.quantity), 0) as units,
-                s.cost as unit_cost,
-                COALESCE(SUM(t.quantity), 0) * COALESCE(s.cost, 0) as total_cost,
-                MAX(t.wound_dx) as wound_dx
-            FROM patients p
-            LEFT JOIN facilities f ON p.facility_id = f.id
-            LEFT JOIN tracking t ON p.id = t.patient_id
-            LEFT JOIN supplies s ON t.supply_id = s.id
-        `;
-        
-        let whereConditions = [];
-        let queryParams = [];
-        let paramIndex = 1;
-
-        if (req.user.role !== 'admin' && req.user.facility_id) {
-            whereConditions.push(`p.facility_id = $${paramIndex}`);
-            queryParams.push(req.user.facility_id);
-            paramIndex++;
-        } else if (facility_id) {
-            whereConditions.push(`p.facility_id = $${paramIndex}`);
-            queryParams.push(facility_id);
-            paramIndex++;
-        }
-
-        if (month) {
-            whereConditions.push(`p.month = $${paramIndex}`);
-            queryParams.push(month);
-            paramIndex++;
-        }
-
-        if (whereConditions.length > 0) {
-            query += ' WHERE ' + whereConditions.join(' AND ');
-        }
-
-        query += `
-            GROUP BY p.id, p.name, p.mrn, p.month, f.name, s.id, s.ar_code, s.description, s.hcpcs, s.cost
-            HAVING COALESCE(SUM(t.quantity), 0) > 0
-            ORDER BY p.name, s.ar_code
-        `;
-
-        const result = await pool.query(query, queryParams);
-        
-        // Generate CSV content
-        let csvContent = 'Name,MRN,MM-YYYY,Facility,AR Code,Description,HCPCS,Units';
-        
-        // Add cost columns for admin users
-        if (req.user.role === 'admin') {
-            csvContent += ',Unit Cost,Total Cost';
+        if (parseInt(id) === req.user.id) {
+            return res.status(400).json({ success: false, error: 'Cannot delete your own account' });
         }
         
-        csvContent += ',Wound Dx\n';
-        
-        result.rows.forEach(row => {
-            const csvRow = [
-                `"${row.patient_name || ''}"`,
-                `"${row.mrn || ''}"`,
-                `"${row.month || ''}"`,
-                `"${row.facility_name || ''}"`,
-                `"${row.ar_code || ''}"`,
-                `"${row.description || ''}"`,
-                `"${row.hcpcs || ''}"`,
-                row.units || 0
-            ];
-            
-            if (req.user.role === 'admin') {
-                csvRow.push(
-                    parseFloat(row.unit_cost || 0).toFixed(2),
-                    parseFloat(row.total_cost || 0).toFixed(2)
-                );
-            }
-            
-            csvRow.push(`"${row.wound_dx || ''}"`);
-            csvContent += csvRow.join(',') + '\n';
-        });
-        
-        res.setHeader('Content-Type', 'text/csv');
-        res.setHeader('Content-Disposition', `attachment; filename="supply-report-${new Date().toISOString().split('T')[0]}.csv"`);
-        res.send(csvContent);
+        await runQuery('DELETE FROM users WHERE id = ?', [id]);
+        console.log(`✅ Deleted user ID: ${id}`);
+        res.json({ success: true });
+
     } catch (error) {
-        console.error('CSV export error:', error);
-        res.status(500).json({ success: false, error: 'Failed to export CSV' });
+        console.error('❌ Error deleting user:', error);
+        res.status(500).json({ success: false, error: 'Failed to delete user' });
     }
 });
 
-// CSV batch upload for patients
-app.post('/api/patients/batch-upload', authenticateToken, upload.single('csv'), async (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({ success: false, error: 'No CSV file uploaded' });
-        }
+// ===== SERVER STARTUP =====
 
-        const results = [];
-        const errors = [];
-        let imported = 0;
-
-        // Read CSV file
-        fs.createReadStream(req.file.path)
-            .pipe(csv())
-            .on('data', (data) => results.push(data))
-            .on('end', async () => {
-                try {
-                    for (const row of results) {
-                        try {
-                            const { Name, MRN, Facility, Month } = row;
-                            
-                            if (!Name || !Facility || !Month) {
-                                errors.push(`Row missing required fields: ${JSON.stringify(row)}`);
-                                continue;
-                            }
-
-                            // Find facility by name
-                            const facilityResult = await pool.query('SELECT id FROM facilities WHERE name ILIKE $1', [Facility]);
-                            if (facilityResult.rows.length === 0) {
-                                errors.push(`Facility not found: ${Facility}`);
-                                continue;
-                            }
-
-                            const facility_id = facilityResult.rows[0].id;
-                            
-                            // Non-admin users can only add to their facility
-                            const finalFacilityId = req.user.role === 'admin' ? facility_id : req.user.facility_id;
-
-                            await pool.query(
-                                'INSERT INTO patients (name, mrn, facility_id, month) VALUES ($1, $2, $3, $4)',
-                                [Name, MRN || null, finalFacilityId, Month]
-                            );
-                            imported++;
-                        } catch (error) {
-                            errors.push(`Error processing row: ${error.message}`);
-                        }
-                    }
-
-                    // Clean up uploaded file
-                    fs.unlinkSync(req.file.path);
-
-                    res.json({ 
-                        success: true, 
-                        imported,
-                        errors: errors.length > 0 ? errors : null
-                    });
-                } catch (error) {
-                    console.error('Batch upload processing error:', error);
-                    res.status(500).json({ success: false, error: 'Failed to process CSV' });
-                }
-            });
-    } catch (error) {
-        console.error('Batch upload error:', error);
-        res.status(500).json({ success: false, error: 'Failed to upload CSV' });
-    }
-});
-
-// Serve static files from public directory
-app.use(express.static(path.join(__dirname, 'public')));
-
-// Catch all handler: send back index.html file for any non-API routes
-app.get('*', (req, res) => {
-    if (!req.url.startsWith('/api')) {
-        res.sendFile(path.join(__dirname, 'public', 'index.html'));
-    } else {
-        res.status(404).json({ success: false, error: 'API endpoint not found' });
-    }
-});
-
-// Error handling middleware
-app.use((err, req, res, next) => {
-    console.error('Server error:', err);
-    res.status(500).json({ success: false, error: 'Internal server error' });
-});
-
-// Start server and initialize database
 async function startServer() {
     try {
-        // Initialize database first
-        await initializeDatabase();
-        
-        // Start server
         app.listen(PORT, () => {
-            console.log(`🚀 Server running on port ${PORT}`);
-            console.log(`🌐 Access at: https://terence-wound-care-tracker-0ee111d0e54a.herokuapp.com/`);
-            console.log(`📋 Health check: /health`);
-            console.log(`🔧 Debug status: /api/debug/status`);
+            console.log('');
+            console.log('🎉 ================================');
+            console.log('🏥 Wound Care RT Supply Tracker');
+            console.log('🎉 ================================');
+            console.log(`🌐 Server running on port ${PORT}`);
+            console.log(`📱 Access your app at: http://localhost:${PORT}`);
+            console.log('');
+            console.log('📊 Complete AR Supply Database Available:');
+            console.log('   • 272: Med/Surgical Supplies');
+            console.log('   • 400-425: Respiratory/Trach Supplies');
+            console.log('   • 600-709: Wound Care & Medical Supplies');
+            console.log('');
+            console.log('🔑 Default Login Credentials:');
+            console.log('   📧 Email: admin@system.com');
+            console.log('   🔐 Password: admin123');
+            console.log('🎉 ================================');
         });
     } catch (error) {
         console.error('❌ Failed to start server:', error);
@@ -1075,5 +765,4 @@ async function startServer() {
     }
 }
 
-// Start the application
 startServer();
