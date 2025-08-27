@@ -820,6 +820,324 @@ app.post('/api/tracking', authenticateToken, async (req, res) => {
         res.status(500).json({ success: false, error: 'Failed to save tracking data' });
     }
 });
+// Add these additional routes to your server.js file for enhanced tracking functionality
+
+// ===== ENHANCED TRACKING ROUTES =====
+
+// Get comprehensive tracking report data (admin only)
+app.get('/api/reports/itemized-summary', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { facilityId, month, patientId } = req.query;
+        
+        let query = `
+            SELECT 
+                p.name as patient_name,
+                p.mrn,
+                p.month,
+                f.name as facility_name,
+                s.code as supply_code,
+                s.description as item_description,
+                s.hcpcs,
+                s.cost as unit_cost,
+                COALESCE(SUM(t.quantity), 0) as total_units,
+                COALESCE(SUM(t.quantity * s.cost), 0) as total_cost,
+                STRING_AGG(DISTINCT t.wound_dx, '; ') FILTER (WHERE t.wound_dx IS NOT NULL AND t.wound_dx != '') as wound_dx
+            FROM patients p
+            JOIN facilities f ON p.facility_id = f.id
+            CROSS JOIN supplies s
+            LEFT JOIN tracking t ON p.id = t.patient_id AND s.id = t.supply_id
+            WHERE 1=1
+        `;
+        
+        const params = [];
+        let paramCount = 0;
+        
+        if (facilityId) {
+            paramCount++;
+            query += ` AND p.facility_id = $${paramCount}`;
+            params.push(facilityId);
+        }
+        
+        if (month) {
+            paramCount++;
+            query += ` AND p.month = $${paramCount}`;
+            params.push(month);
+        }
+        
+        if (patientId) {
+            paramCount++;
+            query += ` AND p.id = $${paramCount}`;
+            params.push(patientId);
+        }
+        
+        query += `
+            GROUP BY p.id, s.id, p.name, p.mrn, p.month, f.name, s.code, s.description, s.hcpcs, s.cost
+            HAVING COALESCE(SUM(t.quantity), 0) > 0
+            ORDER BY p.name, s.code
+        `;
+        
+        const result = await safeQuery(query, params);
+        res.json({ success: true, report: result.rows });
+        
+    } catch (error) {
+        console.error('Error generating itemized summary report:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to generate report',
+            details: error.message 
+        });
+    }
+});
+
+// Get dashboard summary with filtering
+app.get('/api/dashboard/summary', authenticateToken, async (req, res) => {
+    try {
+        const { facilityId, month } = req.query;
+        
+        let query = `
+            SELECT 
+                p.id,
+                p.name,
+                p.mrn,
+                p.month,
+                f.name as facility_name,
+                p.created_at,
+                COALESCE(SUM(t.quantity), 0) as total_units,
+                COALESCE(SUM(t.quantity * s.cost), 0) as total_cost,
+                COUNT(DISTINCT s.id) FILTER (WHERE t.quantity > 0) as supplies_used,
+                STRING_AGG(DISTINCT t.wound_dx, '; ') FILTER (WHERE t.wound_dx IS NOT NULL AND t.wound_dx != '') as wound_diagnoses
+            FROM patients p
+            LEFT JOIN facilities f ON p.facility_id = f.id
+            LEFT JOIN tracking t ON p.id = t.patient_id
+            LEFT JOIN supplies s ON t.supply_id = s.id
+            WHERE 1=1
+        `;
+        
+        const params = [];
+        let paramCount = 0;
+        
+        // Apply facility filter based on user role
+        if (req.user.role !== 'admin' && req.user.facilityId) {
+            paramCount++;
+            query += ` AND p.facility_id = $${paramCount}`;
+            params.push(req.user.facilityId);
+        } else if (facilityId) {
+            paramCount++;
+            query += ` AND p.facility_id = $${paramCount}`;
+            params.push(facilityId);
+        }
+        
+        if (month) {
+            paramCount++;
+            query += ` AND p.month = $${paramCount}`;
+            params.push(month);
+        }
+        
+        query += ' GROUP BY p.id, f.name ORDER BY p.name ASC';
+        
+        const result = await safeQuery(query, params);
+        res.json({ success: true, patients: result.rows });
+        
+    } catch (error) {
+        console.error('Dashboard error:', error);
+        res.status(500).json({ 
+            success: false,
+            error: 'Failed to load dashboard data',
+            details: error.message 
+        });
+    }
+});
+
+// Bulk update tracking data
+app.post('/api/tracking/bulk', authenticateToken, async (req, res) => {
+    try {
+        const { patientId, trackingData } = req.body;
+        
+        if (!patientId || !trackingData || !Array.isArray(trackingData)) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Patient ID and tracking data array are required' 
+            });
+        }
+
+        // Verify patient access
+        const patientCheck = await safeQuery('SELECT * FROM patients WHERE id = $1', [patientId]);
+        
+        if (patientCheck.rows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Patient not found' });
+        }
+
+        const patient = patientCheck.rows[0];
+
+        // Check permission
+        if (req.user.role !== 'admin' && req.user.facilityId && req.user.facilityId != patient.facility_id) {
+            return res.status(403).json({ success: false, error: 'Access denied' });
+        }
+
+        // Begin transaction for bulk update
+        const client = await pool.connect();
+        
+        try {
+            await client.query('BEGIN');
+            
+            for (const item of trackingData) {
+                const { supplyId, dayOfMonth, quantity, woundDx } = item;
+                
+                if (supplyId && dayOfMonth) {
+                    await client.query(
+                        `INSERT INTO tracking (patient_id, supply_id, day_of_month, quantity, wound_dx, updated_at) 
+                         VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+                         ON CONFLICT (patient_id, supply_id, day_of_month) 
+                         DO UPDATE SET 
+                            quantity = EXCLUDED.quantity,
+                            wound_dx = CASE 
+                                WHEN EXCLUDED.wound_dx IS NOT NULL AND EXCLUDED.wound_dx != '' 
+                                THEN EXCLUDED.wound_dx 
+                                ELSE tracking.wound_dx 
+                            END,
+                            updated_at = CURRENT_TIMESTAMP`,
+                        [patientId, supplyId, dayOfMonth, quantity || 0, woundDx || null]
+                    );
+                }
+            }
+            
+            await client.query('COMMIT');
+            res.json({ success: true, message: 'Bulk tracking data saved successfully' });
+            
+        } catch (error) {
+            await client.query('ROLLBACK');
+            throw error;
+        } finally {
+            client.release();
+        }
+
+    } catch (error) {
+        console.error('Error saving bulk tracking data:', error);
+        res.status(500).json({ success: false, error: 'Failed to save tracking data' });
+    }
+});
+
+// Delete all tracking data for a patient (admin only)
+app.delete('/api/tracking/patient/:patientId', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const patientId = req.params.patientId;
+        
+        const result = await safeQuery('DELETE FROM tracking WHERE patient_id = $1', [patientId]);
+        
+        res.json({ 
+            success: true, 
+            message: 'All tracking data deleted for patient',
+            deletedRecords: result.rowCount 
+        });
+    } catch (error) {
+        console.error('Error deleting patient tracking data:', error);
+        res.status(500).json({ success: false, error: 'Failed to delete tracking data' });
+    }
+});
+
+// Get tracking statistics
+app.get('/api/tracking/stats', authenticateToken, async (req, res) => {
+    try {
+        const { facilityId, month } = req.query;
+        
+        let query = `
+            SELECT 
+                COUNT(DISTINCT p.id) as total_patients,
+                COUNT(DISTINCT t.supply_id) as supplies_used,
+                COALESCE(SUM(t.quantity), 0) as total_units,
+                COALESCE(SUM(t.quantity * s.cost), 0) as total_cost,
+                COUNT(DISTINCT t.id) as tracking_entries
+            FROM patients p
+            LEFT JOIN tracking t ON p.id = t.patient_id
+            LEFT JOIN supplies s ON t.supply_id = s.id
+            WHERE 1=1
+        `;
+        
+        const params = [];
+        let paramCount = 0;
+        
+        // Apply facility filter
+        if (req.user.role !== 'admin' && req.user.facilityId) {
+            paramCount++;
+            query += ` AND p.facility_id = $${paramCount}`;
+            params.push(req.user.facilityId);
+        } else if (facilityId) {
+            paramCount++;
+            query += ` AND p.facility_id = $${paramCount}`;
+            params.push(facilityId);
+        }
+        
+        if (month) {
+            paramCount++;
+            query += ` AND p.month = $${paramCount}`;
+            params.push(month);
+        }
+        
+        const result = await safeQuery(query, params);
+        res.json({ success: true, stats: result.rows[0] });
+        
+    } catch (error) {
+        console.error('Error fetching tracking statistics:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch statistics' });
+    }
+});
+
+// Get supplies usage summary
+app.get('/api/supplies/usage-summary', authenticateToken, async (req, res) => {
+    try {
+        const { facilityId, month } = req.query;
+        
+        let query = `
+            SELECT 
+                s.id,
+                s.code,
+                s.description,
+                s.hcpcs,
+                s.cost,
+                COALESCE(SUM(t.quantity), 0) as total_usage,
+                COALESCE(SUM(t.quantity * s.cost), 0) as total_value,
+                COUNT(DISTINCT p.id) as patients_using
+            FROM supplies s
+            LEFT JOIN tracking t ON s.id = t.supply_id
+            LEFT JOIN patients p ON t.patient_id = p.id
+        `;
+        
+        const params = [];
+        let paramCount = 0;
+        let whereAdded = false;
+        
+        // Apply facility filter
+        if (req.user.role !== 'admin' && req.user.facilityId) {
+            paramCount++;
+            query += ` WHERE p.facility_id = $${paramCount}`;
+            params.push(req.user.facilityId);
+            whereAdded = true;
+        } else if (facilityId) {
+            paramCount++;
+            query += ` WHERE p.facility_id = $${paramCount}`;
+            params.push(facilityId);
+            whereAdded = true;
+        }
+        
+        if (month) {
+            paramCount++;
+            query += `${whereAdded ? ' AND' : ' WHERE'} p.month = $${paramCount}`;
+            params.push(month);
+        }
+        
+        query += `
+            GROUP BY s.id, s.code, s.description, s.hcpcs, s.cost
+            ORDER BY total_usage DESC, s.code ASC
+        `;
+        
+        const result = await safeQuery(query, params);
+        res.json({ success: true, supplies: result.rows });
+        
+    } catch (error) {
+        console.error('Error fetching supplies usage summary:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch usage summary' });
+    }
+});
 
 // ===== ADMIN ROUTES =====
 app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
@@ -963,3 +1281,4 @@ async function startServer() {
 startServer();
 
 module.exports = app;
+
