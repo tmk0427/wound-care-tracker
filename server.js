@@ -512,7 +512,55 @@ app.post('/api/supplies/usage', authenticateToken, (req, res) => {
     );
 });
 
-// Dashboard/analytics routes
+// Dashboard routes (both /api/dashboard and /api/dashboard/stats)
+app.get('/api/dashboard', authenticateToken, (req, res) => {
+    const facility_id = req.user.facility_id || 1;
+
+    const queries = {
+        patients: `SELECT COUNT(*) as count FROM patients WHERE status = 'active' AND (facility_id = ? OR ? IS NULL)`,
+        supplies: `SELECT COUNT(*) as count FROM supply_types`,
+        lowStock: `SELECT COUNT(*) as count FROM supply_inventory si 
+                   JOIN supply_types st ON si.supply_type_id = st.id 
+                   WHERE si.facility_id = ? AND si.current_stock <= st.reorder_level`,
+        usage: `SELECT COUNT(*) as count FROM supply_usage 
+                WHERE (facility_id = ? OR ? IS NULL) AND DATE(usage_date) = DATE('now')`
+    };
+
+    Promise.all([
+        new Promise((resolve, reject) => {
+            db.get(queries.patients, [facility_id, facility_id], (err, row) => err ? reject(err) : resolve(row.count));
+        }),
+        new Promise((resolve, reject) => {
+            db.get(queries.supplies, [], (err, row) => err ? reject(err) : resolve(row.count));
+        }),
+        new Promise((resolve, reject) => {
+            db.get(queries.lowStock, [facility_id], (err, row) => err ? reject(err) : resolve(row.count));
+        }),
+        new Promise((resolve, reject) => {
+            db.get(queries.usage, [facility_id, facility_id], (err, row) => err ? reject(err) : resolve(row.count));
+        })
+    ]).then(([patients, supplies, lowStock, todayUsage]) => {
+        res.json({
+            success: true,
+            data: {
+                active_patients: patients,
+                total_supplies: supplies,
+                low_stock_alerts: lowStock,
+                today_usage_count: todayUsage
+            },
+            stats: {
+                active_patients: patients,
+                total_supplies: supplies,
+                low_stock_alerts: lowStock,
+                today_usage_count: todayUsage
+            }
+        });
+    }).catch(err => {
+        console.error('Dashboard stats error:', err);
+        res.status(500).json({ success: false, error: 'Failed to load stats' });
+    });
+});
+
 app.get('/api/dashboard/stats', authenticateToken, (req, res) => {
     const facility_id = req.user.facility_id || 1;
 
@@ -553,6 +601,341 @@ app.get('/api/dashboard/stats', authenticateToken, (req, res) => {
         console.error('Dashboard stats error:', err);
         res.status(500).json({ success: false, error: 'Failed to load stats' });
     });
+});
+
+// Search endpoints
+app.get('/api/search/patients', authenticateToken, (req, res) => {
+    const { query } = req.query;
+    if (!query) {
+        return res.status(400).json({ success: false, error: 'Search query required' });
+    }
+    
+    const searchQuery = `
+        SELECT p.*, f.name as facility_name 
+        FROM patients p 
+        LEFT JOIN facilities f ON p.facility_id = f.id
+        WHERE (p.name LIKE ? OR p.patient_id LIKE ? OR p.room LIKE ?)
+        AND p.status = 'active'
+        ORDER BY p.name
+        LIMIT 20
+    `;
+    
+    const searchTerm = `%${query}%`;
+    db.all(searchQuery, [searchTerm, searchTerm, searchTerm], (err, rows) => {
+        if (err) {
+            console.error('Patient search error:', err);
+            return res.status(500).json({ success: false, error: 'Search failed' });
+        }
+        res.json({ success: true, patients: rows || [] });
+    });
+});
+
+app.get('/api/search/supplies', authenticateToken, (req, res) => {
+    const { query } = req.query;
+    if (!query) {
+        return res.status(400).json({ success: false, error: 'Search query required' });
+    }
+    
+    const searchQuery = `
+        SELECT st.*, 
+               COALESCE(si.current_stock, 0) as current_stock,
+               COALESCE(si.reserved_stock, 0) as reserved_stock
+        FROM supply_types st
+        LEFT JOIN supply_inventory si ON st.id = si.supply_type_id 
+            AND si.facility_id = ?
+        WHERE (st.name LIKE ? OR st.ar_code LIKE ? OR st.category LIKE ?)
+        ORDER BY st.name
+        LIMIT 20
+    `;
+    
+    const facilityId = req.user.facility_id || 1;
+    const searchTerm = `%${query}%`;
+    
+    db.all(searchQuery, [facilityId, searchTerm, searchTerm, searchTerm], (err, rows) => {
+        if (err) {
+            console.error('Supply search error:', err);
+            return res.status(500).json({ success: false, error: 'Search failed' });
+        }
+        res.json({ success: true, supplies: rows || [] });
+    });
+});
+
+// Export endpoints
+app.get('/api/export/patients', authenticateToken, (req, res) => {
+    const query = `
+        SELECT 
+            p.patient_id,
+            p.name,
+            p.room,
+            p.admission_date,
+            p.wound_type,
+            p.severity,
+            p.status,
+            p.notes,
+            f.name as facility_name
+        FROM patients p 
+        LEFT JOIN facilities f ON p.facility_id = f.id
+        WHERE p.status = 'active'
+        ORDER BY p.name
+    `;
+
+    db.all(query, [], (err, rows) => {
+        if (err) {
+            console.error('Export patients error:', err);
+            return res.status(500).json({ success: false, error: 'Export failed' });
+        }
+        
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', 'attachment; filename=patients_export.json');
+        res.json({ success: true, patients: rows || [], exported_at: new Date().toISOString() });
+    });
+});
+
+app.get('/api/export/usage', authenticateToken, (req, res) => {
+    const { start_date, end_date } = req.query;
+    const facility_id = req.user.facility_id || 1;
+    
+    const query = `
+        SELECT 
+            DATE(su.usage_date) as usage_date,
+            su.quantity_used,
+            su.notes,
+            p.name as patient_name,
+            p.patient_id,
+            p.room,
+            st.name as supply_name,
+            st.ar_code,
+            st.category,
+            st.cost_per_unit,
+            (su.quantity_used * st.cost_per_unit) as total_cost,
+            u.name as user_name
+        FROM supply_usage su
+        JOIN patients p ON su.patient_id = p.id
+        JOIN supply_types st ON su.supply_type_id = st.id
+        LEFT JOIN users u ON su.user_id = u.id
+        WHERE su.facility_id = ?
+        AND (DATE(su.usage_date) >= ? OR ? IS NULL)
+        AND (DATE(su.usage_date) <= ? OR ? IS NULL)
+        ORDER BY su.usage_date DESC, p.name
+    `;
+    
+    db.all(query, [facility_id, start_date, start_date, end_date, end_date], (err, rows) => {
+        if (err) {
+            console.error('Export usage error:', err);
+            return res.status(500).json({ success: false, error: 'Export failed' });
+        }
+        
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', 'attachment; filename=usage_export.json');
+        res.json({ 
+            success: true, 
+            usage: rows || [], 
+            exported_at: new Date().toISOString(),
+            date_range: { start_date, end_date }
+        });
+    });
+});
+
+// Users management routes
+app.get('/api/users', authenticateToken, (req, res) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ success: false, error: 'Admin access required' });
+    }
+    
+    db.all(`SELECT id, email, name, role, facility_id, created_at 
+            FROM users ORDER BY name`, [], (err, rows) => {
+        if (err) {
+            console.error('Error fetching users:', err);
+            return res.status(500).json({ success: false, error: 'Database error' });
+        }
+        res.json({ success: true, users: rows || [] });
+    });
+});
+
+app.get('/api/profile', authenticateToken, (req, res) => {
+    db.get('SELECT id, email, name, role, facility_id, created_at FROM users WHERE id = ?', 
+           [req.user.userId], (err, user) => {
+        if (err) {
+            console.error('Error fetching profile:', err);
+            return res.status(500).json({ success: false, error: 'Database error' });
+        }
+        
+        if (!user) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+        
+        res.json({ success: true, user });
+    });
+});
+
+// Admin routes
+app.get('/api/admin/stats', authenticateToken, (req, res) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ success: false, error: 'Admin access required' });
+    }
+    
+    const queries = {
+        totalUsers: `SELECT COUNT(*) as count FROM users`,
+        totalPatients: `SELECT COUNT(*) as count FROM patients`,
+        totalSupplies: `SELECT COUNT(*) as count FROM supply_types`,
+        totalFacilities: `SELECT COUNT(*) as count FROM facilities`,
+        totalUsageToday: `SELECT COUNT(*) as count FROM supply_usage WHERE DATE(usage_date) = DATE('now')`,
+        totalUsageWeek: `SELECT COUNT(*) as count FROM supply_usage WHERE DATE(usage_date) >= DATE('now', '-7 days')`
+    };
+
+    Promise.all([
+        new Promise((resolve, reject) => {
+            db.get(queries.totalUsers, [], (err, row) => err ? reject(err) : resolve(row.count));
+        }),
+        new Promise((resolve, reject) => {
+            db.get(queries.totalPatients, [], (err, row) => err ? reject(err) : resolve(row.count));
+        }),
+        new Promise((resolve, reject) => {
+            db.get(queries.totalSupplies, [], (err, row) => err ? reject(err) : resolve(row.count));
+        }),
+        new Promise((resolve, reject) => {
+            db.get(queries.totalFacilities, [], (err, row) => err ? reject(err) : resolve(row.count));
+        }),
+        new Promise((resolve, reject) => {
+            db.get(queries.totalUsageToday, [], (err, row) => err ? reject(err) : resolve(row.count));
+        }),
+        new Promise((resolve, reject) => {
+            db.get(queries.totalUsageWeek, [], (err, row) => err ? reject(err) : resolve(row.count));
+        })
+    ]).then(([users, patients, supplies, facilities, usageToday, usageWeek]) => {
+        res.json({
+            success: true,
+            stats: {
+                total_users: users,
+                total_patients: patients,
+                total_supplies: supplies,
+                total_facilities: facilities,
+                usage_today: usageToday,
+                usage_week: usageWeek
+            }
+        });
+    }).catch(err => {
+        console.error('Admin stats error:', err);
+        res.status(500).json({ success: false, error: 'Failed to load admin stats' });
+    });
+});
+
+// Inventory management routes
+app.get('/api/inventory', authenticateToken, (req, res) => {
+    const facility_id = req.user.facility_id || 1;
+    
+    const query = `
+        SELECT 
+            st.id,
+            st.name,
+            st.category,
+            st.ar_code,
+            st.unit,
+            st.cost_per_unit,
+            st.reorder_level,
+            st.description,
+            COALESCE(si.current_stock, 0) as current_stock,
+            COALESCE(si.reserved_stock, 0) as reserved_stock,
+            si.last_updated
+        FROM supply_types st
+        LEFT JOIN supply_inventory si ON st.id = si.supply_type_id 
+            AND si.facility_id = ?
+        ORDER BY st.category, st.name
+    `;
+    
+    db.all(query, [facility_id], (err, rows) => {
+        if (err) {
+            console.error('Error fetching inventory:', err);
+            return res.status(500).json({ success: false, error: 'Database error' });
+        }
+        res.json({ success: true, inventory: rows || [], supplies: rows || [] });
+    });
+});
+
+app.post('/api/inventory/update', authenticateToken, (req, res) => {
+    const { supply_type_id, current_stock, reserved_stock } = req.body;
+    const facility_id = req.user.facility_id || 1;
+
+    if (!supply_type_id || current_stock === undefined) {
+        return res.status(400).json({ success: false, error: 'Supply type ID and current stock required' });
+    }
+
+    db.run(`INSERT OR REPLACE INTO supply_inventory 
+            (supply_type_id, facility_id, current_stock, reserved_stock, last_updated) 
+            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+        [supply_type_id, facility_id, current_stock, reserved_stock || 0],
+        function(err) {
+            if (err) {
+                console.error('Inventory update error:', err);
+                return res.status(500).json({ success: false, error: 'Failed to update inventory' });
+            }
+
+            res.json({
+                success: true,
+                inventory: { id: this.lastID, supply_type_id, current_stock, reserved_stock }
+            });
+        }
+    );
+});
+
+// Tracking route (for usage tracking)
+app.get('/api/tracking', authenticateToken, (req, res) => {
+    const facility_id = req.user.facility_id || 1;
+    
+    const query = `
+        SELECT 
+            su.id,
+            su.usage_date,
+            su.quantity_used,
+            su.notes,
+            p.name as patient_name,
+            p.patient_id,
+            p.room,
+            st.name as supply_name,
+            st.ar_code,
+            st.category,
+            u.name as user_name
+        FROM supply_usage su
+        JOIN patients p ON su.patient_id = p.id
+        JOIN supply_types st ON su.supply_type_id = st.id
+        LEFT JOIN users u ON su.user_id = u.id
+        WHERE su.facility_id = ?
+        ORDER BY su.usage_date DESC
+        LIMIT 50
+    `;
+    
+    db.all(query, [facility_id], (err, rows) => {
+        if (err) {
+            console.error('Error fetching tracking data:', err);
+            return res.status(500).json({ success: false, error: 'Database error' });
+        }
+        res.json({ success: true, tracking: rows || [] });
+    });
+});
+
+app.post('/api/tracking', authenticateToken, (req, res) => {
+    const { patient_id, supply_type_id, quantity_used, notes } = req.body;
+    const facility_id = req.user.facility_id || 1;
+
+    if (!patient_id || !supply_type_id || !quantity_used) {
+        return res.status(400).json({ success: false, error: 'Patient, supply, and quantity required' });
+    }
+
+    db.run(`INSERT INTO supply_usage (patient_id, supply_type_id, facility_id, quantity_used, user_id, notes)
+            VALUES (?, ?, ?, ?, ?, ?)`,
+        [patient_id, supply_type_id, facility_id, quantity_used, req.user.userId, notes],
+        function(err) {
+            if (err) {
+                console.error('Usage tracking error:', err);
+                return res.status(500).json({ success: false, error: 'Failed to track usage' });
+            }
+
+            res.status(201).json({
+                success: true,
+                tracking: { id: this.lastID, quantity_used, notes }
+            });
+        }
+    );
 });
 
 // Reports route
@@ -624,6 +1007,7 @@ app.get('/', (req, res) => {
         .stat-number { font-size: 2rem; font-weight: bold; color: #667eea; }
         .stat-label { font-size: 0.9rem; color: #718096; margin-top: 0.25rem; }
         .success { color: #38a169; background: #c6f6d5; padding: 1rem; border-radius: 8px; margin: 1rem 0; }
+        .error { color: #e53e3e; background: #fed7d7; padding: 1rem; border-radius: 8px; margin: 1rem 0; }
         .btn { 
             padding: 0.75rem 1.5rem; background: #667eea; color: white; 
             border: none; border-radius: 6px; cursor: pointer; margin: 0.5rem;
@@ -632,6 +1016,7 @@ app.get('/', (req, res) => {
         .btn:hover { background: #5a6fd8; }
         .section { margin: 2rem 0; }
         .section h3 { color: #4a5568; margin-bottom: 1rem; }
+        .section h4 { color: #667eea; margin-bottom: 0.5rem; font-size: 1rem; }
         .endpoint { 
             background: #f8f9fa; padding: 1rem; border-radius: 6px; margin: 0.5rem 0;
             border-left: 4px solid #667eea; font-family: monospace;
@@ -691,6 +1076,7 @@ app.get('/', (req, res) => {
             <div class="section">
                 <h3>📋 Available API Endpoints</h3>
                 
+                <h4 style="margin-top: 1.5rem; color: #667eea;">🔐 Authentication</h4>
                 <div class="endpoint">
                     <span class="method post">POST</span>/api/auth/login - User authentication
                 </div>
@@ -698,8 +1084,18 @@ app.get('/', (req, res) => {
                     <span class="method post">POST</span>/api/auth/register - User registration  
                 </div>
                 <div class="endpoint">
+                    <span class="method get">GET</span>/api/profile - User profile
+                </div>
+                
+                <h4 style="margin-top: 1.5rem; color: #667eea;">📊 Dashboard</h4>
+                <div class="endpoint">
+                    <span class="method get">GET</span>/api/dashboard - Dashboard data
+                </div>
+                <div class="endpoint">
                     <span class="method get">GET</span>/api/dashboard/stats - Dashboard statistics
                 </div>
+                
+                <h4 style="margin-top: 1.5rem; color: #667eea;">👥 Patient Management</h4>
                 <div class="endpoint">
                     <span class="method get">GET</span>/api/patients - Get all patients
                 </div>
@@ -707,11 +1103,18 @@ app.get('/', (req, res) => {
                     <span class="method post">POST</span>/api/patients - Create new patient
                 </div>
                 <div class="endpoint">
+                    <span class="method get">GET</span>/api/search/patients?query=... - Search patients
+                </div>
+                
+                <h4 style="margin-top: 1.5rem; color: #667eea;">🏢 Facility Management</h4>
+                <div class="endpoint">
                     <span class="method get">GET</span>/api/facilities - Get all facilities
                 </div>
                 <div class="endpoint">
                     <span class="method post">POST</span>/api/facilities - Create new facility
                 </div>
+                
+                <h4 style="margin-top: 1.5rem; color: #667eea;">📦 Supply Management</h4>
                 <div class="endpoint">
                     <span class="method get">GET</span>/api/supplies - Get supply inventory
                 </div>
@@ -719,10 +1122,43 @@ app.get('/', (req, res) => {
                     <span class="method post">POST</span>/api/supplies - Create new supply type
                 </div>
                 <div class="endpoint">
-                    <span class="method post">POST</span>/api/supplies/usage - Track supply usage
+                    <span class="method get">GET</span>/api/inventory - Detailed inventory with stock levels
                 </div>
                 <div class="endpoint">
+                    <span class="method post">POST</span>/api/inventory/update - Update inventory levels
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>/api/search/supplies?query=... - Search supplies
+                </div>
+                
+                <h4 style="margin-top: 1.5rem; color: #667eea;">📊 Usage Tracking</h4>
+                <div class="endpoint">
+                    <span class="method get">GET</span>/api/tracking - Get usage tracking data
+                </div>
+                <div class="endpoint">
+                    <span class="method post">POST</span>/api/tracking - Record supply usage
+                </div>
+                <div class="endpoint">
+                    <span class="method post">POST</span>/api/supplies/usage - Track supply usage (alias)
+                </div>
+                
+                <h4 style="margin-top: 1.5rem; color: #667eea;">📈 Reports & Export</h4>
+                <div class="endpoint">
                     <span class="method get">GET</span>/api/reports/usage - Usage reports
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>/api/export/patients - Export patients data
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>/api/export/usage - Export usage data
+                </div>
+                
+                <h4 style="margin-top: 1.5rem; color: #667eea;">👨‍💼 Admin & Users</h4>
+                <div class="endpoint">
+                    <span class="method get">GET</span>/api/users - Get all users (admin only)
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>/api/admin/stats - Admin statistics
                 </div>
             </div>
         </div>
@@ -734,6 +1170,7 @@ app.get('/', (req, res) => {
                 <button class="btn" onclick="loadStats()">Load Statistics</button>
                 <button class="btn" onclick="testSupplies()">Test Supplies</button>
                 <button class="btn" onclick="testPatients()">Test Patients</button>
+                <button class="btn" onclick="testTracking()">Test Tracking</button>
                 <div id="testResults" style="margin-top: 1rem;"></div>
             </div>
         </div>
@@ -810,6 +1247,27 @@ app.get('/', (req, res) => {
             }
         }
         
+        async function testTracking() {
+            if (!token) {
+                document.getElementById('testResults').innerHTML = '<div class="error">❌ Please login first</div>';
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/tracking', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    document.getElementById('testResults').innerHTML = 
+                        '<div class="success">✅ Tracking data loaded: ' + data.tracking.length + ' usage records</div>';
+                }
+            } catch (error) {
+                document.getElementById('testResults').innerHTML = '<div class="error">❌ Tracking error: ' + error.message + '</div>';
+            }
+        }
+        
         async function testPatients() {
             if (!token) {
                 document.getElementById('testResults').innerHTML = '<div class="error">❌ Please login first</div>';
@@ -848,9 +1306,10 @@ app.listen(PORT, () => {
     console.log('🏥 ================================');
     console.log(`✅ Server running on port ${PORT}`);
     console.log('✅ Database connected (SQLite)');
-    console.log('✅ All API endpoints enabled');
+    console.log('✅ 25+ API endpoints enabled');
     console.log('🔑 Default login: admin@system.com / admin123');
     console.log('📊 Sample data included: 3 patients, 10 supply types');
+    console.log('🔧 Features: Auth, Dashboard, Patients, Supplies, Tracking, Reports, Export');
     console.log('🏥 ================================');
     console.log('');
 });
