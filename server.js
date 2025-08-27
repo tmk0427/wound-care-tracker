@@ -15,147 +15,123 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.static(path.join(__dirname)));
 
 // Database initialization
-const db = new sqlite3.Database('./wound_care.db', (err) => {
-    if (err) {
-        console.error('❌ Error opening database:', err);
-    } else {
-        console.log('✅ Connected to SQLite database');
-        initializeDatabase();
+let db;
+
+function initializeDatabase() {
+    db = new sqlite3.Database('./wound_care.db', async (err) => {
+        if (err) {
+            console.error('❌ Error opening database:', err);
+            process.exit(1);
+        } else {
+            console.log('✅ Connected to SQLite database');
+            await createTables();
+            await initializeDefaultData();
+            console.log('🎉 Database ready!');
+        }
+    });
+
+    // Handle database errors
+    db.on('error', (err) => {
+        console.error('Database error:', err);
+    });
+}
+
+// Create database tables
+async function createTables() {
+    const tables = [
+        // Facilities table
+        `CREATE TABLE IF NOT EXISTS facilities (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
+        
+        // Users table
+        `CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            email TEXT NOT NULL UNIQUE,
+            password TEXT NOT NULL,
+            role TEXT DEFAULT 'user' CHECK(role IN ('admin', 'user')),
+            facility_id INTEGER,
+            is_approved BOOLEAN DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (facility_id) REFERENCES facilities (id)
+        )`,
+        
+        // Supplies table
+        `CREATE TABLE IF NOT EXISTS supplies (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            code INTEGER NOT NULL UNIQUE,
+            description TEXT NOT NULL,
+            hcpcs TEXT,
+            cost DECIMAL(10,2) DEFAULT 0.00,
+            is_custom BOOLEAN DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
+        
+        // Patients table
+        `CREATE TABLE IF NOT EXISTS patients (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            month TEXT NOT NULL,
+            mrn TEXT,
+            facility_id INTEGER NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (facility_id) REFERENCES facilities (id)
+        )`,
+        
+        // Tracking data table
+        `CREATE TABLE IF NOT EXISTS tracking_data (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            patient_id INTEGER NOT NULL,
+            supply_code INTEGER NOT NULL,
+            day INTEGER NOT NULL,
+            quantity INTEGER DEFAULT 0,
+            month TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (patient_id) REFERENCES patients (id) ON DELETE CASCADE,
+            FOREIGN KEY (supply_code) REFERENCES supplies (code)
+        )`
+    ];
+
+    for (const tableSQL of tables) {
+        await runQuery(tableSQL);
     }
-});
-
-// Database helper functions  
-function runQuery(query, params = []) {
-    return new Promise((resolve, reject) => {
-        db.run(query, params, function(err) {
-            if (err) {
-                console.error('Database run error:', err);
-                reject(err);
-            } else {
-                resolve({ id: this.lastID, changes: this.changes });
-            }
-        });
-    });
+    console.log('✅ All database tables created');
 }
 
-function getQuery(query, params = []) {
-    return new Promise((resolve, reject) => {
-        db.get(query, params, (err, row) => {
-            if (err) {
-                console.error('Database get error:', err);
-                reject(err);
-            } else {
-                resolve(row);
-            }
-        });
-    });
-}
-
-function getAllQuery(query, params = []) {
-    return new Promise((resolve, reject) => {
-        db.all(query, params, (err, rows) => {
-            if (err) {
-                console.error('Database getAll error:', err);
-                reject(err);
-            } else {
-                resolve(rows || []);
-            }
-        });
-    });
-}
-
-async function getCount(table, whereClause = '') {
+// Initialize default data
+async function initializeDefaultData() {
     try {
-        const query = `SELECT COUNT(*) as count FROM ${table} ${whereClause}`;
-        const result = await getQuery(query);
-        return result ? result.count : 0;
-    } catch (error) {
-        console.error(`Error counting ${table}:`, error);
-        return 0;
-    }
-}
+        // Add default facilities
+        const facilityCount = await getCount('facilities');
+        if (facilityCount === 0) {
+            console.log('📍 Adding default facilities...');
+            const facilities = [
+                'General Hospital',
+                'Memorial Medical Center',
+                'St. Mary\'s Hospital',
+                'University Medical Center',
+                'Regional Health System'
+            ];
+            
+            for (const name of facilities) {
+                await runQuery('INSERT INTO facilities (name) VALUES (?)', [name]);
+            }
+            console.log(`✅ Added ${facilities.length} facilities`);
+        }
 
-// Initialize database tables and data
-async function initializeDatabase() {
-    try {
-        console.log('🔧 Initializing database tables...');
-
-        // Create facilities table
-        await runQuery(`
-            CREATE TABLE IF NOT EXISTS facilities (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL UNIQUE,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
-
-        // Create supplies table
-        await runQuery(`
-            CREATE TABLE IF NOT EXISTS supplies (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                code INTEGER NOT NULL UNIQUE,
-                description TEXT NOT NULL,
-                hcpcs TEXT,
-                cost DECIMAL(10,2) DEFAULT 0.00,
-                is_custom BOOLEAN DEFAULT 1,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
-
-        // Create users table
-        await runQuery(`
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                email TEXT NOT NULL UNIQUE,
-                password TEXT NOT NULL,
-                role TEXT DEFAULT 'user' CHECK(role IN ('admin', 'user')),
-                facility_id INTEGER,
-                is_approved BOOLEAN DEFAULT 0,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (facility_id) REFERENCES facilities (id)
-            )
-        `);
-
-        // Create patients table
-        await runQuery(`
-            CREATE TABLE IF NOT EXISTS patients (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                month TEXT NOT NULL,
-                mrn TEXT,
-                facility_id INTEGER NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (facility_id) REFERENCES facilities (id)
-            )
-        `);
-
-        // Create tracking_data table
-        await runQuery(`
-            CREATE TABLE IF NOT EXISTS tracking_data (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                patient_id INTEGER NOT NULL,
-                supply_code INTEGER NOT NULL,
-                day INTEGER NOT NULL,
-                quantity INTEGER DEFAULT 0,
-                month TEXT NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (patient_id) REFERENCES patients (id) ON DELETE CASCADE,
-                FOREIGN KEY (supply_code) REFERENCES supplies (code)
-            )
-        `);
-
-        // Initialize default admin user if needed
+        // Add default admin user
         const adminCount = await getCount('users', 'WHERE role = "admin"');
         if (adminCount === 0) {
             console.log('👤 Creating default admin user...');
             const hashedPassword = await bcrypt.hash('admin123', 10);
-            
             await runQuery(
                 'INSERT INTO users (name, email, password, role, is_approved) VALUES (?, ?, ?, ?, ?)',
                 ['System Administrator', 'admin@system.com', hashedPassword, 'admin', 1]
@@ -163,23 +139,19 @@ async function initializeDatabase() {
             console.log('✅ Default admin user created');
         }
 
-        // Add missing supplies if database is incomplete
-        await initializeMissingSupplies();
-        
-        console.log('🎉 Database initialization completed successfully!');
+        // Add complete AR supplies if not already present
+        await addARSupplies();
         
     } catch (error) {
-        console.error('❌ Database initialization failed:', error);
-        throw error;
+        console.error('❌ Error initializing default data:', error);
     }
 }
 
-// Initialize missing supplies from the AR list
-async function initializeMissingSupplies() {
+// Add complete AR supplies database
+async function addARSupplies() {
     try {
-        console.log('📦 Checking for missing AR supplies...');
+        console.log('📦 Checking AR supplies database...');
         
-        // Complete AR Code list from your document
         const arSupplies = [
             { code: 272, description: 'Med/Surgical Supplies', hcpcs: 'B4149', cost: 0.00 },
             { code: 400, description: 'HME filter holder for trach or vent', hcpcs: 'A7507', cost: 3.49 },
@@ -310,30 +282,76 @@ async function initializeMissingSupplies() {
         let addedCount = 0;
         for (const supply of arSupplies) {
             try {
-                // Check if supply already exists
                 const existing = await getQuery('SELECT id FROM supplies WHERE code = ?', [supply.code]);
-                
                 if (!existing) {
                     await runQuery(
-                        'INSERT INTO supplies (code, description, hcpcs, cost, is_custom) VALUES (?, ?, ?, ?, ?)',
+                        'INSERT OR IGNORE INTO supplies (code, description, hcpcs, cost, is_custom) VALUES (?, ?, ?, ?, ?)',
                         [supply.code, supply.description, supply.hcpcs, supply.cost, 0]
                     );
                     addedCount++;
                 }
             } catch (error) {
-                console.error(`Error adding supply ${supply.code}:`, error.message);
-                // Continue with next supply
+                // Skip duplicates
+                console.log(`Supply ${supply.code} already exists, skipping...`);
             }
         }
         
-        if (addedCount > 0) {
-            console.log(`✅ Added ${addedCount} missing AR supplies`);
-        } else {
-            console.log('ℹ️ All AR supplies already present');
-        }
+        const totalSupplies = await getCount('supplies');
+        console.log(`✅ AR Supplies Database: ${totalSupplies} total supplies (added ${addedCount} new)`);
         
     } catch (error) {
-        console.error('❌ Failed to initialize missing supplies:', error);
+        console.error('❌ Error adding AR supplies:', error);
+    }
+}
+
+// Database helper functions
+function runQuery(query, params = []) {
+    return new Promise((resolve, reject) => {
+        db.run(query, params, function(err) {
+            if (err) {
+                console.error('Database run error:', err);
+                reject(err);
+            } else {
+                resolve({ id: this.lastID, changes: this.changes });
+            }
+        });
+    });
+}
+
+function getQuery(query, params = []) {
+    return new Promise((resolve, reject) => {
+        db.get(query, params, (err, row) => {
+            if (err) {
+                console.error('Database get error:', err);
+                reject(err);
+            } else {
+                resolve(row);
+            }
+        });
+    });
+}
+
+function getAllQuery(query, params = []) {
+    return new Promise((resolve, reject) => {
+        db.all(query, params, (err, rows) => {
+            if (err) {
+                console.error('Database getAll error:', err);
+                reject(err);
+            } else {
+                resolve(rows || []);
+            }
+        });
+    });
+}
+
+async function getCount(table, whereClause = '') {
+    try {
+        const query = `SELECT COUNT(*) as count FROM ${table} ${whereClause}`;
+        const result = await getQuery(query);
+        return result ? result.count : 0;
+    } catch (error) {
+        console.error(`Error counting ${table}:`, error);
+        return 0;
     }
 }
 
@@ -557,29 +575,6 @@ app.post('/api/patients', authenticateToken, async (req, res) => {
 
 // ===== TRACKING ROUTES =====
 
-app.get('/api/tracking/:patientId/:month', authenticateToken, async (req, res) => {
-    try {
-        const { patientId, month } = req.params;
-        
-        console.log(`📈 Fetching tracking data for patient ${patientId}, month ${month}`);
-        
-        const tracking = await getAllQuery(`
-            SELECT t.*, s.description as supply_description, s.cost as supply_cost
-            FROM tracking_data t
-            LEFT JOIN supplies s ON t.supply_code = s.code
-            WHERE t.patient_id = ? AND t.month = ?
-            ORDER BY t.supply_code ASC, t.day ASC
-        `, [patientId, month]);
-
-        console.log(`✅ Found ${tracking.length} tracking records`);
-        res.json({ success: true, tracking });
-
-    } catch (error) {
-        console.error('❌ Error fetching tracking data:', error);
-        res.status(500).json({ success: false, error: 'Failed to fetch tracking data' });
-    }
-});
-
 app.get('/api/tracking', authenticateToken, async (req, res) => {
     try {
         const { facility_id, month } = req.query;
@@ -611,8 +606,31 @@ app.get('/api/tracking', authenticateToken, async (req, res) => {
 
         query += ' ORDER BY f.name ASC, p.name ASC, t.supply_code ASC, t.day ASC';
 
-        console.log('📈 Fetching all tracking data...');
+        console.log('📈 Fetching tracking data...');
         const tracking = await getAllQuery(query, params);
+        console.log(`✅ Found ${tracking.length} tracking records`);
+        res.json({ success: true, tracking });
+
+    } catch (error) {
+        console.error('❌ Error fetching tracking data:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch tracking data' });
+    }
+});
+
+app.get('/api/tracking/:patientId/:month', authenticateToken, async (req, res) => {
+    try {
+        const { patientId, month } = req.params;
+        
+        console.log(`📈 Fetching tracking data for patient ${patientId}, month ${month}`);
+        
+        const tracking = await getAllQuery(`
+            SELECT t.*, s.description as supply_description, s.cost as supply_cost
+            FROM tracking_data t
+            LEFT JOIN supplies s ON t.supply_code = s.code
+            WHERE t.patient_id = ? AND t.month = ?
+            ORDER BY t.supply_code ASC, t.day ASC
+        `, [patientId, month]);
+
         console.log(`✅ Found ${tracking.length} tracking records`);
         res.json({ success: true, tracking });
 
@@ -638,7 +656,7 @@ app.post('/api/tracking', authenticateToken, async (req, res) => {
 
         if (existingRecord) {
             await runQuery(
-                'UPDATE tracking_data SET quantity = ? WHERE id = ?',
+                'UPDATE tracking_data SET quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
                 [quantity, existingRecord.id]
             );
         } else {
@@ -709,7 +727,7 @@ app.put('/api/admin/users/:id/approve', authenticateToken, requireAdmin, async (
     try {
         const { id } = req.params;
         
-        await runQuery('UPDATE users SET is_approved = ? WHERE id = ?', [1, id]);
+        await runQuery('UPDATE users SET is_approved = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [1, id]);
         console.log(`✅ Approved user ID: ${id}`);
         res.json({ success: true });
 
@@ -741,24 +759,31 @@ app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, 
 
 async function startServer() {
     try {
-        app.listen(PORT, () => {
-            console.log('');
-            console.log('🎉 ================================');
-            console.log('🏥 Wound Care RT Supply Tracker');
-            console.log('🎉 ================================');
-            console.log(`🌐 Server running on port ${PORT}`);
-            console.log(`📱 Access your app at: http://localhost:${PORT}`);
-            console.log('');
-            console.log('📊 Complete AR Supply Database Available:');
-            console.log('   • 272: Med/Surgical Supplies');
-            console.log('   • 400-425: Respiratory/Trach Supplies');
-            console.log('   • 600-709: Wound Care & Medical Supplies');
-            console.log('');
-            console.log('🔑 Default Login Credentials:');
-            console.log('   📧 Email: admin@system.com');
-            console.log('   🔐 Password: admin123');
-            console.log('🎉 ================================');
-        });
+        // Initialize database first
+        initializeDatabase();
+        
+        // Start server after a short delay to allow database initialization
+        setTimeout(() => {
+            app.listen(PORT, () => {
+                console.log('');
+                console.log('🎉 ================================');
+                console.log('🏥 Wound Care RT Supply Tracker');
+                console.log('🎉 ================================');
+                console.log(`🌐 Server running on port ${PORT}`);
+                console.log(`📱 Access your app at: http://localhost:${PORT}`);
+                console.log('');
+                console.log('📊 Complete AR Supply Database:');
+                console.log('   • 272: Med/Surgical Supplies');
+                console.log('   • 400-425: Respiratory/Trach Supplies');
+                console.log('   • 600-709: Wound Care & Medical Supplies');
+                console.log('');
+                console.log('🔑 Default Login Credentials:');
+                console.log('   📧 Email: admin@system.com');
+                console.log('   🔐 Password: admin123');
+                console.log('🎉 ================================');
+            });
+        }, 2000); // 2 second delay for database initialization
+        
     } catch (error) {
         console.error('❌ Failed to start server:', error);
         process.exit(1);
