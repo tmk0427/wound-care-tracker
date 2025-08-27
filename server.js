@@ -155,21 +155,33 @@ function seedBasicData() {
     console.log('✅ Database initialization complete');
 }
 
-// Authentication middleware
+// Authentication middleware (FIXED with debugging)
 function authenticateToken(req, res, next) {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
 
+    console.log('🔐 Auth check - Header:', authHeader ? 'Present' : 'Missing');
+    console.log('🔐 Auth check - Token:', token ? 'Present' : 'Missing');
+
     if (!token) {
+        console.log('❌ No token provided');
         return res.status(401).json({ success: false, error: 'Access token required' });
     }
 
     try {
         const user = jwt.verify(token, JWT_SECRET);
+        console.log('✅ Token verified for user:', user.email);
         req.user = user;
         next();
     } catch (err) {
-        return res.status(403).json({ success: false, error: 'Invalid token' });
+        console.log('❌ Token verification failed:', err.message);
+        if (err.name === 'TokenExpiredError') {
+            return res.status(403).json({ success: false, error: 'Token expired' });
+        } else if (err.name === 'JsonWebTokenError') {
+            return res.status(403).json({ success: false, error: 'Invalid token format' });
+        } else {
+            return res.status(403).json({ success: false, error: 'Token verification failed', details: err.message });
+        }
     }
 }
 
@@ -348,7 +360,7 @@ app.get('/api/tracking', authenticateToken, (req, res) => {
     });
 });
 
-// Debug route
+// Debug route (no auth required)
 app.get('/api/debug', (req, res) => {
     console.log('🔍 Debug info requested');
     
@@ -362,8 +374,20 @@ app.get('/api/debug', (req, res) => {
             server: 'Simple Wound Care Server',
             database: 'Connected',
             tables: tables.map(t => t.name),
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            jwtSecret: JWT_SECRET ? 'Set' : 'Missing'
         });
+    });
+});
+
+// Test token endpoint
+app.get('/api/test-token', authenticateToken, (req, res) => {
+    console.log('🔧 Token test for user:', req.user);
+    res.json({
+        success: true,
+        message: 'Token is valid',
+        user: req.user,
+        timestamp: new Date().toISOString()
     });
 });
 
