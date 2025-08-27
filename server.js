@@ -49,6 +49,20 @@ const upload = multer({
     limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
 });
 
+// Health check and debug routes
+app.get('/health', (req, res) => {
+    res.json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
+app.get('/api/debug/status', (req, res) => {
+    res.json({ 
+        success: true, 
+        server: 'running', 
+        database: 'connected',
+        timestamp: new Date().toISOString()
+    });
+});
+
 // Authentication middleware
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
@@ -168,7 +182,7 @@ async function createDefaultData() {
             console.log('✅ Default facilities created');
         }
 
-        // Create default admin user if none exists
+        // Create default admin user if none exists, or ensure existing admin password is properly hashed
         const adminCount = await pool.query("SELECT COUNT(*) FROM users WHERE role = 'admin'");
         if (parseInt(adminCount.rows[0].count) === 0) {
             const hashedPassword = await bcrypt.hash('admin123', 12);
@@ -179,6 +193,34 @@ async function createDefaultData() {
                 ['Admin User', 'admin@hospital.com', hashedPassword, 'admin', firstFacility.rows[0].id, true]
             );
             console.log('✅ Default admin created: admin@hospital.com / admin123');
+        } else {
+            // Check if admin@system.com exists and update password if needed
+            const systemAdmin = await pool.query("SELECT * FROM users WHERE email = 'admin@system.com' AND role = 'admin'");
+            if (systemAdmin.rows.length > 0) {
+                const user = systemAdmin.rows[0];
+                // Test if password is properly hashed by trying to compare
+                try {
+                    const isValidHash = await bcrypt.compare('admin123', user.password);
+                    if (!isValidHash) {
+                        // Password might not be properly hashed, update it
+                        const hashedPassword = await bcrypt.hash('admin123', 12);
+                        await pool.query(
+                            'UPDATE users SET password = $1 WHERE email = $2',
+                            [hashedPassword, 'admin@system.com']
+                        );
+                        console.log('✅ Updated admin@system.com password hash');
+                    }
+                } catch (error) {
+                    // Password definitely not properly hashed, update it
+                    const hashedPassword = await bcrypt.hash('admin123', 12);
+                    await pool.query(
+                        'UPDATE users SET password = $1 WHERE email = $2',
+                        [hashedPassword, 'admin@system.com']
+                    );
+                    console.log('✅ Fixed admin@system.com password hash');
+                }
+                console.log('✅ Existing admin found: admin@system.com / admin123');
+            }
         }
 
         // Create default supplies if none exist
@@ -298,7 +340,7 @@ app.post('/api/auth/register', async (req, res) => {
     }
 });
 
-// Facilities routes
+// Facilities routes - GET is public for registration, others require auth
 app.get('/api/facilities', async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM facilities ORDER BY name');
@@ -904,5 +946,8 @@ app.use((err, req, res, next) => {
 // Start server
 app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`🌐 Access at: https://terence-wound-care-tracker-0ee111d0e54a.herokuapp.com/`);
+    console.log(`📋 Health check: /health`);
+    console.log(`🔧 Debug status: /api/debug/status`);
     initializeDatabase();
 });
