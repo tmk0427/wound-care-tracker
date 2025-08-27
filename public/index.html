@@ -186,6 +186,11 @@
             box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
         }
 
+        .btn-small {
+            padding: 8px 16px;
+            font-size: 0.9rem;
+        }
+
         /* Form Styles */
         .form-group {
             margin-bottom: 20px;
@@ -361,6 +366,34 @@
             border: 1px solid #93c5fd;
         }
 
+        /* Stats Cards */
+        .stats-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .stat-label {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
         /* Responsive Design */
         @media (max-width: 768px) {
             .header-content {
@@ -394,54 +427,6 @@
         .flex-wrap { flex-wrap: wrap; }
         .gap-10 { gap: 10px; }
         .gap-20 { gap: 20px; }
-
-        /* Excel Import Styles */
-        .import-area {
-            border: 2px dashed #4f46e5;
-            border-radius: 12px;
-            padding: 40px;
-            text-align: center;
-            background: rgba(79, 70, 229, 0.05);
-            margin-bottom: 20px;
-            transition: all 0.3s ease;
-        }
-
-        .import-area:hover {
-            background: rgba(79, 70, 229, 0.1);
-        }
-
-        .import-area.drag-over {
-            border-color: #7c3aed;
-            background: rgba(124, 58, 237, 0.1);
-        }
-
-        /* Stats Cards */
-        .stats-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-
-        .stat-card {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-            padding: 30px;
-            border-radius: 15px;
-            text-align: center;
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
-        }
-
-        .stat-number {
-            font-size: 2.5rem;
-            font-weight: bold;
-            margin-bottom: 10px;
-        }
-
-        .stat-label {
-            font-size: 1.1rem;
-            opacity: 0.9;
-        }
     </style>
 </head>
 <body>
@@ -554,11 +539,20 @@
 
                 <div class="search-container">
                     <div class="search-box">
-                        <input type="text" id="patientSearch" class="form-control" placeholder="🔍 Search patients...">
+                        <input type="text" id="patientSearch" class="form-control" placeholder="🔍 Search patients..." oninput="filterPatients()">
                     </div>
                     <div class="filter-group">
-                        <select id="facilityFilter" class="form-control">
+                        <select id="patientFacilityFilter" class="form-control" onchange="filterPatients()">
                             <option value="">All Facilities</option>
+                        </select>
+                        <select id="patientMonthFilter" class="form-control" onchange="filterPatients()">
+                            <option value="">All Months</option>
+                        </select>
+                        <select id="patientSortBy" class="form-control" onchange="filterPatients()">
+                            <option value="name">Sort: A-Z Name</option>
+                            <option value="name_desc">Sort: Z-A Name</option>
+                            <option value="month">Sort: Month</option>
+                            <option value="facility">Sort: Facility</option>
                         </select>
                     </div>
                 </div>
@@ -595,7 +589,7 @@
 
                 <div class="search-container">
                     <div class="search-box">
-                        <input type="text" id="supplySearch" class="form-control" placeholder="🔍 Search supplies...">
+                        <input type="text" id="supplySearch" class="form-control" placeholder="🔍 Search supplies..." oninput="filterSupplies()">
                     </div>
                 </div>
 
@@ -634,7 +628,11 @@
                         </select>
                     </div>
                     <div class="filter-group">
-                        <input type="month" id="trackingMonth" class="form-control">
+                        <select id="trackingFacilityFilter" class="form-control" onchange="filterTrackingPatients()">
+                            <option value="">All Facilities</option>
+                        </select>
+                        <select id="trackingMonth" class="form-control">
+                        </select>
                         <button class="btn btn-primary" onclick="loadTrackingData()">Load Tracking</button>
                     </div>
                 </div>
@@ -711,7 +709,7 @@
                 </div>
                 <div class="form-group">
                     <label for="patientMonth">Month</label>
-                    <input type="month" id="patientMonth" class="form-control" required>
+                    <select id="patientMonth" class="form-control" required></select>
                 </div>
                 <div class="form-group">
                     <label for="patientFacility">Facility</label>
@@ -752,6 +750,59 @@
         </div>
     </div>
 
+    <div id="addUserModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add New User</h3>
+                <span class="close" onclick="closeModal('addUserModal')">&times;</span>
+            </div>
+            <form id="addUserForm">
+                <div class="form-group">
+                    <label for="userName">Full Name</label>
+                    <input type="text" id="userName" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="userEmail">Email Address</label>
+                    <input type="email" id="userEmail" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="userPassword">Password</label>
+                    <input type="password" id="userPassword" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="userRole">Role</label>
+                    <select id="userRole" class="form-control" required>
+                        <option value="user">User</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="userFacility">Facility</label>
+                    <select id="userFacility" class="form-control">
+                        <option value="">No Specific Facility</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary">Add User</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="addFacilityModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add New Facility</h3>
+                <span class="close" onclick="closeModal('addFacilityModal')">&times;</span>
+            </div>
+            <form id="addFacilityForm">
+                <div class="form-group">
+                    <label for="facilityName">Facility Name</label>
+                    <input type="text" id="facilityName" class="form-control" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Add Facility</button>
+            </form>
+        </div>
+    </div>
+
     <script>
         // Global variables
         let currentUser = null;
@@ -759,6 +810,69 @@
         let patients = [];
         let supplies = [];
         let facilities = [];
+        let allPatients = []; // Store unfiltered patients
+
+        // Generate month options from July 2024 to September 2027
+        function generateMonthOptions() {
+            const startYear = 2024;
+            const startMonth = 7; // July
+            const endYear = 2027;
+            const endMonth = 9; // September
+            
+            const months = [];
+            const monthNames = [
+                'January', 'February', 'March', 'April', 'May', 'June',
+                'July', 'August', 'September', 'October', 'November', 'December'
+            ];
+
+            for (let year = startYear; year <= endYear; year++) {
+                const start = (year === startYear) ? startMonth : 1;
+                const end = (year === endYear) ? endMonth : 12;
+                
+                for (let month = start; month <= end; month++) {
+                    const value = `${year}-${month.toString().padStart(2, '0')}`;
+                    const label = `${monthNames[month - 1]} ${year}`;
+                    months.push({ value, label });
+                }
+            }
+            
+            return months;
+        }
+
+        // Initialize month dropdowns
+        function initializeMonthDropdowns() {
+            const months = generateMonthOptions();
+            
+            // Patient month filter
+            const patientMonthFilter = document.getElementById('patientMonthFilter');
+            patientMonthFilter.innerHTML = '<option value="">All Months</option>';
+            months.forEach(month => {
+                const option = document.createElement('option');
+                option.value = month.value;
+                option.textContent = month.label;
+                patientMonthFilter.appendChild(option);
+            });
+
+            // Patient modal month selector
+            const patientMonth = document.getElementById('patientMonth');
+            patientMonth.innerHTML = '<option value="">Select Month</option>';
+            months.forEach(month => {
+                const option = document.createElement('option');
+                option.value = month.value;
+                option.textContent = month.label;
+                patientMonth.appendChild(option);
+            });
+
+            // Tracking month selector
+            const trackingMonth = document.getElementById('trackingMonth');
+            trackingMonth.innerHTML = '<option value="">Select Month</option>';
+            months.forEach(month => {
+                const option = document.createElement('option');
+                option.value = month.value;
+                option.textContent = month.label;
+                trackingMonth.appendChild(option);
+            });
+        }
 
         // Authentication
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
@@ -801,6 +915,9 @@
             if (currentUser.role === 'admin') {
                 document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'block');
             }
+
+            // Initialize month dropdowns
+            initializeMonthDropdowns();
 
             // Load initial data
             loadDashboardData();
@@ -923,6 +1040,7 @@
             tbody.innerHTML = `
                 <tr><td>${new Date().toLocaleDateString()}</td><td>System</td><td>Login</td><td>User logged in successfully</td></tr>
                 <tr><td>${new Date().toLocaleDateString()}</td><td>System</td><td>Dashboard</td><td>Dashboard data loaded</td></tr>
+                <tr><td>${new Date().toLocaleDateString()}</td><td>System</td><td>Supplies</td><td>Complete AR supply database loaded (272, 400-709)</td></tr>
             `;
         }
 
@@ -930,13 +1048,49 @@
         async function loadPatients() {
             try {
                 const data = await apiCall('/api/patients');
-                patients = data.patients || [];
-                renderPatientsTable();
+                allPatients = data.patients || [];
+                patients = [...allPatients]; // Copy for filtering
+                filterPatients(); // Apply current filters
             } catch (error) {
                 console.error('Failed to load patients:', error);
                 document.getElementById('patientsTable').innerHTML = 
                     '<tr><td colspan="5" class="text-center">Failed to load patients</td></tr>';
             }
+        }
+
+        function filterPatients() {
+            const searchTerm = document.getElementById('patientSearch').value.toLowerCase();
+            const facilityFilter = document.getElementById('patientFacilityFilter').value;
+            const monthFilter = document.getElementById('patientMonthFilter').value;
+            const sortBy = document.getElementById('patientSortBy').value;
+            
+            let filtered = allPatients.filter(patient => {
+                const matchesSearch = patient.name.toLowerCase().includes(searchTerm) ||
+                                    (patient.mrn && patient.mrn.toLowerCase().includes(searchTerm));
+                const matchesFacility = !facilityFilter || patient.facility_id.toString() === facilityFilter;
+                const matchesMonth = !monthFilter || patient.month === monthFilter;
+                
+                return matchesSearch && matchesFacility && matchesMonth;
+            });
+
+            // Sort patients
+            filtered.sort((a, b) => {
+                switch(sortBy) {
+                    case 'name':
+                        return a.name.localeCompare(b.name);
+                    case 'name_desc':
+                        return b.name.localeCompare(a.name);
+                    case 'month':
+                        return a.month.localeCompare(b.month);
+                    case 'facility':
+                        return (a.facility_name || '').localeCompare(b.facility_name || '');
+                    default:
+                        return a.name.localeCompare(b.name);
+                }
+            });
+
+            patients = filtered;
+            renderPatientsTable();
         }
 
         function renderPatientsTable() {
@@ -954,8 +1108,8 @@
                     <td>${patient.month}</td>
                     <td>${patient.facility_name || 'N/A'}</td>
                     <td>
-                        <button class="btn btn-primary" onclick="editPatient(${patient.id})">Edit</button>
-                        <button class="btn btn-danger" onclick="deletePatient(${patient.id})">Delete</button>
+                        <button class="btn btn-primary btn-small" onclick="editPatient(${patient.id})">Edit</button>
+                        <button class="btn btn-danger btn-small" onclick="deletePatient(${patient.id})">Delete</button>
                     </td>
                 </tr>
             `).join('');
@@ -983,6 +1137,7 @@
                 });
 
                 closeModal('addPatientModal');
+                document.getElementById('addPatientForm').reset();
                 loadPatients();
                 showMessage('Successfully added patient!', 'success');
             } catch (error) {
@@ -995,7 +1150,7 @@
             try {
                 const data = await apiCall('/api/supplies');
                 supplies = data.supplies || [];
-                renderSuppliesTable();
+                filterSupplies();
             } catch (error) {
                 console.error('Failed to load supplies:', error);
                 document.getElementById('suppliesTable').innerHTML = 
@@ -1003,24 +1158,36 @@
             }
         }
 
-        function renderSuppliesTable() {
+        function filterSupplies() {
+            const searchTerm = document.getElementById('supplySearch').value.toLowerCase();
+            
+            const filtered = supplies.filter(supply => 
+                supply.description.toLowerCase().includes(searchTerm) ||
+                supply.code.toString().includes(searchTerm) ||
+                (supply.hcpcs && supply.hcpcs.toLowerCase().includes(searchTerm))
+            );
+            
+            renderSuppliesTable(filtered);
+        }
+
+        function renderSuppliesTable(filteredSupplies = supplies) {
             const tbody = document.getElementById('suppliesTable');
             
-            if (supplies.length === 0) {
+            if (filteredSupplies.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="6" class="text-center">No supplies found</td></tr>';
                 return;
             }
 
-            tbody.innerHTML = supplies.map(supply => `
+            tbody.innerHTML = filteredSupplies.map(supply => `
                 <tr>
                     <td>${supply.code}</td>
                     <td>${supply.description}</td>
                     <td>${supply.hcpcs || 'N/A'}</td>
                     <td>$${parseFloat(supply.cost || 0).toFixed(2)}</td>
-                    <td>${supply.is_custom ? 'Custom' : 'Standard'}</td>
+                    <td>${supply.is_custom ? 'Custom' : 'AR Standard'}</td>
                     <td>
-                        <button class="btn btn-primary" onclick="editSupply(${supply.id})">Edit</button>
-                        <button class="btn btn-danger" onclick="deleteSupply(${supply.id})">Delete</button>
+                        <button class="btn btn-primary btn-small" onclick="editSupply(${supply.id})">Edit</button>
+                        ${supply.is_custom ? `<button class="btn btn-danger btn-small" onclick="deleteSupply(${supply.id})">Delete</button>` : ''}
                     </td>
                 </tr>
             `).join('');
@@ -1047,6 +1214,7 @@
                 });
 
                 closeModal('addSupplyModal');
+                document.getElementById('addSupplyForm').reset();
                 loadSupplies();
                 showMessage('Successfully added supply!', 'success');
             } catch (error) {
@@ -1059,14 +1227,41 @@
             try {
                 const data = await apiCall('/api/facilities');
                 facilities = data.facilities || [];
+                
+                // Update facility filters
+                updateFacilityFilters();
             } catch (error) {
                 console.error('Failed to load facilities:', error);
             }
         }
 
+        function updateFacilityFilters() {
+            // Patient facility filter
+            const patientFacilityFilter = document.getElementById('patientFacilityFilter');
+            patientFacilityFilter.innerHTML = '<option value="">All Facilities</option>';
+            facilities.forEach(facility => {
+                const option = document.createElement('option');
+                option.value = facility.id;
+                option.textContent = facility.name;
+                patientFacilityFilter.appendChild(option);
+            });
+
+            // Tracking facility filter
+            const trackingFacilityFilter = document.getElementById('trackingFacilityFilter');
+            trackingFacilityFilter.innerHTML = '<option value="">All Facilities</option>';
+            facilities.forEach(facility => {
+                const option = document.createElement('option');
+                option.value = facility.id;
+                option.textContent = facility.name;
+                trackingFacilityFilter.appendChild(option);
+            });
+        }
+
         function loadFacilityOptions(selectId) {
             const select = document.getElementById(selectId);
-            select.innerHTML = '<option value="">Select Facility</option>';
+            const currentHTML = select.innerHTML;
+            
+            select.innerHTML = selectId.includes('patient') ? '<option value="">Select Facility</option>' : '<option value="">No Specific Facility</option>';
             
             facilities.forEach(facility => {
                 const option = document.createElement('option');
@@ -1081,17 +1276,34 @@
             try {
                 const data = await apiCall('/api/patients');
                 const select = document.getElementById('trackingPatient');
-                select.innerHTML = '<option value="">Select Patient...</option>';
                 
-                data.patients?.forEach(patient => {
-                    const option = document.createElement('option');
-                    option.value = patient.id;
-                    option.textContent = `${patient.name} (${patient.month})`;
-                    select.appendChild(option);
-                });
+                // Store all patients for filtering
+                window.trackingPatients = data.patients || [];
+                
+                filterTrackingPatients();
             } catch (error) {
                 console.error('Failed to load tracking patients:', error);
             }
+        }
+
+        function filterTrackingPatients() {
+            const facilityFilter = document.getElementById('trackingFacilityFilter').value;
+            const select = document.getElementById('trackingPatient');
+            
+            select.innerHTML = '<option value="">Select Patient...</option>';
+            
+            const filteredPatients = (window.trackingPatients || []).filter(patient => {
+                return !facilityFilter || patient.facility_id.toString() === facilityFilter;
+            });
+
+            filteredPatients.sort((a, b) => a.name.localeCompare(b.name));
+
+            filteredPatients.forEach(patient => {
+                const option = document.createElement('option');
+                option.value = patient.id;
+                option.textContent = `${patient.name} (${patient.month}) - ${patient.facility_name || 'No Facility'}`;
+                select.appendChild(option);
+            });
         }
 
         async function loadTrackingData() {
@@ -1223,11 +1435,97 @@
                     <td>${user.facility_name || 'N/A'}</td>
                     <td>${user.is_approved ? 'Approved' : 'Pending'}</td>
                     <td>
-                        ${!user.is_approved ? `<button class="btn btn-success" onclick="approveUser(${user.id})">Approve</button>` : ''}
-                        <button class="btn btn-danger" onclick="deleteUser(${user.id})">Delete</button>
+                        ${!user.is_approved ? `<button class="btn btn-success btn-small" onclick="approveUser(${user.id})">Approve</button>` : ''}
+                        <button class="btn btn-danger btn-small" onclick="deleteUser(${user.id})">Delete</button>
                     </td>
                 </tr>
             `).join('');
+        }
+
+        function showAddUserModal() {
+            document.getElementById('addUserModal').style.display = 'block';
+            loadFacilityOptions('userFacility');
+        }
+
+        function showAddFacilityModal() {
+            document.getElementById('addFacilityModal').style.display = 'block';
+        }
+
+        // Add User Form Submit
+        document.getElementById('addUserForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const userData = {
+                name: document.getElementById('userName').value,
+                email: document.getElementById('userEmail').value,
+                password: document.getElementById('userPassword').value,
+                role: document.getElementById('userRole').value,
+                facility_id: document.getElementById('userFacility').value || null
+            };
+
+            try {
+                await apiCall('/api/admin/users', {
+                    method: 'POST',
+                    body: JSON.stringify(userData)
+                });
+
+                closeModal('addUserModal');
+                document.getElementById('addUserForm').reset();
+                loadAdminData();
+                showMessage('Successfully added user!', 'success');
+            } catch (error) {
+                showMessage('Failed to add user', 'error');
+            }
+        });
+
+        // Add Facility Form Submit
+        document.getElementById('addFacilityForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const facilityData = {
+                name: document.getElementById('facilityName').value
+            };
+
+            try {
+                await apiCall('/api/facilities', {
+                    method: 'POST',
+                    body: JSON.stringify(facilityData)
+                });
+
+                closeModal('addFacilityModal');
+                document.getElementById('addFacilityForm').reset();
+                loadFacilities();
+                loadAdminData();
+                showMessage('Successfully added facility!', 'success');
+            } catch (error) {
+                showMessage('Failed to add facility', 'error');
+            }
+        });
+
+        async function approveUser(userId) {
+            try {
+                await apiCall(`/api/admin/users/${userId}/approve`, {
+                    method: 'PUT'
+                });
+                loadAdminData();
+                showMessage('User approved successfully!', 'success');
+            } catch (error) {
+                showMessage('Failed to approve user', 'error');
+            }
+        }
+
+        async function deleteUser(userId) {
+            if (!confirm('Are you sure you want to delete this user?')) return;
+
+            try {
+                await apiCall(`/api/admin/users/${userId}`, {
+                    method: 'DELETE'
+                });
+                loadAdminData();
+                showMessage('User deleted successfully!', 'success');
+            } catch (error) {
+                showMessage('Failed to delete user', 'error');
+            }
         }
 
         // Utility functions
@@ -1251,12 +1549,10 @@
 
         // Export functions
         function exportTrackingData() {
-            // Simple CSV export functionality
             alert('Export functionality would generate CSV/Excel file with tracking data');
         }
 
         function importExcel() {
-            // Simple import functionality
             const input = document.createElement('input');
             input.type = 'file';
             input.accept = '.xlsx,.xls,.csv';
@@ -1269,81 +1565,24 @@
             input.click();
         }
 
-        // Search functionality
-        document.getElementById('patientSearch')?.addEventListener('input', (e) => {
-            const searchTerm = e.target.value.toLowerCase();
-            const filteredPatients = patients.filter(patient => 
-                patient.name.toLowerCase().includes(searchTerm) ||
-                (patient.mrn && patient.mrn.toLowerCase().includes(searchTerm))
-            );
-            renderPatientsTableFiltered(filteredPatients);
-        });
-
-        document.getElementById('supplySearch')?.addEventListener('input', (e) => {
-            const searchTerm = e.target.value.toLowerCase();
-            const filteredSupplies = supplies.filter(supply => 
-                supply.description.toLowerCase().includes(searchTerm) ||
-                supply.code.toString().includes(searchTerm) ||
-                (supply.hcpcs && supply.hcpcs.toLowerCase().includes(searchTerm))
-            );
-            renderSuppliesTableFiltered(filteredSupplies);
-        });
-
-        function renderPatientsTableFiltered(filteredPatients) {
-            const tbody = document.getElementById('patientsTable');
-            
-            if (filteredPatients.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" class="text-center">No patients match your search</td></tr>';
-                return;
-            }
-
-            tbody.innerHTML = filteredPatients.map(patient => `
-                <tr>
-                    <td>${patient.name}</td>
-                    <td>${patient.mrn || 'N/A'}</td>
-                    <td>${patient.month}</td>
-                    <td>${patient.facility_name || 'N/A'}</td>
-                    <td>
-                        <button class="btn btn-primary" onclick="editPatient(${patient.id})">Edit</button>
-                        <button class="btn btn-danger" onclick="deletePatient(${patient.id})">Delete</button>
-                    </td>
-                </tr>
-            `).join('');
-        }
-
-        function renderSuppliesTableFiltered(filteredSupplies) {
-            const tbody = document.getElementById('suppliesTable');
-            
-            if (filteredSupplies.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="text-center">No supplies match your search</td></tr>';
-                return;
-            }
-
-            tbody.innerHTML = filteredSupplies.map(supply => `
-                <tr>
-                    <td>${supply.code}</td>
-                    <td>${supply.description}</td>
-                    <td>${supply.hcpcs || 'N/A'}</td>
-                    <td>$${parseFloat(supply.cost || 0).toFixed(2)}</td>
-                    <td>${supply.is_custom ? 'Custom' : 'Standard'}</td>
-                    <td>
-                        <button class="btn btn-primary" onclick="editSupply(${supply.id})">Edit</button>
-                        <button class="btn btn-danger" onclick="deleteSupply(${supply.id})">Delete</button>
-                    </td>
-                </tr>
-            `).join('');
-        }
-
         // Placeholder functions for actions
-        function editPatient(id) { alert(`Edit patient ${id}`); }
-        function deletePatient(id) { alert(`Delete patient ${id}`); }
-        function editSupply(id) { alert(`Edit supply ${id}`); }
-        function deleteSupply(id) { alert(`Delete supply ${id}`); }
-        function approveUser(id) { alert(`Approve user ${id}`); }
-        function deleteUser(id) { alert(`Delete user ${id}`); }
-        function showAddUserModal() { alert('Add user modal'); }
-        function showAddFacilityModal() { alert('Add facility modal'); }
-        function showSystemReset() { alert('System reset confirmation'); }
+        function editPatient(id) { alert(`Edit patient ${id} - Feature coming soon`); }
+        function deletePatient(id) { 
+            if(confirm('Delete this patient?')) {
+                alert(`Delete patient ${id} - Feature coming soon`); 
+            }
+        }
+        function editSupply(id) { alert(`Edit supply ${id} - Feature coming soon`); }
+        function deleteSupply(id) { 
+            if(confirm('Delete this supply?')) {
+                alert(`Delete supply ${id} - Feature coming soon`); 
+            }
+        }
+        function showSystemReset() { 
+            if(confirm('This will reset all data. Are you sure?')) {
+                alert('System reset - Feature coming soon'); 
+            }
+        }
 
         // Modal close on outside click
         window.onclick = function(event) {
