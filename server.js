@@ -926,13 +926,13 @@ app.post('/api/patients/batch-upload', authenticateToken, upload.single('csv'), 
     }
 });
 
-// Serve static files from static directory
-app.use(express.static(path.join(__dirname, 'static')));
+// Serve static files from public directory
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Catch all handler: send back index.html file for any non-API routes
 app.get('*', (req, res) => {
     if (!req.url.startsWith('/api')) {
-        res.sendFile(path.join(__dirname, 'static', 'index.html'));
+        res.sendFile(path.join(__dirname, 'public', 'index.html'));
     } else {
         res.status(404).json({ success: false, error: 'API endpoint not found' });
     }
