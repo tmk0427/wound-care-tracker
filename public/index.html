@@ -900,6 +900,7 @@ function renderTrackingInterface() {
     }
 }
 
+// Fix for the renderAdminTrackingView function - add missing closing brace
 function renderAdminTrackingView() {
     let html = `
         <div style="margin-bottom: 20px;">
@@ -968,6 +969,20 @@ function renderAdminTrackingView() {
                 </div>
             `;
         }
+        
+        html += `
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += '</tbody></table></div>';
+    const trackingTable = document.getElementById('trackingTable');
+    if (trackingTable) {
+        trackingTable.innerHTML = html;
+    }
+}
         
         html += `
                     </div>
