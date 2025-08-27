@@ -320,15 +320,24 @@
 
         async function loadSupplies() {
             try {
+                console.log('🔄 Loading supplies...');
                 const response = await apiRequest('/api/supplies');
+                console.log('Supplies API response status:', response.status);
+                
                 const data = await response.json();
+                console.log('Supplies API response data:', data);
+                
                 if (data.success) {
                     supplies = data.supplies;
-                    console.log('Supplies loaded:', supplies.length);
+                    console.log('✅ Supplies loaded:', supplies.length);
                     displaySupplies();
+                } else {
+                    console.error('❌ Supplies API returned error:', data.error);
+                    document.getElementById('suppliesContent').innerHTML = '<div class="no-data">Error loading supplies: ' + (data.error || 'Unknown error') + '</div>';
                 }
             } catch (error) {
-                console.error('Error loading supplies:', error);
+                console.error('❌ Error loading supplies:', error);
+                document.getElementById('suppliesContent').innerHTML = '<div class="no-data">Failed to load supplies - check console for details</div>';
             }
         }
 
@@ -348,15 +357,24 @@
 
         async function loadTracking() {
             try {
+                console.log('🔄 Loading tracking data...');
                 const response = await apiRequest('/api/tracking');
+                console.log('Tracking API response status:', response.status);
+                
                 const data = await response.json();
+                console.log('Tracking API response data:', data);
+                
                 if (data.success) {
                     trackingData = data.tracking;
-                    console.log('Tracking data loaded:', trackingData.length);
+                    console.log('✅ Tracking data loaded:', trackingData.length);
                     displayTracking();
+                } else {
+                    console.error('❌ Tracking API returned error:', data.error);
+                    document.getElementById('trackingContent').innerHTML = '<div class="no-data">Error loading tracking: ' + (data.error || 'Unknown error') + '</div>';
                 }
             } catch (error) {
-                console.error('Error loading tracking:', error);
+                console.error('❌ Error loading tracking:', error);
+                document.getElementById('trackingContent').innerHTML = '<div class="no-data">Failed to load tracking data - check console for details</div>';
             }
         }
 
@@ -423,6 +441,42 @@
                 console.error('Error:', message);
             }
         }
+
+        // Debug function to test API endpoints
+        window.testAPI = async function() {
+            console.log('=== API TEST START ===');
+            console.log('Auth token:', authToken ? 'Present' : 'Missing');
+            console.log('Current user:', currentUser);
+            
+            // Test facilities (should work - public)
+            try {
+                const facResponse = await fetch('/api/facilities');
+                const facData = await facResponse.json();
+                console.log('✅ Facilities API:', facResponse.status, facData);
+            } catch (error) {
+                console.log('❌ Facilities API error:', error);
+            }
+            
+            // Test supplies (requires auth)
+            try {
+                const supResponse = await apiRequest('/api/supplies');
+                const supData = await supResponse.json();
+                console.log('✅ Supplies API:', supResponse.status, supData);
+            } catch (error) {
+                console.log('❌ Supplies API error:', error);
+            }
+            
+            // Test tracking (requires auth)
+            try {
+                const trackResponse = await apiRequest('/api/tracking');
+                const trackData = await trackResponse.json();
+                console.log('✅ Tracking API:', trackResponse.status, trackData);
+            } catch (error) {
+                console.log('❌ Tracking API error:', error);
+            }
+            
+            console.log('=== API TEST END ===');
+        };
 
         // Check for existing session
         window.addEventListener('load', function() {
