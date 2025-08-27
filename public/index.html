@@ -1386,6 +1386,8 @@ async function exportTrackingReport() {
 
 // Replace the entire <script> section in your HTML file with this fixed version
 
+<!-- Replace the entire <script> section in your index.html with this corrected version -->
+
 <script>
         // Global variables
         let currentUser = null;
@@ -2187,7 +2189,7 @@ async function exportTrackingReport() {
             }
         }
 
-        // Tracking interface renderer
+        // FIXED: All tracking interface functions with proper syntax
         function renderTrackingInterface() {
             if (!currentUser) {
                 showMessage('User not authenticated', 'error');
@@ -2211,6 +2213,345 @@ async function exportTrackingReport() {
                 adminView.style.display = 'none';
                 userView.style.display = 'block';
             }
+        }
+
+        function renderAdminTrackingView() {
+            let html = `
+                <div style="margin-bottom: 20px;">
+                    <h3>Administrative View - Complete Report Data</h3>
+                </div>
+                <div style="overflow-x: auto;">
+                    <table class="table" style="min-width: 1200px;">
+                        <thead>
+                            <tr style="background: #f8fafc;">
+                                <th>Code</th>
+                                <th style="min-width: 250px;">Description</th>
+                                <th>HCPCS</th>
+                                <th>Unit Cost</th>
+                                <th>Total Units</th>
+                                <th>Total Cost</th>
+                                <th style="min-width: 200px;">Wound Dx</th>
+                                <th style="min-width: 400px;">Daily Quantities (1-31)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            filteredSupplies.forEach(supply => {
+                const totalUnits = getTotalUnitsForSupply(supply.id);
+                const totalCost = totalUnits * parseFloat(supply.cost || 0);
+                const woundDx = getWoundDxForSupply(supply.id);
+                
+                html += `
+                    <tr class="${totalUnits > 0 ? 'supply-with-data' : ''}" style="border-bottom: 2px solid #e5e7eb;">
+                        <td><strong>${supply.code}</strong></td>
+                        <td>${supply.description}</td>
+                        <td>${supply.hcpcs || 'N/A'}</td>
+                        <td>$${parseFloat(supply.cost || 0).toFixed(2)}</td>
+                        <td><strong>${totalUnits}</strong></td>
+                        <td><strong>$${totalCost.toFixed(2)}</strong></td>
+                        <td>
+                            <input type="text" 
+                                   value="${woundDx}" 
+                                   placeholder="Enter diagnosis"
+                                   style="width: 180px; padding: 4px; border: 1px solid #ddd; border-radius: 4px;"
+                                   onchange="updateSupplyWoundDx(${supply.id}, this.value)"
+                                   data-supply-id="${supply.id}">
+                        </td>
+                        <td>
+                            <div class="days-grid">
+                `;
+                
+                // Add day inputs
+                for (let day = 1; day <= 31; day++) {
+                    const key = `${supply.id}_${day}`;
+                    const currentData = trackingData[key];
+                    const quantity = currentData ? currentData.quantity : 0;
+                    
+                    html += `
+                        <div style="text-align: center;">
+                            <div class="day-header">${day}</div>
+                            <input type="number" 
+                                   class="day-input"
+                                   value="${quantity || ''}" 
+                                   min="0" 
+                                   max="9999"
+                                   placeholder="0"
+                                   data-supply-id="${supply.id}" 
+                                   data-day="${day}"
+                                   onchange="updateTrackingValue(${supply.id}, ${day}, this.value)">
+                        </div>
+                    `;
+                }
+                
+                html += `
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table></div>';
+            const trackingTableElement = document.getElementById('trackingTable');
+            if (trackingTableElement) {
+                trackingTableElement.innerHTML = html;
+            }
+        }
+
+        function renderUserTrackingView() {
+            let html = `
+                <div style="margin-bottom: 20px;">
+                    <h3>Supply Tracking - Daily Quantities</h3>
+                    <p>Enter quantities used for each day (1-31). Leave blank for zero.</p>
+                </div>
+            `;
+            
+            // Show only supplies with existing data or commonly used ones first
+            const suppliesWithData = filteredSupplies.filter(supply => getTotalUnitsForSupply(supply.id) > 0);
+            const suppliesWithoutData = filteredSupplies.filter(supply => getTotalUnitsForSupply(supply.id) === 0);
+            
+            const orderedSupplies = [...suppliesWithData, ...suppliesWithoutData];
+            
+            orderedSupplies.forEach(supply => {
+                const totalUnits = getTotalUnitsForSupply(supply.id);
+                const borderStyle = totalUnits > 0 ? 'border-left: 4px solid #10b981;' : '';
+                
+                html += `
+                    <div class="supply-row" style="margin-bottom: 20px; ${borderStyle}">
+                        <div class="supply-header">
+                            <div><strong>Code: ${supply.code}</strong></div>
+                            <div>${supply.description}</div>
+                            <div>Units: <strong>${totalUnits}</strong></div>
+                            <div>Cost: $${parseFloat(supply.cost || 0).toFixed(2)}</div>
+                            <div>Total: <strong>$${(totalUnits * parseFloat(supply.cost || 0)).toFixed(2)}</strong></div>
+                        </div>
+                        
+                        <div style="margin-top: 10px;">
+                            <div style="font-weight: 600; margin-bottom: 8px; color: #374151;">Daily Quantities:</div>
+                            <div class="days-grid">
+                `;
+                
+                // Add day inputs in a responsive grid
+                for (let day = 1; day <= 31; day++) {
+                    const key = `${supply.id}_${day}`;
+                    const currentData = trackingData[key];
+                    const quantity = currentData ? currentData.quantity : 0;
+                    
+                    html += `
+                        <div style="text-align: center;">
+                            <div class="day-header">${day}</div>
+                            <input type="number" 
+                                   class="day-input"
+                                   value="${quantity || ''}" 
+                                   min="0" 
+                                   max="9999"
+                                   placeholder="0"
+                                   data-supply-id="${supply.id}" 
+                                   data-day="${day}"
+                                   onchange="updateTrackingValue(${supply.id}, ${day}, this.value)">
+                        </div>
+                    `;
+                }
+                
+                html += `
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            const userTrackingTableElement = document.getElementById('userTrackingTable');
+            if (userTrackingTableElement) {
+                userTrackingTableElement.innerHTML = html;
+            }
+        }
+
+        function filterTrackingSupplies() {
+            const searchTermElement = document.getElementById('trackingSupplySearch');
+            if (!searchTermElement) return;
+            
+            const searchTerm = searchTermElement.value.toLowerCase();
+            
+            if (!searchTerm) {
+                filteredSupplies = [...supplies];
+            } else {
+                filteredSupplies = supplies.filter(supply => {
+                    const codeMatch = supply.code.toString().includes(searchTerm);
+                    const descMatch = supply.description.toLowerCase().includes(searchTerm);
+                    const hcpcsMatch = supply.hcpcs && supply.hcpcs.toLowerCase().includes(searchTerm);
+                    return codeMatch || descMatch || hcpcsMatch;
+                });
+            }
+            
+            const searchResultsElement = document.getElementById('searchResultsCount');
+            if (searchResultsElement) {
+                searchResultsElement.textContent = `${filteredSupplies.length} of ${supplies.length} supplies`;
+            }
+            
+            renderTrackingInterface();
+        }
+
+        function getTotalUnitsForSupply(supplyId) {
+            let total = 0;
+            for (let day = 1; day <= 31; day++) {
+                const key = `${supplyId}_${day}`;
+                const data = trackingData[key];
+                if (data) {
+                    total += parseInt(data.quantity || 0);
+                }
+            }
+            return total;
+        }
+
+        function getWoundDxForSupply(supplyId) {
+            for (let day = 1; day <= 31; day++) {
+                const key = `${supplyId}_${day}`;
+                const data = trackingData[key];
+                if (data && data.wound_dx) {
+                    return data.wound_dx;
+                }
+            }
+            return '';
+        }
+
+        function updateTrackingValue(supplyId, day, value) {
+            const key = `${supplyId}_${day}`;
+            const quantity = parseInt(value) || 0;
+            
+            // Update local tracking data
+            if (!trackingData[key]) {
+                trackingData[key] = {
+                    patient_id: currentTrackingPatient,
+                    supply_id: supplyId,
+                    day_of_month: day,
+                    quantity: quantity
+                };
+            } else {
+                trackingData[key].quantity = quantity;
+            }
+            
+            // Update totals in the interface
+            updateSupplyTotals(supplyId);
+        }
+
+        function updateSupplyWoundDx(supplyId, diagnosis) {
+            // Update wound diagnosis for the first day entry of this supply
+            const key = `${supplyId}_1`;
+            if (!trackingData[key]) {
+                trackingData[key] = {
+                    patient_id: currentTrackingPatient,
+                    supply_id: supplyId,
+                    day_of_month: 1,
+                    quantity: 0,
+                    wound_dx: diagnosis
+                };
+            } else {
+                trackingData[key].wound_dx = diagnosis;
+            }
+        }
+
+        function updateSupplyTotals(supplyId) {
+            const totalUnits = getTotalUnitsForSupply(supplyId);
+            const supply = supplies.find(s => s.id == supplyId);
+            const totalCost = totalUnits * parseFloat(supply.cost || 0);
+            
+            // Update totals in the display
+            const rows = document.querySelectorAll(`[data-supply-id="${supplyId}"]`);
+            // This would need specific selectors to update the total displays
+        }
+
+        async function saveAllTrackingData() {
+            if (!currentTrackingPatient) {
+                showMessage('No patient selected', 'error');
+                return;
+            }
+
+            const savePromises = [];
+            
+            // Save all tracking data
+            Object.values(trackingData).forEach(data => {
+                if (data.quantity > 0 || data.wound_dx) {
+                    savePromises.push(
+                        apiCall('/api/tracking', {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                patientId: data.patient_id || currentTrackingPatient,
+                                supplyId: data.supply_id,
+                                dayOfMonth: data.day_of_month,
+                                quantity: data.quantity || 0,
+                                woundDx: data.wound_dx || null
+                            })
+                        })
+                    );
+                }
+            });
+
+            try {
+                await Promise.all(savePromises);
+                showMessage('All tracking data saved successfully!', 'success');
+                
+                // Reload to get fresh data
+                loadPatientTracking();
+            } catch (error) {
+                console.error('Failed to save tracking data:', error);
+                showMessage('Failed to save some tracking data', 'error');
+            }
+        }
+
+        async function exportTrackingReport() {
+            if (!currentTrackingPatient) {
+                showMessage('No patient selected', 'error');
+                return;
+            }
+
+            const patient = patients.find(p => p.id == currentTrackingPatient);
+            if (!patient) {
+                showMessage('Patient not found', 'error');
+                return;
+            }
+
+            // Create CSV data in the format requested
+            const csvRows = [];
+            csvRows.push(['Name', 'MRN', 'MM-YYYY', 'Facility', 'Code', 'Description', 'HCPCS', 'Total Units', 'Total Cost', 'Wound Dx']);
+
+            supplies.forEach(supply => {
+                const totalUnits = getTotalUnitsForSupply(supply.id);
+                if (totalUnits > 0) { // Only include supplies with usage
+                    const totalCost = totalUnits * parseFloat(supply.cost || 0);
+                    const woundDx = getWoundDxForSupply(supply.id);
+                    
+                    csvRows.push([
+                        patient.name,
+                        patient.mrn || '',
+                        patient.month,
+                        patient.facility_name || '',
+                        supply.code,
+                        supply.description,
+                        supply.hcpcs || '',
+                        totalUnits,
+                        totalCost.toFixed(2),
+                        woundDx
+                    ]);
+                }
+            });
+
+            // Convert to CSV string
+            const csvContent = csvRows.map(row => 
+                row.map(cell => `"${cell}"`).join(',')
+            ).join('\n');
+
+            // Download the file
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Itemized_Summary_Report_${new Date().toISOString().split('T')[0]}_${patient.name.replace(/\s+/g, '_')}_${patient.month.replace('-', '_')}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            
+            showMessage('Report exported successfully!', 'success');
         }
 
         // Utility functions
@@ -2268,31 +2609,39 @@ async function exportTrackingReport() {
             input.click();
         }
 
-        // Placeholder functions for actions - FIXED: Removed problematic characters
-        function editPatient(id) { alert('Edit patient ' + id + ' - Feature coming soon'); }
+        // Placeholder functions for actions - FIXED: Proper function syntax
+        function editPatient(id) { 
+            alert('Edit patient ' + id + ' - Feature coming soon'); 
+        }
+        
         function deletePatient(id) { 
             if(confirm('Delete this patient?')) {
                 alert('Delete patient ' + id + ' - Feature coming soon'); 
             }
         }
-        function editSupply(id) { alert('Edit supply ' + id + ' - Feature coming soon'); }
+        
+        function editSupply(id) { 
+            alert('Edit supply ' + id + ' - Feature coming soon'); 
+        }
+        
         function deleteSupply(id) { 
             if(confirm('Delete this supply?')) {
                 alert('Delete supply ' + id + ' - Feature coming soon'); 
             }
         }
+        
         function showSystemReset() { 
             if(confirm('This will reset all data. Are you sure?')) {
                 alert('System reset - Feature coming soon'); 
             }
         }
 
-        // Modal close on outside click
+        // Modal close on outside click - FIXED: Proper event handling
         window.onclick = function(event) {
-            if (event.target.classList.contains('modal')) {
+            if (event && event.target && event.target.classList.contains('modal')) {
                 event.target.style.display = 'none';
             }
-        }
+        };
     </script>
 </body>
 </html>
