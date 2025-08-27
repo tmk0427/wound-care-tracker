@@ -1,7 +1,7 @@
 {
   "name": "wound-care-rt-supply-tracker",
   "version": "1.0.0",
-  "description": "Professional Wound Care RT Supply Tracker with persistent database",
+  "description": "Professional Wound Care RT Supply Tracker with PostgreSQL",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -12,17 +12,20 @@
   },
   "dependencies": {
     "express": "^4.18.2",
-    "sqlite3": "^5.1.6",
+    "pg": "^8.11.3",
     "bcryptjs": "^2.4.3",
     "jsonwebtoken": "^9.0.2",
     "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
   },
   "keywords": [
     "healthcare",
     "supply-tracking", 
     "wound-care",
     "medical",
-    "database"
+    "postgresql"
   ],
   "author": "Healthcare Professional",
   "license": "MIT"
