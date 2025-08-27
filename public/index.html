@@ -630,8 +630,8 @@
     <div class="search-container">
         <div class="search-box">
             <select id="trackingPatient" class="form-control" onchange="loadPatientTracking()">
-                <option value="">Select Patient...</option>
-            </select>
+    <option value="">Select Patient...</option>
+</select>
         </div>
         <div class="filter-group">
             <select id="trackingFacilityFilter" class="form-control" onchange="filterTrackingPatients()">
@@ -771,56 +771,89 @@ let allTrackingData = [];
 let filteredSupplies = [];
 let trackingData = {};
 
+// Replace the loadPatientTracking function with this fixed version
 async function loadPatientTracking() {
-    const patientId = document.getElementById('trackingPatient').value;
+    const patientSelect = document.getElementById('trackingPatient');
+    if (!patientSelect) {
+        console.error('trackingPatient select element not found');
+        return;
+    }
+
+    const patientId = patientSelect.value;
     
     if (!patientId) {
-        document.getElementById('trackingTableContainer').style.display = 'none';
-        document.getElementById('trackingSearchContainer').style.display = 'none';
+        const containers = ['trackingTableContainer', 'trackingSearchContainer'];
+        containers.forEach(id => {
+            const elem = document.getElementById(id);
+            if (elem) elem.style.display = 'none';
+        });
         return;
     }
 
     try {
         currentTrackingPatient = patientId;
         
-        // Show loading
-        document.getElementById('trackingTable').innerHTML = '<p class="text-center">Loading tracking data...</p>';
-        document.getElementById('trackingTableContainer').style.display = 'block';
-        document.getElementById('trackingSearchContainer').style.display = 'block';
+        // Show loading with safe element access
+        const trackingTable = document.getElementById('trackingTable');
+        if (trackingTable) {
+            trackingTable.innerHTML = '<p class="text-center">Loading tracking data...</p>';
+        }
         
-        // Load patient info
+        const tableContainer = document.getElementById('trackingTableContainer');
+        const searchContainer = document.getElementById('trackingSearchContainer');
+        if (tableContainer) tableContainer.style.display = 'block';
+        if (searchContainer) searchContainer.style.display = 'block';
+        
+        // Find patient with safe check
         const patient = patients.find(p => p.id == patientId);
-        document.getElementById('patientInfo').innerHTML = `
-            <strong>Patient:</strong> ${patient.name} | 
-            <strong>MRN:</strong> ${patient.mrn || 'N/A'} | 
-            <strong>Month:</strong> ${patient.month} | 
-            <strong>Facility:</strong> ${patient.facility_name}
-        `;
+        if (!patient) {
+            showMessage('Patient not found', 'error');
+            return;
+        }
+        
+        // Update patient info safely
+        const patientInfo = document.getElementById('patientInfo');
+        if (patientInfo) {
+            patientInfo.innerHTML = `
+                <strong>Patient:</strong> ${patient.name} | 
+                <strong>MRN:</strong> ${patient.mrn || 'N/A'} | 
+                <strong>Month:</strong> ${patient.month} | 
+                <strong>Facility:</strong> ${patient.facility_name || 'N/A'}
+            `;
+        }
         
         // Load tracking data
         const trackingResponse = await apiCall(`/api/tracking/${patientId}`);
         allTrackingData = trackingResponse.tracking || [];
         
-        // Process tracking data into a lookup object
+        // Process tracking data into lookup object
         trackingData = {};
         allTrackingData.forEach(item => {
             const key = `${item.supply_id}_${item.day_of_month}`;
             trackingData[key] = item;
         });
         
-        // Show all supplies, not just tracked ones
-        filteredSupplies = [...supplies];
+        // Show all supplies with safe check
+        if (supplies && supplies.length > 0) {
+            filteredSupplies = [...supplies];
+            renderTrackingInterface();
+        } else {
+            showMessage('No supplies loaded. Please refresh the page.', 'error');
+            return;
+        }
         
-        renderTrackingInterface();
-        
-        document.getElementById('exportBtn').style.display = 'block';
-        document.getElementById('saveAllBtn').style.display = 'block';
+        // Show buttons safely
+        const exportBtn = document.getElementById('exportBtn');
+        const saveAllBtn = document.getElementById('saveAllBtn');
+        if (exportBtn) exportBtn.style.display = 'block';
+        if (saveAllBtn) saveAllBtn.style.display = 'block';
         
     } catch (error) {
         console.error('Failed to load tracking data:', error);
-        showMessage('Failed to load tracking data', 'error');
+        showMessage('Failed to load tracking data: ' + error.message, 'error');
     }
 }
+
 
 function filterTrackingSupplies() {
     const searchTerm = document.getElementById('trackingSupplySearch').value.toLowerCase();
@@ -841,15 +874,29 @@ function filterTrackingSupplies() {
     renderTrackingInterface();
 }
 
+/ Replace the renderTrackingInterface function with safe checks
 function renderTrackingInterface() {
+    if (!currentUser) {
+        showMessage('User not authenticated', 'error');
+        return;
+    }
+    
+    const adminView = document.getElementById('adminTrackingView');
+    const userView = document.getElementById('userTrackingView');
+    
+    if (!adminView || !userView) {
+        console.error('Tracking view elements not found');
+        return;
+    }
+    
     if (currentUser.role === 'admin') {
         renderAdminTrackingView();
-        document.getElementById('adminTrackingView').style.display = 'block';
-        document.getElementById('userTrackingView').style.display = 'none';
+        adminView.style.display = 'block';
+        userView.style.display = 'none';
     } else {
         renderUserTrackingView();
-        document.getElementById('adminTrackingView').style.display = 'none';
-        document.getElementById('userTrackingView').style.display = 'block';
+        adminView.style.display = 'none';
+        userView.style.display = 'block';
     }
 }
 
@@ -1358,40 +1405,46 @@ async function exportTrackingReport() {
             return months;
         }
 
-        // Initialize month dropdowns
-        function initializeMonthDropdowns() {
-            const months = generateMonthOptions();
-            
-            // Patient month filter
-            const patientMonthFilter = document.getElementById('patientMonthFilter');
-            patientMonthFilter.innerHTML = '<option value="">All Months</option>';
-            months.forEach(month => {
-                const option = document.createElement('option');
-                option.value = month.value;
-                option.textContent = month.label;
-                patientMonthFilter.appendChild(option);
-            });
+        / Replace the initializeMonthDropdowns function with this fixed version
+function initializeMonthDropdowns() {
+    const months = generateMonthOptions();
+    
+    // Patient month filter - check if element exists
+    const patientMonthFilter = document.getElementById('patientMonthFilter');
+    if (patientMonthFilter) {
+        patientMonthFilter.innerHTML = '<option value="">All Months</option>';
+        months.forEach(month => {
+            const option = document.createElement('option');
+            option.value = month.value;
+            option.textContent = month.label;
+            patientMonthFilter.appendChild(option);
+        });
+    }
 
-            // Patient modal month selector
-            const patientMonth = document.getElementById('patientMonth');
-            patientMonth.innerHTML = '<option value="">Select Month</option>';
-            months.forEach(month => {
-                const option = document.createElement('option');
-                option.value = month.value;
-                option.textContent = month.label;
-                patientMonth.appendChild(option);
-            });
+    // Patient modal month selector - check if element exists
+    const patientMonth = document.getElementById('patientMonth');
+    if (patientMonth) {
+        patientMonth.innerHTML = '<option value="">Select Month</option>';
+        months.forEach(month => {
+            const option = document.createElement('option');
+            option.value = month.value;
+            option.textContent = month.label;
+            patientMonth.appendChild(option);
+        });
+    }
 
-            // Tracking month selector
-            const trackingMonth = document.getElementById('trackingMonth');
-            trackingMonth.innerHTML = '<option value="">Select Month</option>';
-            months.forEach(month => {
-                const option = document.createElement('option');
-                option.value = month.value;
-                option.textContent = month.label;
-                trackingMonth.appendChild(option);
-            });
-        }
+    // Tracking month selector - check if element exists (this was causing the error)
+    const trackingMonth = document.getElementById('trackingMonth');
+    if (trackingMonth) {
+        trackingMonth.innerHTML = '<option value="">Select Month</option>';
+        months.forEach(month => {
+            const option = document.createElement('option');
+            option.value = month.value;
+            option.textContent = month.label;
+            trackingMonth.appendChild(option);
+        });
+    }
+}
 
         // Authentication
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
@@ -1422,28 +1475,50 @@ async function exportTrackingReport() {
             }
         });
 
-        function showMainApp() {
-            document.getElementById('loginScreen').style.display = 'none';
-            document.getElementById('mainApp').style.display = 'block';
-            
-            // Update user info
-            document.getElementById('userName').textContent = currentUser.name;
-            document.getElementById('userRole').textContent = currentUser.role.toUpperCase();
-            
-            // Show admin panel if user is admin
-            if (currentUser.role === 'admin') {
-                document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'block');
-            }
-
-            // Initialize month dropdowns
-            initializeMonthDropdowns();
-
-            // Load initial data
-            loadDashboardData();
-            loadPatients();
-            loadSupplies();
-            loadFacilities();
+        // Add error handling to the main app initialization
+function showMainApp() {
+    try {
+        const loginScreen = document.getElementById('loginScreen');
+        const mainApp = document.getElementById('mainApp');
+        
+        if (loginScreen) loginScreen.style.display = 'none';
+        if (mainApp) mainApp.style.display = 'block';
+        
+        // Update user info safely
+        const userName = document.getElementById('userName');
+        const userRole = document.getElementById('userRole');
+        
+        if (userName && currentUser) userName.textContent = currentUser.name;
+        if (userRole && currentUser) userRole.textContent = currentUser.role.toUpperCase();
+        
+        // Show admin panel if user is admin
+        if (currentUser && currentUser.role === 'admin') {
+            document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'block');
         }
+
+        // Initialize month dropdowns with error handling
+        try {
+            initializeMonthDropdowns();
+        } catch (error) {
+            console.error('Error initializing month dropdowns:', error);
+        }
+
+        // Load initial data with error handling
+        Promise.all([
+            loadDashboardData(),
+            loadPatients(),
+            loadSupplies(),
+            loadFacilities()
+        ]).catch(error => {
+            console.error('Error loading initial data:', error);
+            showMessage('Some data failed to load. Please refresh the page.', 'error');
+        });
+        
+    } catch (error) {
+        console.error('Error showing main app:', error);
+        showMessage('Application initialization error. Please refresh the page.', 'error');
+    }
+}
 
         function logout() {
             localStorage.removeItem('authToken');
@@ -1494,43 +1569,51 @@ async function exportTrackingReport() {
             }
         }
 
-        // Panel navigation
-        function showPanel(panelName) {
-            // Hide all panels
-            document.querySelectorAll('.panel').forEach(panel => {
-                panel.classList.remove('active');
-            });
-            
-            // Remove active from all tabs
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                btn.classList.remove('active');
-            });
-            
-            // Show selected panel
-            document.getElementById(panelName + 'Panel').classList.add('active');
-            event.target.classList.add('active');
+       // Replace the showPanel function to ensure data is loaded
+function showPanel(panelName) {
+    // Hide all panels
+    document.querySelectorAll('.panel').forEach(panel => {
+        panel.classList.remove('active');
+    });
+    
+    // Remove active from all tabs
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // Show selected panel
+    const targetPanel = document.getElementById(panelName + 'Panel');
+    if (targetPanel) {
+        targetPanel.classList.add('active');
+    }
+    
+    if (event && event.target) {
+        event.target.classList.add('active');
+    }
 
-            // Load panel-specific data
-            switch(panelName) {
-                case 'dashboard':
-                    loadDashboardData();
-                    break;
-                case 'patients':
-                    loadPatients();
-                    break;
-                case 'supplies':
-                    loadSupplies();
-                    break;
-                case 'tracking':
-                    loadTrackingPatients();
-                    break;
-                case 'admin':
-                    if (currentUser.role === 'admin') {
-                        loadAdminData();
-                    }
-                    break;
+    // Load panel-specific data with error handling
+    switch(panelName) {
+        case 'dashboard':
+            loadDashboardData().catch(err => console.error('Dashboard load error:', err));
+            break;
+        case 'patients':
+            loadPatients().catch(err => console.error('Patients load error:', err));
+            break;
+        case 'supplies':
+            loadSupplies().catch(err => console.error('Supplies load error:', err));
+            break;
+        case 'tracking':
+            ensureDataLoaded().then(() => {
+                loadTrackingPatients();
+            }).catch(err => console.error('Tracking load error:', err));
+            break;
+        case 'admin':
+            if (currentUser && currentUser.role === 'admin') {
+                loadAdminData().catch(err => console.error('Admin load error:', err));
             }
-        }
+            break;
+    }
+}
 
         // Dashboard functions
         async function loadDashboardData() {
@@ -2284,37 +2367,37 @@ function exportTrackingData() {
             document.getElementById(modalId).style.display = 'none';
         }
 
-        function showMessage(message, type) {
-            // Create temporary message element
-            const msgDiv = document.createElement('div');
-            msgDiv.className = `alert alert-${type}`;
-            msgDiv.textContent = message;
-            
-            // Add to top of current panel
-            const activePanel = document.querySelector('.panel.active');
-            activePanel.insertBefore(msgDiv, activePanel.firstChild);
-            
-            // Remove after 3 seconds
-            setTimeout(() => msgDiv.remove(), 3000);
+        // Add safe element access to showMessage function
+function showMessage(message, type = 'info') {
+    // Remove any existing messages first
+    const existingMessages = document.querySelectorAll('.alert');
+    existingMessages.forEach(msg => msg.remove());
+    
+    // Create new message element
+    const msgDiv = document.createElement('div');
+    msgDiv.className = `alert alert-${type}`;
+    msgDiv.textContent = message;
+    
+    // Add to top of current panel or body with safe checks
+    const activePanel = document.querySelector('.panel.active');
+    if (activePanel) {
+        activePanel.insertBefore(msgDiv, activePanel.firstChild);
+    } else {
+        const mainApp = document.getElementById('mainApp');
+        if (mainApp) {
+            mainApp.insertBefore(msgDiv, mainApp.firstChild);
+        } else {
+            document.body.insertBefore(msgDiv, document.body.firstChild);
         }
-
-        // Export functions
-        function exportTrackingData() {
-            alert('Export functionality would generate CSV/Excel file with tracking data');
+    }
+    
+    // Remove after 5 seconds
+    setTimeout(() => {
+        if (msgDiv && msgDiv.parentNode) {
+            msgDiv.remove();
         }
-
-        function importExcel() {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = '.xlsx,.xls,.csv';
-            input.addEventListener('change', (e) => {
-                const file = e.target.files[0];
-                if (file) {
-                    alert(`Would import file: ${file.name}`);
-                }
-            });
-            input.click();
-        }
+    }, 5000);
+}
 
         // PATIENT EDIT FUNCTIONALITY
 let editingPatientId = null;
@@ -2449,6 +2532,48 @@ async function updateSupply() {
                 alert('System reset - Feature coming soon'); 
             }
         }
+// Add this function to ensure data is loaded before tracking operations
+async function ensureDataLoaded() {
+    if (!patients || patients.length === 0) {
+        console.log('Loading patients data...');
+        await loadPatients();
+    }
+    
+    if (!supplies || supplies.length === 0) {
+        console.log('Loading supplies data...');
+        await loadSupplies();
+    }
+    
+    if (!facilities || facilities.length === 0) {
+        console.log('Loading facilities data...');
+        await loadFacilities();
+    }
+}
+        // Replace the renderTrackingInterface function with safe checks
+function renderTrackingInterface() {
+    if (!currentUser) {
+        showMessage('User not authenticated', 'error');
+        return;
+    }
+    
+    const adminView = document.getElementById('adminTrackingView');
+    const userView = document.getElementById('userTrackingView');
+    
+    if (!adminView || !userView) {
+        console.error('Tracking view elements not found');
+        return;
+    }
+    
+    if (currentUser.role === 'admin') {
+        renderAdminTrackingView();
+        adminView.style.display = 'block';
+        userView.style.display = 'none';
+    } else {
+        renderUserTrackingView();
+        adminView.style.display = 'none';
+        userView.style.display = 'block';
+    }
+}
 
         // Modal close on outside click
         window.onclick = function(event) {
