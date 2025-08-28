@@ -659,7 +659,10 @@
             <div id="patientsPanel" class="panel">
                 <div class="flex" style="justify-content: space-between; align-items: center; margin-bottom: 20px;">
                     <h2>👤 Patient Management</h2>
-                    <button class="btn btn-primary" onclick="showAddPatientModal()">+ Add Patient</button>
+                    <div class="flex gap-10">
+                        <button class="btn btn-success" onclick="showBulkPatientUploadModal()">📊 Bulk Upload</button>
+                        <button class="btn btn-primary" onclick="showAddPatientModal()">+ Add Patient</button>
+                    </div>
                 </div>
 
                 <div class="search-container">
@@ -1013,6 +1016,44 @@
                 </div>
                 <button type="submit" class="btn btn-primary">Add Facility</button>
             </form>
+        </div>
+    </div>
+
+    <div id="bulkPatientUploadModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <h3>Bulk Patient Upload</h3>
+                <span class="close" onclick="closeModal('bulkPatientUploadModal')">&times;</span>
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <div class="alert alert-info">
+                    <strong>CSV Format Required:</strong> Name (Last, First), MRN, Month (MM-YYYY), Facility Name<br>
+                    <strong>Example:</strong> "Doe, John","12345","08-2024","General Hospital"
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="bulkPatientFile">Select CSV File</label>
+                <input type="file" id="bulkPatientFile" class="form-control" accept=".csv" onchange="previewPatientFile()">
+            </div>
+
+            <div id="patientPreviewContainer" style="display: none;">
+                <h4>Preview (First 10 rows)</h4>
+                <div id="patientPreviewTable" class="table-container" style="max-height: 300px; overflow-y: auto;">
+                </div>
+                <div style="margin: 15px 0;">
+                    <span id="patientFileStats"></span>
+                </div>
+                <button class="btn btn-primary" onclick="uploadBulkPatients()">Upload Patients</button>
+                <button class="btn btn-danger" onclick="cancelBulkUpload()">Cancel</button>
+            </div>
+
+            <div id="bulkUploadResults" style="display: none;">
+                <h4>Upload Results</h4>
+                <div id="uploadResultsContent"></div>
+                <button class="btn btn-primary" onclick="finishBulkUpload()">Done</button>
+            </div>
         </div>
     </div>
 
@@ -2162,6 +2203,233 @@
         function showAddFacilityModal() {
             var modal = document.getElementById('addFacilityModal');
             if (modal) modal.style.display = 'block';
+        }
+
+        function showBulkPatientUploadModal() {
+            var modal = document.getElementById('bulkPatientUploadModal');
+            if (modal) modal.style.display = 'block';
+            resetBulkUploadModal();
+        }
+
+        function resetBulkUploadModal() {
+            document.getElementById('bulkPatientFile').value = '';
+            document.getElementById('patientPreviewContainer').style.display = 'none';
+            document.getElementById('bulkUploadResults').style.display = 'none';
+        }
+
+        function previewPatientFile() {
+            var fileInput = document.getElementById('bulkPatientFile');
+            var file = fileInput.files[0];
+            
+            if (!file) return;
+            
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                var csvData = e.target.result;
+                
+                // Parse CSV using a simple parser (you could use Papa Parse library for more robust parsing)
+                var lines = csvData.split('\n');
+                var data = [];
+                
+                for (var i = 0; i < lines.length; i++) {
+                    var line = lines[i].trim();
+                    if (line) {
+                        // Simple CSV parsing - handles basic quoted fields
+                        var fields = parseCSVLine(line);
+                        if (fields.length >= 4) {
+                            data.push({
+                                name: fields[0],
+                                mrn: fields[1], 
+                                month: fields[2],
+                                facilityName: fields[3]
+                            });
+                        }
+                    }
+                }
+                
+                if (data.length === 0) {
+                    showMessage('No valid patient data found in file', 'error');
+                    return;
+                }
+                
+                renderPatientPreview(data);
+            };
+            
+            reader.readAsText(file);
+        }
+
+        function parseCSVLine(line) {
+            var fields = [];
+            var field = '';
+            var inQuotes = false;
+            
+            for (var i = 0; i < line.length; i++) {
+                var char = line[i];
+                
+                if (char === '"') {
+                    if (inQuotes && line[i + 1] === '"') {
+                        field += '"';
+                        i++;
+                    } else {
+                        inQuotes = !inQuotes;
+                    }
+                } else if (char === ',' && !inQuotes) {
+                    fields.push(field.trim());
+                    field = '';
+                } else {
+                    field += char;
+                }
+            }
+            
+            fields.push(field.trim());
+            return fields;
+        }
+
+        function renderPatientPreview(data) {
+            var previewContainer = document.getElementById('patientPreviewContainer');
+            var tableContainer = document.getElementById('patientPreviewTable');
+            var statsElement = document.getElementById('patientFileStats');
+            
+            // Show preview of first 10 rows
+            var previewData = data.slice(0, 10);
+            
+            var html = '<table class="table">' +
+                '<thead><tr><th>Name</th><th>MRN</th><th>Month</th><th>Facility</th><th>Status</th></tr></thead>' +
+                '<tbody>';
+            
+            for (var i = 0; i < previewData.length; i++) {
+                var patient = previewData[i];
+                var status = validatePatientRow(patient);
+                var statusClass = status === 'Valid' ? 'alert-success' : 'alert-error';
+                
+                html += '<tr>' +
+                    '<td>' + escapeHtmlValue(patient.name) + '</td>' +
+                    '<td>' + escapeHtmlValue(patient.mrn) + '</td>' +
+                    '<td>' + escapeHtmlValue(patient.month) + '</td>' +
+                    '<td>' + escapeHtmlValue(patient.facilityName) + '</td>' +
+                    '<td><span class="alert ' + statusClass + '" style="padding: 2px 8px; font-size: 12px;">' + status + '</span></td>' +
+                '</tr>';
+            }
+            
+            html += '</tbody></table>';
+            tableContainer.innerHTML = html;
+            
+            statsElement.textContent = 'Total patients in file: ' + data.length + 
+                (data.length > 10 ? ' (showing first 10)' : '');
+            
+            previewContainer.style.display = 'block';
+            
+            // Store data for upload
+            window.bulkPatientData = data;
+        }
+
+        function validatePatientRow(patient) {
+            // Validate name format "Last, First"
+            if (!patient.name || patient.name.length < 3) return 'Missing/Invalid Name';
+            if (patient.name.indexOf(',') === -1) return 'Name must be "Last, First" format';
+            
+            var nameParts = patient.name.split(',');
+            if (nameParts.length !== 2 || !nameParts[0].trim() || !nameParts[1].trim()) {
+                return 'Invalid "Last, First" format';
+            }
+            
+            // Validate month format MM-YYYY
+            if (!patient.month || !patient.month.match(/^\d{2}-\d{4}$/)) return 'Invalid Month Format (use MM-YYYY)';
+            
+            // Validate month range
+            var monthParts = patient.month.split('-');
+            var month = parseInt(monthParts[0]);
+            var year = parseInt(monthParts[1]);
+            if (month < 1 || month > 12) return 'Month must be 01-12';
+            if (year < 2020 || year > 2030) return 'Year must be 2020-2030';
+            
+            if (!patient.facilityName || patient.facilityName.length < 2) return 'Missing Facility';
+            return 'Valid';
+        }
+
+        function uploadBulkPatients() {
+            if (!window.bulkPatientData) {
+                showMessage('No data to upload', 'error');
+                return;
+            }
+            
+            var validPatients = [];
+            var invalidPatients = [];
+            
+            // Validate all patients first
+            for (var i = 0; i < window.bulkPatientData.length; i++) {
+                var patient = window.bulkPatientData[i];
+                var validation = validatePatientRow(patient);
+                
+                if (validation === 'Valid') {
+                    validPatients.push(patient);
+                } else {
+                    invalidPatients.push({patient: patient, error: validation});
+                }
+            }
+            
+            if (validPatients.length === 0) {
+                showMessage('No valid patients to upload', 'error');
+                return;
+            }
+            
+            // Show loading message
+            showMessage('Uploading ' + validPatients.length + ' patients...', 'info');
+            
+            // Upload patients in batch
+            apiCall('/api/patients/bulk', {
+                method: 'POST',
+                body: JSON.stringify({patients: validPatients})
+            }).then(function(response) {
+                displayUploadResults(response, invalidPatients);
+            }).catch(function(error) {
+                console.error('Bulk upload failed:', error);
+                showMessage('Upload failed: ' + error.message, 'error');
+            });
+        }
+
+        function displayUploadResults(response, invalidPatients) {
+            var resultsContainer = document.getElementById('bulkUploadResults');
+            var resultsContent = document.getElementById('uploadResultsContent');
+            
+            var html = '<div class="alert alert-success">' +
+                '<strong>Successfully uploaded:</strong> ' + (response.successful || 0) + ' patients' +
+                '</div>';
+            
+            if (response.failed && response.failed.length > 0) {
+                html += '<div class="alert alert-error">' +
+                    '<strong>Failed to upload:</strong> ' + response.failed.length + ' patients' +
+                    '<ul>';
+                for (var i = 0; i < response.failed.length; i++) {
+                    html += '<li>' + escapeHtmlValue(response.failed[i].name) + ': ' + escapeHtmlValue(response.failed[i].error) + '</li>';
+                }
+                html += '</ul></div>';
+            }
+            
+            if (invalidPatients.length > 0) {
+                html += '<div class="alert alert-error">' +
+                    '<strong>Invalid data (not uploaded):</strong> ' + invalidPatients.length + ' patients' +
+                    '<ul>';
+                for (var j = 0; j < invalidPatients.length; j++) {
+                    html += '<li>' + escapeHtmlValue(invalidPatients[j].patient.name) + ': ' + escapeHtmlValue(invalidPatients[j].error) + '</li>';
+                }
+                html += '</ul></div>';
+            }
+            
+            resultsContent.innerHTML = html;
+            document.getElementById('patientPreviewContainer').style.display = 'none';
+            resultsContainer.style.display = 'block';
+        }
+
+        function cancelBulkUpload() {
+            resetBulkUploadModal();
+            closeModal('bulkPatientUploadModal');
+        }
+
+        function finishBulkUpload() {
+            closeModal('bulkPatientUploadModal');
+            loadPatients(); // Refresh the patients list
+            showMessage('Bulk upload completed successfully!', 'success');
         }
 
         function approveUser(userId) {
