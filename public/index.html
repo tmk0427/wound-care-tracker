@@ -694,7 +694,7 @@
             <div class="nav-tabs">
                 <button class="tab-btn active" onclick="showPanel('dashboard')">📊 Dashboard</button>
                 <button class="tab-btn" onclick="showPanel('patients')">👤 Patients</button>
-                <button class="tab-btn" onclick="showPanel('supplies')">📦 Supplies</button>
+                <button class="tab-btn admin-only" onclick="showPanel('supplies')" style="display: none;">📦 Supplies</button>
                 <button class="tab-btn" onclick="showPanel('tracking')">📈 Tracking</button>
                 <button class="tab-btn admin-only" onclick="showPanel('admin')" style="display: none;">⚙️ Admin</button>
             </div>
@@ -833,9 +833,12 @@
             <div id="trackingPanel" class="panel">
                 <div class="flex" style="justify-content: space-between; align-items: center; margin-bottom: 20px;">
                     <h2>📈 Supply Tracking</h2>
-                    <div class="flex gap-10">
+                    <div class="flex gap-10 admin-only" style="display: none;">
                         <button class="btn btn-success" onclick="exportTrackingReport()" id="exportBtn" style="display: none;">📄 Export Report</button>
                         <button class="btn btn-primary" onclick="saveAllTrackingData()" id="saveAllBtn" style="display: none;">💾 Save All</button>
+                    </div>
+                    <div class="flex gap-10 user-only" style="display: none;">
+                        <button class="btn btn-primary" onclick="saveAllTrackingData()" id="saveAllBtnUser" style="display: none;">💾 Save All</button>
                     </div>
                 </div>
 
@@ -905,9 +908,9 @@
                 </div>
 
                 <div class="flex gap-20 mb-20">
-                    <button class="btn btn-primary" onclick="showAddUserModal()">+ Add User</button>
-                    <button class="btn btn-primary" onclick="showAddFacilityModal()">+ Add Facility</button>
-                    <button class="btn btn-danger" onclick="showSystemReset()">🔄 System Reset</button>
+                    <button class="btn btn-primary admin-only" onclick="showAddUserModal()" style="display: none;">+ Add User</button>
+                    <button class="btn btn-primary admin-only" onclick="showAddFacilityModal()" style="display: none;">+ Add Facility</button>
+                    <button class="btn btn-danger admin-only" onclick="showSystemReset()" style="display: none;">🔄 System Reset</button>
                 </div>
 
                 <h3>User Management</h3>
@@ -1460,6 +1463,19 @@
                     for (var i = 0; i < adminElements.length; i++) {
                         adminElements[i].style.display = 'block';
                     }
+                    var userElements = document.querySelectorAll('.user-only');
+                    for (var i = 0; i < userElements.length; i++) {
+                        userElements[i].style.display = 'none';
+                    }
+                } else {
+                    var adminElements = document.querySelectorAll('.admin-only');
+                    for (var i = 0; i < adminElements.length; i++) {
+                        adminElements[i].style.display = 'none';
+                    }
+                    var userElements = document.querySelectorAll('.user-only');
+                    for (var i = 0; i < userElements.length; i++) {
+                        userElements[i].style.display = 'block';
+                    }
                 }
 
                 try {
@@ -1665,7 +1681,14 @@
 
         /* Patient functions */
         function loadPatients() {
-            return apiCall('/api/patients').then(function(data) {
+            var queryParams = '';
+            
+            // For non-admin users, filter by their facility
+            if (currentUser && currentUser.role !== 'admin' && currentUser.facility_id) {
+                queryParams = '?facility_id=' + currentUser.facility_id;
+            }
+            
+            return apiCall('/api/patients' + queryParams).then(function(data) {
                 allPatients = data.patients || [];
                 patients = allPatients.slice();
                 filterPatients();
@@ -1848,12 +1871,26 @@
             var patientFacilityFilter = document.getElementById('patientFacilityFilter');
             if (patientFacilityFilter) {
                 patientFacilityFilter.innerHTML = '<option value="">All Facilities</option>';
-                for (var i = 0; i < facilities.length; i++) {
-                    var facility = facilities[i];
-                    var option = document.createElement('option');
-                    option.value = facility.id;
-                    option.textContent = facility.name;
-                    patientFacilityFilter.appendChild(option);
+                
+                // For non-admin users, only show their assigned facility
+                if (currentUser && currentUser.role !== 'admin' && currentUser.facility_id) {
+                    var userFacility = facilities.find(function(f) { return f.id == currentUser.facility_id; });
+                    if (userFacility) {
+                        var option = document.createElement('option');
+                        option.value = userFacility.id;
+                        option.textContent = userFacility.name;
+                        patientFacilityFilter.appendChild(option);
+                        patientFacilityFilter.value = userFacility.id; // Pre-select user's facility
+                    }
+                } else {
+                    // Admin users see all facilities
+                    for (var i = 0; i < facilities.length; i++) {
+                        var facility = facilities[i];
+                        var option = document.createElement('option');
+                        option.value = facility.id;
+                        option.textContent = facility.name;
+                        patientFacilityFilter.appendChild(option);
+                    }
                 }
             }
 
@@ -1861,12 +1898,26 @@
             var trackingFacilityFilter = document.getElementById('trackingFacilityFilter');
             if (trackingFacilityFilter) {
                 trackingFacilityFilter.innerHTML = '<option value="">All Facilities</option>';
-                for (var i = 0; i < facilities.length; i++) {
-                    var facility = facilities[i];
-                    var option = document.createElement('option');
-                    option.value = facility.id;
-                    option.textContent = facility.name;
-                    trackingFacilityFilter.appendChild(option);
+                
+                // For non-admin users, only show their assigned facility
+                if (currentUser && currentUser.role !== 'admin' && currentUser.facility_id) {
+                    var userFacility = facilities.find(function(f) { return f.id == currentUser.facility_id; });
+                    if (userFacility) {
+                        var option = document.createElement('option');
+                        option.value = userFacility.id;
+                        option.textContent = userFacility.name;
+                        trackingFacilityFilter.appendChild(option);
+                        trackingFacilityFilter.value = userFacility.id; // Pre-select user's facility
+                    }
+                } else {
+                    // Admin users see all facilities
+                    for (var i = 0; i < facilities.length; i++) {
+                        var facility = facilities[i];
+                        var option = document.createElement('option');
+                        option.value = facility.id;
+                        option.textContent = facility.name;
+                        trackingFacilityFilter.appendChild(option);
+                    }
                 }
             }
         }
@@ -1892,7 +1943,14 @@
 
         /* Tracking functions */
         function loadTrackingPatients() {
-            return apiCall('/api/patients').then(function(data) {
+            var queryParams = '';
+            
+            // For non-admin users, filter by their facility
+            if (currentUser && currentUser.role !== 'admin' && currentUser.facility_id) {
+                queryParams = '?facility_id=' + currentUser.facility_id;
+            }
+            
+            return apiCall('/api/patients' + queryParams).then(function(data) {
                 window.trackingPatients = data.patients || [];
                 filterTrackingPatients();
             }).catch(function(error) {
@@ -2159,16 +2217,12 @@
             for (var s = 0; s < orderedSupplies.length; s++) {
                 var supply = orderedSupplies[s];
                 var totalUnits = getTotalUnitsForSupply(supply.id);
-                var totalCost = totalUnits * parseFloat(supply.cost || 0);
                 var borderStyle = totalUnits > 0 ? 'border-left: 4px solid #10b981;' : '';
                 
                 html.push('<div class="supply-row" id="user-supply-' + supply.id + '" style="margin-bottom: 20px; ' + borderStyle + '">');
                 html.push('<div class="supply-header">');
-                html.push('<div><strong>Code: ' + escapeHtmlValue(supply.code) + '</strong></div>');
-                html.push('<div>' + escapeHtmlValue(supply.description) + '</div>');
-                html.push('<div>Units: <strong><span id="user-total-units-' + supply.id + '">' + totalUnits + '</span></strong></div>');
-                html.push('<div>Cost: $' + parseFloat(supply.cost || 0).toFixed(2) + '</div>');
-                html.push('<div>Total: <strong><span id="user-total-cost-' + supply.id + '">$' + totalCost.toFixed(2) + '</span></strong></div>');
+                html.push('<div><strong>' + escapeHtmlValue(supply.description) + '</strong></div>');
+                html.push('<div>Total Units: <strong><span id="user-total-units-' + supply.id + '">' + totalUnits + '</span></strong></div>');
                 html.push('</div>');
                 
                 html.push('<div style="margin-top: 10px;">');
@@ -2496,6 +2550,7 @@
                     '<td>' +
                         approveBtn +
                         '<button class="btn btn-warning btn-small" onclick="editUser(' + parseInt(user.id) + ')">Edit</button> ' +
+                        '<button class="btn btn-primary btn-small" onclick="resetUserPassword(' + parseInt(user.id) + ')">Reset Password</button> ' +
                         '<button class="btn btn-danger btn-small" onclick="deleteUser(' + parseInt(user.id) + ')">Delete</button>' +
                     '</td>' +
                 '</tr>';
@@ -2897,6 +2952,32 @@
                 showMessage('User deleted successfully!', 'success');
             }).catch(function(error) {
                 showMessage('Failed to delete user', 'error');
+            });
+        }
+
+        function resetUserPassword(userId) {
+            var newPassword = prompt('Enter new password for this user (minimum 8 characters):');
+            if (!newPassword) return;
+            
+            if (newPassword.length < 8) {
+                showMessage('Password must be at least 8 characters long', 'error');
+                return;
+            }
+            
+            if (!confirm('Reset password for this user? They will need to use the new password to login.')) return;
+
+            apiCall('/api/admin/users/' + userId + '/reset-password', {
+                method: 'PUT',
+                body: JSON.stringify({ newPassword: newPassword })
+            }).then(function(response) {
+                if (response.success) {
+                    showMessage('Password reset successfully! User can now login with the new password.', 'success');
+                } else {
+                    showMessage('Failed to reset password: ' + (response.error || 'Unknown error'), 'error');
+                }
+            }).catch(function(error) {
+                console.error('Password reset error:', error);
+                showMessage('Failed to reset password', 'error');
             });
         }
 
