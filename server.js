@@ -4,6 +4,8 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const path = require('path');
+const multer = require('multer');
+const XLSX = require('xlsx');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -13,6 +15,20 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-t
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Multer configuration for file uploads
+const upload = multer({
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+            file.mimetype === 'application/vnd.ms-excel' ||
+            file.mimetype === 'text/csv') {
+            cb(null, true);
+        } else {
+            cb(new Error('Only Excel and CSV files are allowed'));
+        }
+    }
+});
 
 // ===== DATABASE CONFIGURATION =====
 const pool = new Pool({
@@ -90,7 +106,7 @@ async function initializeDatabase() {
             )
         `);
 
-        // Create users table
+        // Create users table with email verification fields
         await safeQuery(`
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
@@ -100,6 +116,9 @@ async function initializeDatabase() {
                 role VARCHAR(20) DEFAULT 'user' CHECK (role IN ('admin', 'user')),
                 facility_id INTEGER REFERENCES facilities(id) ON DELETE SET NULL,
                 is_approved BOOLEAN DEFAULT false,
+                email_verified BOOLEAN DEFAULT false,
+                email_verification_token VARCHAR(255),
+                email_verification_expires TIMESTAMP WITH TIME ZONE,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             )
@@ -138,6 +157,7 @@ async function initializeDatabase() {
         await safeQuery('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)');
         await safeQuery('CREATE INDEX IF NOT EXISTS idx_users_facility ON users(facility_id)');
         await safeQuery('CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)');
+        await safeQuery('CREATE INDEX IF NOT EXISTS idx_users_verification ON users(email_verification_token)');
         await safeQuery('CREATE INDEX IF NOT EXISTS idx_patients_facility ON patients(facility_id)');
         await safeQuery('CREATE INDEX IF NOT EXISTS idx_patients_month ON patients(month)');
         await safeQuery('CREATE INDEX IF NOT EXISTS idx_patients_mrn ON patients(mrn)');
@@ -210,8 +230,8 @@ async function initializeDefaultData() {
             
             const hashedPassword = await bcrypt.hash('admin123', 12);
             await safeQuery(
-                'INSERT INTO users (name, email, password, role, is_approved) VALUES ($1, $2, $3, $4, $5)',
-                ['System Administrator', 'admin@system.com', hashedPassword, 'admin', true]
+                'INSERT INTO users (name, email, password, role, is_approved, email_verified) VALUES ($1, $2, $3, $4, $5, $6)',
+                ['System Administrator', 'admin@system.com', hashedPassword, 'admin', true, true]
             );
             
             console.log('Admin user created: admin@system.com / admin123');
@@ -279,6 +299,11 @@ const requireAdmin = (req, res, next) => {
     next();
 };
 
+// Helper function to generate random token
+const generateVerificationToken = () => {
+    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+};
+
 // ===== BASIC ROUTES =====
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
@@ -298,6 +323,79 @@ app.get('/health', async (req, res) => {
             timestamp: new Date().toISOString(),
             database: 'disconnected',
             error: error.message 
+        });
+    }
+});
+
+// ===== DASHBOARD ROUTE =====
+app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
+    try {
+        console.log('Loading dashboard statistics...');
+        
+        // Get basic counts with facility filtering for non-admin users
+        const [patientsResult, suppliesResult, trackingResult] = await Promise.all([
+            safeQuery(`
+                SELECT COUNT(*) as count 
+                FROM patients p
+                ${req.user.role !== 'admin' && req.user.facilityId ? 
+                  'WHERE p.facility_id = $1' : ''}
+            `, req.user.role !== 'admin' && req.user.facilityId ? [req.user.facilityId] : []),
+            
+            safeQuery('SELECT COUNT(*) as count FROM supplies'),
+            
+            safeQuery(`
+                SELECT COUNT(*) as count 
+                FROM tracking t
+                JOIN patients p ON t.patient_id = p.id
+                ${req.user.role !== 'admin' && req.user.facilityId ? 
+                  'WHERE p.facility_id = $1' : ''}
+            `, req.user.role !== 'admin' && req.user.facilityId ? [req.user.facilityId] : [])
+        ]);
+
+        // Calculate total usage cost efficiently using SQL
+        let totalCostResult;
+        if (req.user.role === 'admin') {
+            totalCostResult = await safeQuery(`
+                SELECT 
+                    COALESCE(SUM(t.quantity * s.cost), 0) as total_cost
+                FROM tracking t
+                JOIN supplies s ON t.supply_id = s.id
+                WHERE t.quantity > 0
+            `);
+        } else if (req.user.facilityId) {
+            totalCostResult = await safeQuery(`
+                SELECT 
+                    COALESCE(SUM(t.quantity * s.cost), 0) as total_cost
+                FROM tracking t
+                JOIN supplies s ON t.supply_id = s.id
+                JOIN patients p ON t.patient_id = p.id
+                WHERE t.quantity > 0 AND p.facility_id = $1
+            `, [req.user.facilityId]);
+        } else {
+            totalCostResult = { rows: [{ total_cost: 0 }] };
+        }
+
+        res.json({
+            success: true,
+            stats: {
+                totalPatients: parseInt(patientsResult.rows[0].count) || 0,
+                totalSupplies: parseInt(suppliesResult.rows[0].count) || 0,
+                monthlyTracking: parseInt(trackingResult.rows[0].count) || 0,
+                totalCost: parseFloat(totalCostResult.rows[0].total_cost) || 0
+            }
+        });
+
+    } catch (error) {
+        console.error('Dashboard stats error:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to load dashboard statistics',
+            stats: {
+                totalPatients: 0,
+                totalSupplies: 0,
+                monthlyTracking: 0,
+                totalCost: 0
+            }
         });
     }
 });
@@ -327,6 +425,10 @@ app.post('/api/auth/login', async (req, res) => {
 
         if (!(await bcrypt.compare(password, user.password))) {
             return res.status(401).json({ success: false, message: 'Invalid credentials' });
+        }
+
+        if (!user.email_verified) {
+            return res.status(403).json({ success: false, message: 'Please verify your email address before logging in' });
         }
 
         if (!user.is_approved) {
@@ -359,6 +461,125 @@ app.post('/api/auth/login', async (req, res) => {
 
     } catch (error) {
         console.error('Login error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+app.post('/api/auth/register', async (req, res) => {
+    try {
+        const { name, email, password, facility_id } = req.body;
+
+        if (!name || !email || !password) {
+            return res.status(400).json({ success: false, message: 'Name, email, and password are required' });
+        }
+
+        if (password.length < 8) {
+            return res.status(400).json({ success: false, message: 'Password must be at least 8 characters long' });
+        }
+
+        // Check if email already exists
+        const existingUser = await safeQuery('SELECT id FROM users WHERE email = $1', [email]);
+        if (existingUser.rows.length > 0) {
+            return res.status(400).json({ success: false, message: 'Email address already registered' });
+        }
+
+        // Hash password
+        const hashedPassword = await bcrypt.hash(password, 12);
+
+        // Generate email verification token
+        const verificationToken = generateVerificationToken();
+        const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+        // Insert user
+        const result = await safeQuery(
+            `INSERT INTO users (name, email, password, facility_id, email_verification_token, email_verification_expires) 
+             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+            [name, email, hashedPassword, facility_id || null, verificationToken, verificationExpires]
+        );
+
+        // In a real application, you would send an email here
+        console.log(`Verification token for ${email}: ${verificationToken}`);
+
+        res.json({
+            success: true,
+            message: 'Registration successful! Please check your email for verification instructions.',
+            requiresEmailVerification: true
+        });
+
+    } catch (error) {
+        console.error('Registration error:', error);
+        res.status(500).json({ success: false, message: 'Server error during registration' });
+    }
+});
+
+app.post('/api/auth/resend-verification', async (req, res) => {
+    try {
+        const { email } = req.body;
+
+        if (!email) {
+            return res.status(400).json({ success: false, message: 'Email address is required' });
+        }
+
+        const user = await safeQuery('SELECT id, email_verified FROM users WHERE email = $1', [email]);
+        
+        if (user.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Email address not found' });
+        }
+
+        if (user.rows[0].email_verified) {
+            return res.status(400).json({ success: false, message: 'Email address is already verified' });
+        }
+
+        // Generate new verification token
+        const verificationToken = generateVerificationToken();
+        const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+        await safeQuery(
+            'UPDATE users SET email_verification_token = $1, email_verification_expires = $2 WHERE email = $3',
+            [verificationToken, verificationExpires, email]
+        );
+
+        // In a real application, you would send an email here
+        console.log(`New verification token for ${email}: ${verificationToken}`);
+
+        res.json({
+            success: true,
+            message: 'Verification email resent successfully!'
+        });
+
+    } catch (error) {
+        console.error('Resend verification error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+app.get('/api/auth/verify-email/:token', async (req, res) => {
+    try {
+        const { token } = req.params;
+
+        const result = await safeQuery(
+            'SELECT id, email FROM users WHERE email_verification_token = $1 AND email_verification_expires > NOW()',
+            [token]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(400).json({ success: false, message: 'Invalid or expired verification token' });
+        }
+
+        const user = result.rows[0];
+
+        await safeQuery(
+            'UPDATE users SET email_verified = true, email_verification_token = NULL, email_verification_expires = NULL WHERE id = $1',
+            [user.id]
+        );
+
+        res.json({
+            success: true,
+            message: 'Email verified successfully! Your account is now pending administrator approval.'
+        });
+
+    } catch (error) {
+        console.error('Email verification error:', error);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });
@@ -492,6 +713,119 @@ app.put('/api/supplies/:id', authenticateToken, requireAdmin, async (req, res) =
     }
 });
 
+app.delete('/api/supplies/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const supplyId = req.params.id;
+
+        // Check if supply exists and is custom
+        const supplyCheck = await safeQuery('SELECT is_custom FROM supplies WHERE id = $1', [supplyId]);
+        
+        if (supplyCheck.rows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Supply not found' });
+        }
+
+        if (!supplyCheck.rows[0].is_custom) {
+            return res.status(400).json({ success: false, error: 'Cannot delete AR standard supplies' });
+        }
+
+        // Check if supply is used in tracking
+        const trackingCheck = await safeQuery('SELECT COUNT(*) FROM tracking WHERE supply_id = $1', [supplyId]);
+        
+        if (parseInt(trackingCheck.rows[0].count) > 0) {
+            return res.status(400).json({ success: false, error: 'Cannot delete supply that is used in tracking data' });
+        }
+
+        const result = await safeQuery('DELETE FROM supplies WHERE id = $1', [supplyId]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ success: false, error: 'Supply not found' });
+        }
+
+        res.json({ success: true, message: 'Supply deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting supply:', error);
+        res.status(500).json({ success: false, error: 'Failed to delete supply' });
+    }
+});
+
+app.post('/api/supplies/import', authenticateToken, requireAdmin, upload.single('file'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, error: 'No file uploaded' });
+        }
+
+        let data;
+        try {
+            // Parse Excel file
+            const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+            const sheetName = workbook.SheetNames[0];
+            const sheet = workbook.Sheets[sheetName];
+            data = XLSX.utils.sheet_to_json(sheet);
+        } catch (parseError) {
+            return res.status(400).json({ success: false, error: 'Invalid file format' });
+        }
+
+        if (data.length === 0) {
+            return res.status(400).json({ success: false, error: 'No data found in file' });
+        }
+
+        const results = {
+            successful: 0,
+            failed: [],
+            skipped: 0
+        };
+
+        for (const row of data) {
+            try {
+                // Expect columns: Code, Description, HCPCS, Cost
+                const code = parseInt(row.Code || row.code);
+                const description = row.Description || row.description;
+                const hcpcs = row.HCPCS || row.hcpcs || null;
+                const cost = parseFloat(row.Cost || row.cost) || 0;
+
+                if (!code || !description) {
+                    results.failed.push({
+                        code: code || 'N/A',
+                        error: 'Missing code or description'
+                    });
+                    continue;
+                }
+
+                // Check if supply already exists
+                const existing = await safeQuery('SELECT id FROM supplies WHERE code = $1', [code]);
+                
+                if (existing.rows.length > 0) {
+                    results.skipped++;
+                    continue;
+                }
+
+                await safeQuery(
+                    'INSERT INTO supplies (code, description, hcpcs, cost, is_custom) VALUES ($1, $2, $3, $4, $5)',
+                    [code, description, hcpcs, cost, true]
+                );
+
+                results.successful++;
+
+            } catch (error) {
+                results.failed.push({
+                    code: row.Code || row.code || 'N/A',
+                    error: error.message
+                });
+            }
+        }
+
+        res.json({
+            success: true,
+            message: `Import completed. ${results.successful} successful, ${results.skipped} skipped, ${results.failed.length} failed.`,
+            results
+        });
+
+    } catch (error) {
+        console.error('Excel import error:', error);
+        res.status(500).json({ success: false, error: 'Failed to import supplies' });
+    }
+});
+
 // ===== PATIENTS ROUTES =====
 app.get('/api/patients', authenticateToken, async (req, res) => {
     try {
@@ -572,6 +906,63 @@ app.post('/api/patients', authenticateToken, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Patient already exists for this month and facility' });
         }
         res.status(500).json({ success: false, error: 'Failed to create patient' });
+    }
+});
+
+app.put('/api/patients/:id', authenticateToken, async (req, res) => {
+    try {
+        const patientId = req.params.id;
+        const { name, month, mrn, facility_id } = req.body;
+        
+        if (!name || !month || !facility_id) {
+            return res.status(400).json({ success: false, error: 'Name, month, and facility are required' });
+        }
+
+        // Check if patient exists and get current info
+        const patientCheck = await safeQuery('SELECT * FROM patients WHERE id = $1', [patientId]);
+        
+        if (patientCheck.rows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Patient not found' });
+        }
+
+        const currentPatient = patientCheck.rows[0];
+
+        // Check permission for non-admin users
+        if (req.user.role !== 'admin' && req.user.facilityId) {
+            if (req.user.facilityId != currentPatient.facility_id || req.user.facilityId != facility_id) {
+                return res.status(403).json({ success: false, error: 'Access denied' });
+            }
+        }
+
+        // Check for duplicate MRN if MRN is provided and different from current
+        if (mrn && mrn.trim() && mrn.trim().toLowerCase() !== (currentPatient.mrn || '').toLowerCase()) {
+            const mrnCheck = await safeQuery('SELECT id, name FROM patients WHERE LOWER(mrn) = LOWER($1) AND id != $2', [mrn.trim(), patientId]);
+            
+            if (mrnCheck.rows.length > 0) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: `MRN "${mrn}" already exists for patient: ${mrnCheck.rows[0].name}`
+                });
+            }
+        }
+
+        const result = await safeQuery(
+            'UPDATE patients SET name = $1, month = $2, mrn = $3, facility_id = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5',
+            [name, month, mrn ? mrn.trim() : null, facility_id, patientId]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ success: false, error: 'Patient not found' });
+        }
+
+        res.json({ success: true, message: 'Patient updated successfully' });
+
+    } catch (error) {
+        console.error('Error updating patient:', error);
+        if (error.code === '23505') {
+            return res.status(400).json({ success: false, error: 'Patient already exists for this month and facility' });
+        }
+        res.status(500).json({ success: false, error: 'Failed to update patient' });
     }
 });
 
@@ -908,10 +1299,34 @@ app.post('/api/tracking', authenticateToken, async (req, res) => {
 
 app.get('/api/tracking', authenticateToken, async (req, res) => {
     try {
-        const result = await safeQuery('SELECT * FROM tracking ORDER BY id DESC LIMIT 1000');
+        // Enhanced tracking query with facility filtering and limits
+        let query = `
+            SELECT t.*, s.description as supply_description, s.cost as supply_cost, 
+                   s.hcpcs, s.code as supply_code, p.name as patient_name, p.month as patient_month
+            FROM tracking t 
+            LEFT JOIN supplies s ON t.supply_id = s.id 
+            LEFT JOIN patients p ON t.patient_id = p.id
+        `;
+        let params = [];
+        let conditions = [];
+
+        // Apply facility filter if user is not admin
+        if (req.user.role !== 'admin' && req.user.facilityId) {
+            conditions.push('p.facility_id = $' + (params.length + 1));
+            params.push(req.user.facilityId);
+        }
+
+        if (conditions.length > 0) {
+            query += ' WHERE ' + conditions.join(' AND ');
+        }
+
+        query += ' ORDER BY t.id DESC LIMIT 1000';
+
+        const result = await safeQuery(query, params);
         res.json({ success: true, tracking: result.rows });
+
     } catch (error) {
-        console.error('Error fetching all tracking data:', error);
+        console.error('Error fetching tracking data:', error);
         res.status(500).json({ success: false, error: 'Failed to fetch tracking data' });
     }
 });
@@ -948,8 +1363,8 @@ app.post('/api/admin/users', authenticateToken, requireAdmin, async (req, res) =
         const hashedPassword = await bcrypt.hash(password, 12);
         
         const result = await safeQuery(
-            'INSERT INTO users (name, email, password, role, facility_id, is_approved) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-            [name, email, hashedPassword, role || 'user', facility_id || null, true]
+            'INSERT INTO users (name, email, password, role, facility_id, is_approved, email_verified) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+            [name, email, hashedPassword, role || 'user', facility_id || null, true, true]
         );
 
         res.json({ success: true, user: result.rows[0] });
@@ -1033,6 +1448,15 @@ app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, 
 // ===== ERROR HANDLING MIDDLEWARE =====
 app.use((err, req, res, next) => {
     console.error('Unhandled error:', err);
+    
+    // Handle multer errors
+    if (err instanceof multer.MulterError) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+            return res.status(400).json({ success: false, error: 'File too large (max 5MB)' });
+        }
+        return res.status(400).json({ success: false, error: 'File upload error: ' + err.message });
+    }
+    
     res.status(500).json({ 
         success: false, 
         error: 'Internal server error',
