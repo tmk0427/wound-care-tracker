@@ -222,6 +222,12 @@ async function initializeDatabase() {
         }
 
         await initializeDefaultData();
+        
+        // Clear any existing tracking data for fresh start
+        console.log('Clearing existing tracking data for fresh start...');
+        await safeQuery('DELETE FROM tracking');
+        console.log('All tracking data cleared');
+        
         console.log('Database initialization completed successfully');
         
     } catch (error) {
@@ -458,10 +464,6 @@ app.post('/api/auth/login', async (req, res) => {
             return res.status(401).json({ success: false, message: 'Invalid credentials' });
         }
 
-        if (!user.email_verified) {
-            return res.status(403).json({ success: false, message: 'Please verify your email address before logging in' });
-        }
-
         if (!user.is_approved) {
             return res.status(403).json({ success: false, message: 'Account pending approval' });
         }
@@ -517,24 +519,17 @@ app.post('/api/auth/register', async (req, res) => {
         // Hash password
         const hashedPassword = await bcrypt.hash(password, 12);
 
-        // Generate email verification token
-        const verificationToken = generateVerificationToken();
-        const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-
-        // Insert user
+        // Insert user with email verification bypassed
         const result = await safeQuery(
-            `INSERT INTO users (name, email, password, facility_id, email_verification_token, email_verification_expires) 
-             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-            [name, email, hashedPassword, facility_id || null, verificationToken, verificationExpires]
+            `INSERT INTO users (name, email, password, facility_id, email_verified) 
+             VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+            [name, email, hashedPassword, facility_id || null, true]
         );
-
-        // In a real application, you would send an email here
-        console.log(`Verification token for ${email}: ${verificationToken}`);
 
         res.json({
             success: true,
-            message: 'Registration successful! Please check your email for verification instructions.',
-            requiresEmailVerification: true
+            message: 'Registration successful! Your account is pending administrator approval.',
+            requiresEmailVerification: false
         });
 
     } catch (error) {
