@@ -22,6 +22,7 @@
             max-width: 1400px;
             margin: 0 auto;
             padding: 20px;
+            padding-top: 120px; /* Account for sticky header and nav */
         }
 
         /* Header Styles */
@@ -31,11 +32,16 @@
             padding: 20px;
             border-radius: 15px;
             box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
-            margin-bottom: 30px;
-            position: sticky;
+            margin-bottom: 20px;
+            position: fixed;
             top: 20px;
+            left: 20px;
+            right: 20px;
             z-index: 1000;
             border: 1px solid rgba(255, 255, 255, 0.18);
+            max-width: 1400px;
+            margin-left: auto;
+            margin-right: auto;
         }
 
         .header-content {
@@ -91,12 +97,25 @@
             font-size: 0.9rem;
         }
 
-        /* Navigation Styles */
+        /* Navigation Styles - Made Sticky */
         .nav-tabs {
             display: flex;
             gap: 10px;
             margin-bottom: 30px;
             flex-wrap: wrap;
+            position: fixed;
+            top: 100px;
+            left: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 15px;
+            border-radius: 25px;
+            z-index: 999;
+            justify-content: center;
+            max-width: 1400px;
+            margin-left: auto;
+            margin-right: auto;
         }
 
         .tab-btn {
@@ -184,6 +203,16 @@
         .btn-success:hover {
             transform: translateY(-2px);
             box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white;
+        }
+
+        .btn-warning:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
         }
 
         .btn-small {
@@ -467,6 +496,23 @@
 
         /* Responsive Design */
         @media (max-width: 768px) {
+            .container {
+                padding-top: 160px;
+            }
+
+            .header {
+                position: fixed;
+                top: 10px;
+                left: 10px;
+                right: 10px;
+            }
+
+            .nav-tabs {
+                top: 120px;
+                left: 10px;
+                right: 10px;
+            }
+
             .header-content {
                 flex-direction: column;
                 text-align: center;
@@ -502,6 +548,15 @@
         .flex-wrap { flex-wrap: wrap; }
         .gap-10 { gap: 10px; }
         .gap-20 { gap: 20px; }
+
+        /* Supply totals update styles */
+        .supply-totals {
+            background: #f0f9ff;
+            padding: 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            color: #0369a1;
+        }
     </style>
 </head>
 <body>
@@ -526,11 +581,6 @@
         </form>
         
         <div id="loginMessage" style="margin-top: 20px;"></div>
-        
-        <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; color: #666;">
-            <p><strong>Demo Credentials:</strong></p>
-            <p>Admin: admin@system.com / admin123</p>
-        </div>
     </div>
 
     <!-- Main Application -->
@@ -581,7 +631,7 @@
                     </div>
                     <div class="stat-card">
                         <div class="stat-number" id="totalCost">$0</div>
-                        <div class="stat-label">Total Supply Cost</div>
+                        <div class="stat-label">Total Supply Usage Cost</div>
                     </div>
                 </div>
 
@@ -850,6 +900,35 @@
         </div>
     </div>
 
+    <div id="editSupplyModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Supply</h3>
+                <span class="close" onclick="closeModal('editSupplyModal')">&times;</span>
+            </div>
+            <form id="editSupplyForm">
+                <input type="hidden" id="editSupplyId">
+                <div class="form-group">
+                    <label for="editSupplyCode">Supply Code</label>
+                    <input type="number" id="editSupplyCode" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="editSupplyDescription">Description</label>
+                    <input type="text" id="editSupplyDescription" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="editSupplyHCPCS">HCPCS Code</label>
+                    <input type="text" id="editSupplyHCPCS" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label for="editSupplyCost">Cost ($)</label>
+                    <input type="number" id="editSupplyCost" class="form-control" step="0.01" min="0">
+                </div>
+                <button type="submit" class="btn btn-primary">Update Supply</button>
+            </form>
+        </div>
+    </div>
+
     <div id="addUserModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -883,6 +962,40 @@
                     </select>
                 </div>
                 <button type="submit" class="btn btn-primary">Add User</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="editUserModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit User</h3>
+                <span class="close" onclick="closeModal('editUserModal')">&times;</span>
+            </div>
+            <form id="editUserForm">
+                <input type="hidden" id="editUserId">
+                <div class="form-group">
+                    <label for="editUserName">Full Name</label>
+                    <input type="text" id="editUserName" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="editUserEmail">Email Address</label>
+                    <input type="email" id="editUserEmail" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="editUserRole">Role</label>
+                    <select id="editUserRole" class="form-control" required>
+                        <option value="user">User</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="editUserFacility">Facility</label>
+                    <select id="editUserFacility" class="form-control">
+                        <option value="">No Specific Facility</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary">Update User</button>
             </form>
         </div>
     </div>
@@ -1158,27 +1271,42 @@
             return Promise.all([
                 apiCall('/api/patients'),
                 apiCall('/api/supplies'),
-                apiCall('/api/tracking')
+                apiCall('/api/tracking/stats')
             ]).then(function(results) {
                 var patientsData = results[0];
                 var suppliesData = results[1];
-                var trackingData = results[2];
+                var statsData = results[2];
 
                 document.getElementById('totalPatients').textContent = (patientsData.patients && patientsData.patients.length) || 0;
                 document.getElementById('totalSupplies').textContent = (suppliesData.supplies && suppliesData.supplies.length) || 0;
-                document.getElementById('monthlyTracking').textContent = (trackingData.tracking && trackingData.tracking.length) || 0;
                 
-                var totalCost = 0;
-                if (suppliesData.supplies) {
-                    for (var i = 0; i < suppliesData.supplies.length; i++) {
-                        totalCost += parseFloat(suppliesData.supplies[i].cost) || 0;
-                    }
+                // Use tracking stats for more accurate dashboard data
+                if (statsData.stats) {
+                    document.getElementById('monthlyTracking').textContent = statsData.stats.tracking_entries || 0;
+                    document.getElementById('totalCost').textContent = '$' + (parseFloat(statsData.stats.total_cost) || 0).toFixed(2);
+                } else {
+                    document.getElementById('monthlyTracking').textContent = '0';
+                    document.getElementById('totalCost').textContent = '$0.00';
                 }
-                document.getElementById('totalCost').textContent = '$' + totalCost.toFixed(2);
                 
                 loadRecentActivity();
             }).catch(function(error) {
                 console.error('Failed to load dashboard data:', error);
+                // Fallback to basic calculation
+                return Promise.all([
+                    apiCall('/api/patients'),
+                    apiCall('/api/supplies')
+                ]).then(function(results) {
+                    var patientsData = results[0];
+                    var suppliesData = results[1];
+
+                    document.getElementById('totalPatients').textContent = (patientsData.patients && patientsData.patients.length) || 0;
+                    document.getElementById('totalSupplies').textContent = (suppliesData.supplies && suppliesData.supplies.length) || 0;
+                    document.getElementById('monthlyTracking').textContent = '0';
+                    document.getElementById('totalCost').textContent = '$0.00';
+                    
+                    loadRecentActivity();
+                });
             });
         }
 
@@ -1323,9 +1451,9 @@
                 var actions = '<span>View Only</span>';
                 
                 if (currentUser && currentUser.role === 'admin') {
-                    actions = '<button class="btn btn-primary btn-small" onclick="editSupply(' + supply.id + ')">Edit</button>';
+                    actions = '<button class="btn btn-warning btn-small" onclick="editSupply(' + supply.id + ')">Edit</button>';
                     if (supply.is_custom) {
-                        actions += '<button class="btn btn-danger btn-small" onclick="deleteSupply(' + supply.id + ')" style="margin-left: 5px;">Delete</button>';
+                        actions += ' <button class="btn btn-danger btn-small" onclick="deleteSupply(' + supply.id + ')">Delete</button>';
                     }
                 }
                 
@@ -1344,6 +1472,22 @@
         function showAddSupplyModal() {
             var modal = document.getElementById('addSupplyModal');
             if (modal) modal.style.display = 'block';
+        }
+
+        function editSupply(supplyId) {
+            var supply = supplies.find(function(s) { return s.id == supplyId; });
+            if (!supply) {
+                showMessage('Supply not found', 'error');
+                return;
+            }
+
+            document.getElementById('editSupplyId').value = supply.id;
+            document.getElementById('editSupplyCode').value = supply.code;
+            document.getElementById('editSupplyDescription').value = supply.description;
+            document.getElementById('editSupplyHCPCS').value = supply.hcpcs || '';
+            document.getElementById('editSupplyCost').value = supply.cost || '0';
+
+            document.getElementById('editSupplyModal').style.display = 'block';
         }
 
         /* Facility functions */
@@ -1569,13 +1713,13 @@
                 
                 var rowClass = totalUnits > 0 ? 'supply-with-data' : '';
                 
-                html.push('<tr class="' + rowClass + '" style="border-bottom: 2px solid #e5e7eb;">');
+                html.push('<tr class="' + rowClass + '" style="border-bottom: 2px solid #e5e7eb;" id="supply-row-' + supply.id + '">');
                 html.push('<td><strong>' + supply.code + '</strong></td>');
                 html.push('<td>' + supply.description + '</td>');
                 html.push('<td>' + (supply.hcpcs || 'N/A') + '</td>');
                 html.push('<td>$' + parseFloat(supply.cost || 0).toFixed(2) + '</td>');
-                html.push('<td><strong>' + totalUnits + '</strong></td>');
-                html.push('<td><strong>$' + totalCost.toFixed(2) + '</strong></td>');
+                html.push('<td><strong><span id="total-units-' + supply.id + '">' + totalUnits + '</span></strong></td>');
+                html.push('<td><strong><span id="total-cost-' + supply.id + '">$' + totalCost.toFixed(2) + '</span></strong></td>');
                 
                 html.push('<td>');
                 html.push('<input type="text" value="' + (woundDx || '') + '" placeholder="Enter diagnosis"');
@@ -1637,15 +1781,16 @@
             for (var s = 0; s < orderedSupplies.length; s++) {
                 var supply = orderedSupplies[s];
                 var totalUnits = getTotalUnitsForSupply(supply.id);
+                var totalCost = totalUnits * parseFloat(supply.cost || 0);
                 var borderStyle = totalUnits > 0 ? 'border-left: 4px solid #10b981;' : '';
                 
-                html.push('<div class="supply-row" style="margin-bottom: 20px; ' + borderStyle + '">');
+                html.push('<div class="supply-row" id="user-supply-' + supply.id + '" style="margin-bottom: 20px; ' + borderStyle + '">');
                 html.push('<div class="supply-header">');
                 html.push('<div><strong>Code: ' + supply.code + '</strong></div>');
                 html.push('<div>' + supply.description + '</div>');
-                html.push('<div>Units: <strong>' + totalUnits + '</strong></div>');
+                html.push('<div>Units: <strong><span id="user-total-units-' + supply.id + '">' + totalUnits + '</span></strong></div>');
                 html.push('<div>Cost: $' + parseFloat(supply.cost || 0).toFixed(2) + '</div>');
-                html.push('<div>Total: <strong>$' + (totalUnits * parseFloat(supply.cost || 0)).toFixed(2) + '</strong></div>');
+                html.push('<div>Total: <strong><span id="user-total-cost-' + supply.id + '">$' + totalCost.toFixed(2) + '</span></strong></div>');
                 html.push('</div>');
                 
                 html.push('<div style="margin-top: 10px;">');
@@ -1767,8 +1912,33 @@
                     break;
                 }
             }
+            
             if (supply) {
                 var totalCost = totalUnits * parseFloat(supply.cost || 0);
+                
+                // Update admin view totals
+                var adminUnitsElement = document.getElementById('total-units-' + supplyId);
+                var adminCostElement = document.getElementById('total-cost-' + supplyId);
+                if (adminUnitsElement) adminUnitsElement.textContent = totalUnits;
+                if (adminCostElement) adminCostElement.textContent = '$' + totalCost.toFixed(2);
+                
+                // Update user view totals
+                var userUnitsElement = document.getElementById('user-total-units-' + supplyId);
+                var userCostElement = document.getElementById('user-total-cost-' + supplyId);
+                if (userUnitsElement) userUnitsElement.textContent = totalUnits;
+                if (userCostElement) userCostElement.textContent = '$' + totalCost.toFixed(2);
+                
+                // Update row highlighting
+                var supplyRow = document.getElementById('supply-row-' + supplyId);
+                var userSupplyRow = document.getElementById('user-supply-' + supplyId);
+                
+                if (totalUnits > 0) {
+                    if (supplyRow) supplyRow.className = 'supply-with-data';
+                    if (userSupplyRow) userSupplyRow.style.borderLeft = '4px solid #10b981';
+                } else {
+                    if (supplyRow) supplyRow.className = '';
+                    if (userSupplyRow) userSupplyRow.style.borderLeft = '';
+                }
             }
         }
 
@@ -1800,6 +1970,8 @@
             Promise.all(savePromises).then(function() {
                 showMessage('All tracking data saved successfully!', 'success');
                 loadPatientTracking();
+                // Also refresh dashboard to update total costs
+                loadDashboardData();
             }).catch(function(error) {
                 console.error('Failed to save tracking data:', error);
                 showMessage('Failed to save some tracking data', 'error');
@@ -1916,7 +2088,7 @@
             for (var i = 0; i < users.length; i++) {
                 var user = users[i];
                 var approveBtn = user.is_approved ? '' : 
-                    '<button class="btn btn-success btn-small" onclick="approveUser(' + user.id + ')">Approve</button>';
+                    '<button class="btn btn-success btn-small" onclick="approveUser(' + user.id + ')">Approve</button> ';
                 
                 html += '<tr>' +
                     '<td>' + user.name + '</td>' +
@@ -1926,6 +2098,7 @@
                     '<td>' + (user.is_approved ? 'Approved' : 'Pending') + '</td>' +
                     '<td>' +
                         approveBtn +
+                        '<button class="btn btn-warning btn-small" onclick="editUser(' + user.id + ')">Edit</button> ' +
                         '<button class="btn btn-danger btn-small" onclick="deleteUser(' + user.id + ')">Delete</button>' +
                     '</td>' +
                 '</tr>';
@@ -1939,6 +2112,36 @@
                 modal.style.display = 'block';
                 loadFacilityOptions('userFacility');
             }
+        }
+
+        function editUser(userId) {
+            // Find the user
+            apiCall('/api/admin/users').then(function(response) {
+                var users = response.users || [];
+                var user = users.find(function(u) { return u.id == userId; });
+                
+                if (!user) {
+                    showMessage('User not found', 'error');
+                    return;
+                }
+
+                // Populate the edit form
+                document.getElementById('editUserId').value = user.id;
+                document.getElementById('editUserName').value = user.name;
+                document.getElementById('editUserEmail').value = user.email;
+                document.getElementById('editUserRole').value = user.role;
+                
+                // Load facilities and set the user's facility
+                loadFacilityOptions('editUserFacility');
+                setTimeout(function() {
+                    document.getElementById('editUserFacility').value = user.facility_id || '';
+                }, 100);
+
+                document.getElementById('editUserModal').style.display = 'block';
+            }).catch(function(error) {
+                console.error('Failed to load user data:', error);
+                showMessage('Failed to load user data', 'error');
+            });
         }
 
         function showAddFacilityModal() {
@@ -2046,6 +2249,33 @@
                 });
             }
 
+            var editSupplyForm = document.getElementById('editSupplyForm');
+            if (editSupplyForm) {
+                editSupplyForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    
+                    var supplyId = document.getElementById('editSupplyId').value;
+                    var supplyData = {
+                        code: document.getElementById('editSupplyCode').value,
+                        description: document.getElementById('editSupplyDescription').value,
+                        hcpcs: document.getElementById('editSupplyHCPCS').value,
+                        cost: document.getElementById('editSupplyCost').value
+                    };
+
+                    apiCall('/api/supplies/' + supplyId, {
+                        method: 'PUT',
+                        body: JSON.stringify(supplyData)
+                    }).then(function() {
+                        closeModal('editSupplyModal');
+                        document.getElementById('editSupplyForm').reset();
+                        loadSupplies();
+                        showMessage('Successfully updated supply!', 'success');
+                    }).catch(function(error) {
+                        showMessage('Failed to update supply', 'error');
+                    });
+                });
+            }
+
             var addUserForm = document.getElementById('addUserForm');
             if (addUserForm) {
                 addUserForm.addEventListener('submit', function(e) {
@@ -2069,6 +2299,33 @@
                         showMessage('Successfully added user!', 'success');
                     }).catch(function(error) {
                         showMessage('Failed to add user', 'error');
+                    });
+                });
+            }
+
+            var editUserForm = document.getElementById('editUserForm');
+            if (editUserForm) {
+                editUserForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    
+                    var userId = document.getElementById('editUserId').value;
+                    var userData = {
+                        name: document.getElementById('editUserName').value,
+                        email: document.getElementById('editUserEmail').value,
+                        role: document.getElementById('editUserRole').value,
+                        facility_id: document.getElementById('editUserFacility').value || null
+                    };
+
+                    apiCall('/api/admin/users/' + userId, {
+                        method: 'PUT',
+                        body: JSON.stringify(userData)
+                    }).then(function() {
+                        closeModal('editUserModal');
+                        document.getElementById('editUserForm').reset();
+                        loadAdminData();
+                        showMessage('Successfully updated user!', 'success');
+                    }).catch(function(error) {
+                        showMessage('Failed to update user', 'error');
                     });
                 });
             }
@@ -2160,10 +2417,6 @@
             if (confirm('Delete this patient?')) {
                 alert('Delete patient ' + id + ' - Feature coming soon'); 
             }
-        }
-        
-        function editSupply(id) { 
-            alert('Edit supply ' + id + ' - Feature coming soon'); 
         }
         
         function deleteSupply(id) { 
