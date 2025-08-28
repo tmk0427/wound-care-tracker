@@ -752,7 +752,7 @@
                     </div>
                 </div>
 
-                <!-- Patient Selection -->
+                <!-- Patient Selection with Month Filter -->
                 <div class="search-container">
                     <div class="search-box">
                         <select id="trackingPatient" class="form-control" onchange="loadPatientTracking()">
@@ -762,6 +762,9 @@
                     <div class="filter-group">
                         <select id="trackingFacilityFilter" class="form-control" onchange="filterTrackingPatients()">
                             <option value="">All Facilities</option>
+                        </select>
+                        <select id="trackingMonthFilter" class="form-control" onchange="filterTrackingPatients()">
+                            <option value="">All Months</option>
                         </select>
                     </div>
                 </div>
@@ -1128,6 +1131,7 @@
         function initializeMonthDropdowns() {
             var months = generateMonthOptions();
             
+            // Patient month filter
             var patientMonthFilter = document.getElementById('patientMonthFilter');
             if (patientMonthFilter) {
                 patientMonthFilter.innerHTML = '<option value="">All Months</option>';
@@ -1139,6 +1143,19 @@
                 }
             }
 
+            // Tracking month filter (NEW)
+            var trackingMonthFilter = document.getElementById('trackingMonthFilter');
+            if (trackingMonthFilter) {
+                trackingMonthFilter.innerHTML = '<option value="">All Months</option>';
+                for (var i = 0; i < months.length; i++) {
+                    var option = document.createElement('option');
+                    option.value = months[i].value;
+                    option.textContent = months[i].label;
+                    trackingMonthFilter.appendChild(option);
+                }
+            }
+
+            // Patient add/edit modal month dropdown
             var patientMonth = document.getElementById('patientMonth');
             if (patientMonth) {
                 patientMonth.innerHTML = '<option value="">Select Month</option>';
@@ -1312,6 +1329,13 @@
                 case 'tracking':
                     ensureDataLoaded().then(function() {
                         loadTrackingPatients();
+                        // Ensure month filter is populated when tracking panel is shown
+                        setTimeout(function() {
+                            if (!document.getElementById('trackingMonthFilter').innerHTML.includes('2024')) {
+                                initializeMonthDropdowns();
+                                updateFacilityFilters();
+                            }
+                        }, 100);
                     }).catch(function(err) { console.error('Tracking load error:', err); });
                     break;
                 case 'admin':
@@ -1322,50 +1346,56 @@
             }
         }
 
-        /* Dashboard functions */
+        /* Dashboard functions - FIXED */
         function loadDashboardData() {
-            return Promise.all([
-                apiCall('/api/patients'),
-                apiCall('/api/supplies'),
-                apiCall('/api/tracking')
-            ]).then(function(results) {
-                var patientsData = results[0];
-                var suppliesData = results[1];
-                var trackingData = results[2];
-
-                document.getElementById('totalPatients').textContent = (patientsData.patients && patientsData.patients.length) || 0;
-                document.getElementById('totalSupplies').textContent = (suppliesData.supplies && suppliesData.supplies.length) || 0;
-                document.getElementById('monthlyTracking').textContent = (trackingData.tracking && trackingData.tracking.length) || 0;
-                
-                var totalUsageCost = 0;
-                if (trackingData.tracking && suppliesData.supplies) {
-                    var supplyCostMap = {};
-                    for (var i = 0; i < suppliesData.supplies.length; i++) {
-                        var supply = suppliesData.supplies[i];
-                        supplyCostMap[supply.id] = parseFloat(supply.cost || 0);
-                    }
+            console.log('Loading dashboard data...');
+            
+            // Use the new dedicated dashboard stats endpoint
+            return apiCall('/api/dashboard/stats').then(function(data) {
+                if (data.success && data.stats) {
+                    var stats = data.stats;
                     
-                    for (var j = 0; j < trackingData.tracking.length; j++) {
-                        var tracking = trackingData.tracking[j];
-                        var supplyCost = supplyCostMap[tracking.supply_id] || 0;
-                        var quantity = parseInt(tracking.quantity || 0);
-                        totalUsageCost += supplyCost * quantity;
-                    }
+                    // Update dashboard stats
+                    document.getElementById('totalPatients').textContent = stats.totalPatients || 0;
+                    document.getElementById('totalSupplies').textContent = stats.totalSupplies || 0;
+                    document.getElementById('monthlyTracking').textContent = stats.monthlyTracking || 0;
+                    document.getElementById('totalCost').textContent = '$' + (stats.totalCost || 0).toFixed(2);
+                    
+                    console.log('Dashboard stats updated:', stats);
+                } else {
+                    // Fallback to zero values if stats not available
+                    console.warn('Dashboard stats not available, using fallback');
+                    document.getElementById('totalPatients').textContent = '0';
+                    document.getElementById('totalSupplies').textContent = '0';
+                    document.getElementById('monthlyTracking').textContent = '0';
+                    document.getElementById('totalCost').textContent = '$0.00';
                 }
                 
-                document.getElementById('totalCost').textContent = '$' + totalUsageCost.toFixed(2);
+                // Always load recent activity
                 loadRecentActivity();
+                
             }).catch(function(error) {
-                console.error('Failed to load dashboard data:', error);
+                console.error('Failed to load dashboard stats:', error);
+                
+                // Fallback: try to load basic counts
                 return Promise.all([
-                    apiCall('/api/patients'),
-                    apiCall('/api/supplies')
+                    apiCall('/api/patients').catch(function() { return { patients: [] }; }),
+                    apiCall('/api/supplies').catch(function() { return { supplies: [] }; })
                 ]).then(function(results) {
                     var patientsData = results[0];
                     var suppliesData = results[1];
 
                     document.getElementById('totalPatients').textContent = (patientsData.patients && patientsData.patients.length) || 0;
                     document.getElementById('totalSupplies').textContent = (suppliesData.supplies && suppliesData.supplies.length) || 0;
+                    document.getElementById('monthlyTracking').textContent = '0';
+                    document.getElementById('totalCost').textContent = '$0.00';
+                    
+                    loadRecentActivity();
+                }).catch(function(fallbackError) {
+                    console.error('Even fallback failed:', fallbackError);
+                    // Set everything to zero if all fails
+                    document.getElementById('totalPatients').textContent = '0';
+                    document.getElementById('totalSupplies').textContent = '0';
                     document.getElementById('monthlyTracking').textContent = '0';
                     document.getElementById('totalCost').textContent = '$0.00';
                     
@@ -1377,10 +1407,17 @@
         function loadRecentActivity() {
             var tbody = document.getElementById('recentActivity');
             if (tbody) {
-                var today = new Date().toLocaleDateString();
-                tbody.innerHTML = '<tr><td>' + today + '</td><td>System</td><td>Login</td><td>User logged in successfully</td></tr>' +
-                                  '<tr><td>' + today + '</td><td>System</td><td>Dashboard</td><td>Dashboard data loaded</td></tr>' +
-                                  '<tr><td>' + today + '</td><td>System</td><td>Supplies</td><td>Complete AR supply database loaded</td></tr>';
+                try {
+                    var today = new Date().toLocaleDateString();
+                    var currentTime = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                    tbody.innerHTML = 
+                        '<tr><td>' + today + ' ' + currentTime + '</td><td>' + (currentUser ? escapeHtmlValue(currentUser.name) : 'System') + '</td><td>Login</td><td>User session active</td></tr>' +
+                        '<tr><td>' + today + '</td><td>System</td><td>Dashboard</td><td>Dashboard statistics loaded</td></tr>' +
+                        '<tr><td>' + today + '</td><td>System</td><td>Database</td><td>Supply tracking system operational</td></tr>';
+                } catch (error) {
+                    console.error('Error loading recent activity:', error);
+                    tbody.innerHTML = '<tr><td colspan="4" class="text-center">Recent activity unavailable</td></tr>';
+                }
             }
         }
 
@@ -1565,6 +1602,7 @@
         }
 
         function updateFacilityFilters() {
+            // Patient facility filter
             var patientFacilityFilter = document.getElementById('patientFacilityFilter');
             if (patientFacilityFilter) {
                 patientFacilityFilter.innerHTML = '<option value="">All Facilities</option>';
@@ -1577,6 +1615,7 @@
                 }
             }
 
+            // Tracking facility filter
             var trackingFacilityFilter = document.getElementById('trackingFacilityFilter');
             if (trackingFacilityFilter) {
                 trackingFacilityFilter.innerHTML = '<option value="">All Facilities</option>';
@@ -1621,14 +1660,18 @@
 
         function filterTrackingPatients() {
             var facilityElement = document.getElementById('trackingFacilityFilter');
+            var monthElement = document.getElementById('trackingMonthFilter');
             var facilityFilter = facilityElement ? facilityElement.value : '';
+            var monthFilter = monthElement ? monthElement.value : '';
             var select = document.getElementById('trackingPatient');
             if (!select) return;
             
             select.innerHTML = '<option value="">Select Patient...</option>';
             
             var filteredPatients = (window.trackingPatients || []).filter(function(patient) {
-                return !facilityFilter || patient.facility_id.toString() === facilityFilter;
+                var matchesFacility = !facilityFilter || patient.facility_id.toString() === facilityFilter;
+                var matchesMonth = !monthFilter || patient.month === monthFilter;
+                return matchesFacility && matchesMonth;
             });
 
             filteredPatients.sort(function(a, b) { return a.name.localeCompare(b.name); });
@@ -1639,6 +1682,28 @@
                 option.value = patient.id;
                 option.textContent = patient.name + ' (' + patient.month + ') - ' + (patient.facility_name || 'No Facility');
                 select.appendChild(option);
+            }
+
+            // Clear current patient selection if it doesn't match filters
+            var currentPatientId = select.value;
+            if (currentPatientId) {
+                var currentPatientExists = filteredPatients.some(function(patient) {
+                    return patient.id.toString() === currentPatientId;
+                });
+                
+                if (!currentPatientExists) {
+                    select.value = '';
+                    var containers = ['trackingTableContainer', 'trackingSearchContainer'];
+                    for (var j = 0; j < containers.length; j++) {
+                        var elem = document.getElementById(containers[j]);
+                        if (elem) elem.style.display = 'none';
+                    }
+                    
+                    var exportBtn = document.getElementById('exportBtn');
+                    var saveAllBtn = document.getElementById('saveAllBtn');
+                    if (exportBtn) exportBtn.style.display = 'none';
+                    if (saveAllBtn) saveAllBtn.style.display = 'none';
+                }
             }
         }
 
@@ -1657,6 +1722,11 @@
                     var elem = document.getElementById(containers[i]);
                     if (elem) elem.style.display = 'none';
                 }
+                
+                var exportBtn = document.getElementById('exportBtn');
+                var saveAllBtn = document.getElementById('saveAllBtn');
+                if (exportBtn) exportBtn.style.display = 'none';
+                if (saveAllBtn) saveAllBtn.style.display = 'none';
                 return;
             }
 
@@ -1672,10 +1742,12 @@
             if (tableContainer) tableContainer.style.display = 'block';
             if (searchContainer) searchContainer.style.display = 'block';
             
+            // Find patient in the filtered list (instead of all patients)
             var patient = null;
-            for (var i = 0; i < patients.length; i++) {
-                if (patients[i].id == patientId) {
-                    patient = patients[i];
+            var trackingPatients = window.trackingPatients || patients || [];
+            for (var i = 0; i < trackingPatients.length; i++) {
+                if (trackingPatients[i].id == patientId) {
+                    patient = trackingPatients[i];
                     break;
                 }
             }
