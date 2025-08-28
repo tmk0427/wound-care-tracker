@@ -2327,7 +2327,9 @@
             
             for (var key in trackingData) {
                 var data = trackingData[key];
-                if (data.quantity > 0 || data.wound_dx) {
+                // Save if quantity exists (including 0) OR wound diagnosis exists
+                // This ensures zero quantities overwrite existing non-zero records
+                if (data.quantity >= 0 || data.wound_dx) {
                     var promise = apiCall('/api/tracking', {
                         method: 'POST',
                         body: JSON.stringify({
