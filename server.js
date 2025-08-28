@@ -140,6 +140,7 @@ async function initializeDatabase() {
         await safeQuery('CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)');
         await safeQuery('CREATE INDEX IF NOT EXISTS idx_patients_facility ON patients(facility_id)');
         await safeQuery('CREATE INDEX IF NOT EXISTS idx_patients_month ON patients(month)');
+        await safeQuery('CREATE INDEX IF NOT EXISTS idx_patients_mrn ON patients(mrn)');
         await safeQuery('CREATE INDEX IF NOT EXISTS idx_tracking_patient ON tracking(patient_id)');
         await safeQuery('CREATE INDEX IF NOT EXISTS idx_tracking_supply ON tracking(supply_id)');
         await safeQuery('CREATE INDEX IF NOT EXISTS idx_supplies_code ON supplies(code)');
@@ -546,9 +547,21 @@ app.post('/api/patients', authenticateToken, async (req, res) => {
             return res.status(403).json({ success: false, error: 'Cannot add patients to this facility' });
         }
 
+        // Check for duplicate MRN if MRN is provided
+        if (mrn && mrn.trim()) {
+            const mrnCheck = await safeQuery('SELECT id, name FROM patients WHERE LOWER(mrn) = LOWER($1)', [mrn.trim()]);
+            
+            if (mrnCheck.rows.length > 0) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: `MRN "${mrn}" already exists for patient: ${mrnCheck.rows[0].name}`
+                });
+            }
+        }
+
         const result = await safeQuery(
             'INSERT INTO patients (name, month, mrn, facility_id) VALUES ($1, $2, $3, $4) RETURNING *',
-            [name, month, mrn || null, facility_id]
+            [name, month, mrn ? mrn.trim() : null, facility_id]
         );
 
         res.json({ success: true, patient: result.rows[0] });
@@ -559,6 +572,51 @@ app.post('/api/patients', authenticateToken, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Patient already exists for this month and facility' });
         }
         res.status(500).json({ success: false, error: 'Failed to create patient' });
+    }
+});
+
+app.delete('/api/patients/:id', authenticateToken, async (req, res) => {
+    try {
+        const patientId = req.params.id;
+        
+        if (!patientId) {
+            return res.status(400).json({ success: false, error: 'Patient ID is required' });
+        }
+
+        // Check if patient exists and get their info
+        const patientCheck = await safeQuery('SELECT * FROM patients WHERE id = $1', [patientId]);
+        
+        if (patientCheck.rows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Patient not found' });
+        }
+
+        const patient = patientCheck.rows[0];
+
+        // Check permission for non-admin users
+        if (req.user.role !== 'admin' && req.user.facilityId && req.user.facilityId != patient.facility_id) {
+            return res.status(403).json({ success: false, error: 'Access denied' });
+        }
+
+        // Delete patient (tracking data will be deleted automatically due to CASCADE)
+        const result = await safeQuery('DELETE FROM patients WHERE id = $1', [patientId]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ success: false, error: 'Patient not found' });
+        }
+
+        res.json({ 
+            success: true, 
+            message: 'Patient deleted successfully',
+            deletedPatient: {
+                id: patient.id,
+                name: patient.name,
+                mrn: patient.mrn
+            }
+        });
+
+    } catch (error) {
+        console.error('Error deleting patient:', error);
+        res.status(500).json({ success: false, error: 'Failed to delete patient' });
     }
 });
 
@@ -588,10 +646,20 @@ app.post('/api/patients/bulk', authenticateToken, async (req, res) => {
             facilityMap[facility.name.toLowerCase()] = facility.id;
         }
 
+        // Get existing MRNs for duplicate checking
+        const existingMRNsResult = await safeQuery('SELECT LOWER(mrn) as mrn_lower, name FROM patients WHERE mrn IS NOT NULL AND mrn != \'\'');
+        const existingMRNs = {};
+        for (const row of existingMRNsResult.rows) {
+            existingMRNs[row.mrn_lower] = row.name;
+        }
+
         const results = {
             successful: 0,
             failed: []
         };
+
+        // Track MRNs within the batch to prevent duplicates
+        const batchMRNs = {};
 
         // Process each patient
         for (const patientData of patients) {
@@ -684,6 +752,31 @@ app.post('/api/patients/bulk', authenticateToken, async (req, res) => {
                     continue;
                 }
 
+                // Check for duplicate MRN
+                if (mrn && mrn.trim()) {
+                    const mrnLower = mrn.trim().toLowerCase();
+                    
+                    // Check against existing patients
+                    if (existingMRNs[mrnLower]) {
+                        results.failed.push({ 
+                            name: name, 
+                            error: `MRN "${mrn}" already exists for patient: ${existingMRNs[mrnLower]}`
+                        });
+                        continue;
+                    }
+                    
+                    // Check against batch duplicates
+                    if (batchMRNs[mrnLower]) {
+                        results.failed.push({ 
+                            name: name, 
+                            error: `Duplicate MRN "${mrn}" in upload batch (first occurrence: ${batchMRNs[mrnLower]})`
+                        });
+                        continue;
+                    }
+                    
+                    batchMRNs[mrnLower] = name;
+                }
+
                 // Insert patient with cleaned name
                 const cleanName = `${nameParts[0].trim()}, ${nameParts[1].trim()}`;
                 const insertResult = await safeQuery(
@@ -693,6 +786,11 @@ app.post('/api/patients/bulk', authenticateToken, async (req, res) => {
 
                 if (insertResult.rows.length > 0) {
                     results.successful++;
+                    
+                    // Add to existing MRNs to prevent duplicates in subsequent records
+                    if (mrn && mrn.trim()) {
+                        existingMRNs[mrn.trim().toLowerCase()] = cleanName;
+                    }
                 }
 
             } catch (error) {
@@ -859,6 +957,38 @@ app.post('/api/admin/users', authenticateToken, requireAdmin, async (req, res) =
     } catch (error) {
         console.error('Error creating user:', error);
         res.status(500).json({ success: false, error: 'Failed to create user' });
+    }
+});
+
+app.put('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const { name, email, role, facility_id } = req.body;
+        
+        if (!name || !email || !role) {
+            return res.status(400).json({ success: false, error: 'Name, email, and role are required' });
+        }
+
+        // Check if email exists for another user
+        const existingUser = await safeQuery('SELECT id FROM users WHERE email = $1 AND id != $2', [email, userId]);
+        if (existingUser.rows.length > 0) {
+            return res.status(400).json({ success: false, error: 'Email already exists' });
+        }
+
+        const result = await safeQuery(
+            'UPDATE users SET name = $1, email = $2, role = $3, facility_id = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5',
+            [name, email, role, facility_id || null, userId]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+
+        res.json({ success: true, message: 'User updated successfully' });
+
+    } catch (error) {
+        console.error('Error updating user:', error);
+        res.status(500).json({ success: false, error: 'Failed to update user' });
     }
 });
 
