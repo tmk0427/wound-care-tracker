@@ -344,7 +344,7 @@
 
         /* Login Styles */
         .login-container {
-            max-width: 400px;
+            max-width: 450px;
             margin: 100px auto;
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
@@ -568,7 +568,8 @@
             <p>Professional Healthcare Supply Management</p>
         </div>
         
-        <form id="loginForm">
+        <!-- Login Form -->
+        <form id="loginForm" style="display: block;">
             <div class="form-group">
                 <label for="email">Email Address</label>
                 <input type="email" id="email" class="form-control" required>
@@ -578,7 +579,97 @@
                 <input type="password" id="password" class="form-control" required>
             </div>
             <button type="submit" class="btn btn-primary" style="width: 100%;">Sign In</button>
+            
+            <div style="text-align: center; margin: 20px 0;">
+                <a href="#" onclick="showRegistrationForm()" style="color: #4f46e5; text-decoration: none;">
+                    Don't have an account? Create one
+                </a>
+            </div>
         </form>
+
+        <!-- Registration Form -->
+        <form id="registrationForm" style="display: none;">
+            <div class="form-group">
+                <label for="regName">Full Name *</label>
+                <input type="text" id="regName" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label for="regEmail">Email Address *</label>
+                <input type="email" id="regEmail" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label for="regPassword">Password *</label>
+                <input type="password" id="regPassword" class="form-control" required minlength="8">
+                <small style="color: #666; font-size: 12px;">Minimum 8 characters</small>
+            </div>
+            <div class="form-group">
+                <label for="regConfirmPassword">Confirm Password *</label>
+                <input type="password" id="regConfirmPassword" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label for="regFacility">Facility (Optional)</label>
+                <select id="regFacility" class="form-control">
+                    <option value="">Select a facility (optional)</option>
+                </select>
+            </div>
+            
+            <button type="submit" class="btn btn-success" style="width: 100%;">Create Account</button>
+            
+            <div style="text-align: center; margin: 20px 0;">
+                <a href="#" onclick="showLoginForm()" style="color: #4f46e5; text-decoration: none;">
+                    Already have an account? Sign in
+                </a>
+            </div>
+            
+            <div style="background: #f0f9ff; padding: 12px; border-radius: 8px; margin-top: 15px;">
+                <p style="margin: 0; font-size: 13px; color: #0369a1;">
+                    <strong>Note:</strong> After creating your account, you'll need to verify your email address and then wait for administrator approval before you can access the system.
+                </p>
+            </div>
+        </form>
+
+        <!-- Email Verification Status -->
+        <div id="verificationStatus" style="display: none;">
+            <div style="text-align: center;">
+                <div style="background: #d1fae5; color: #065f46; padding: 20px; border-radius: 12px; border: 1px solid #a7f3d0;">
+                    <h3 style="margin: 0 0 10px 0;">Check Your Email</h3>
+                    <p style="margin: 0 0 15px 0;">We've sent a verification link to your email address.</p>
+                    <p style="margin: 0; font-size: 14px;">After verifying your email, your account will need administrator approval.</p>
+                </div>
+                
+                <button class="btn btn-primary" onclick="showResendVerification()" style="margin-top: 15px;">
+                    Didn't receive email?
+                </button>
+                
+                <div style="margin-top: 15px;">
+                    <a href="#" onclick="showLoginForm()" style="color: #4f46e5; text-decoration: none;">
+                        Back to Login
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Resend Verification Form -->
+        <div id="resendVerificationForm" style="display: none;">
+            <div style="text-align: center; margin-bottom: 20px;">
+                <h3>Resend Verification Email</h3>
+                <p style="color: #666;">Enter your email address to receive a new verification link.</p>
+            </div>
+            
+            <form id="resendForm">
+                <div class="form-group">
+                    <label for="resendEmail">Email Address</label>
+                    <input type="email" id="resendEmail" class="form-control" required>
+                </div>
+                <button type="submit" class="btn btn-warning" style="width: 100%;">Resend Verification Email</button>
+            </form>
+            
+            <div style="text-align: center; margin-top: 15px;">
+                <a href="#" onclick="showLoginForm()" style="color: #4f46e5; text-decoration: none;">
+                    Back to Login
+                </a>
+            </div>
+        </div>
         
         <div id="loginMessage" style="margin-top: 20px;"></div>
     </div>
@@ -832,13 +923,14 @@
                                 <th>Email</th>
                                 <th>Role</th>
                                 <th>Facility</th>
-                                <th>Status</th>
+                                <th>Email Status</th>
+                                <th>Account Status</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody id="usersTable">
                             <tr>
-                                <td colspan="6" class="text-center">Loading users...</td>
+                                <td colspan="7" class="text-center">Loading users...</td>
                             </tr>
                         </tbody>
                     </table>
@@ -1143,7 +1235,7 @@
                 }
             }
 
-            // Tracking month filter (NEW)
+            // Tracking month filter
             var trackingMonthFilter = document.getElementById('trackingMonthFilter');
             if (trackingMonthFilter) {
                 trackingMonthFilter.innerHTML = '<option value="">All Months</option>';
@@ -1168,8 +1260,71 @@
             }
         }
 
+        /* Registration Form Functions */
+        function showRegistrationForm() {
+            document.getElementById('loginForm').style.display = 'none';
+            document.getElementById('registrationForm').style.display = 'block';
+            document.getElementById('verificationStatus').style.display = 'none';
+            document.getElementById('resendVerificationForm').style.display = 'none';
+            clearLoginMessage();
+            loadRegistrationFacilities();
+        }
+
+        function showLoginForm() {
+            document.getElementById('loginForm').style.display = 'block';
+            document.getElementById('registrationForm').style.display = 'none';
+            document.getElementById('verificationStatus').style.display = 'none';
+            document.getElementById('resendVerificationForm').style.display = 'none';
+            clearLoginMessage();
+        }
+
+        function showVerificationStatus() {
+            document.getElementById('loginForm').style.display = 'none';
+            document.getElementById('registrationForm').style.display = 'none';
+            document.getElementById('verificationStatus').style.display = 'block';
+            document.getElementById('resendVerificationForm').style.display = 'none';
+            clearLoginMessage();
+        }
+
+        function showResendVerification() {
+            document.getElementById('loginForm').style.display = 'none';
+            document.getElementById('registrationForm').style.display = 'none';
+            document.getElementById('verificationStatus').style.display = 'none';
+            document.getElementById('resendVerificationForm').style.display = 'block';
+            clearLoginMessage();
+        }
+
+        function clearLoginMessage() {
+            var msgContainer = document.getElementById('loginMessage');
+            if (msgContainer) {
+                msgContainer.innerHTML = '';
+            }
+        }
+
+        function loadRegistrationFacilities() {
+            fetch('/api/facilities')
+                .then(function(response) { return response.json(); })
+                .then(function(data) {
+                    var facilitySelect = document.getElementById('regFacility');
+                    if (facilitySelect && data.success && data.facilities) {
+                        facilitySelect.innerHTML = '<option value="">Select a facility (optional)</option>';
+                        for (var i = 0; i < data.facilities.length; i++) {
+                            var facility = data.facilities[i];
+                            var option = document.createElement('option');
+                            option.value = facility.id;
+                            option.textContent = facility.name;
+                            facilitySelect.appendChild(option);
+                        }
+                    }
+                })
+                .catch(function(error) {
+                    console.error('Failed to load facilities:', error);
+                });
+        }
+
         /* Authentication */
         function setupLoginForm() {
+            // Original login form handler
             var loginForm = document.getElementById('loginForm');
             if (loginForm) {
                 loginForm.addEventListener('submit', function(e) {
@@ -1194,6 +1349,97 @@
                     })
                     .catch(function(error) {
                         showMessage('loginMessage', 'Login failed. Please try again.', 'error');
+                    });
+                });
+            }
+
+            // Registration form handler
+            var registrationForm = document.getElementById('registrationForm');
+            if (registrationForm) {
+                registrationForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    
+                    var name = document.getElementById('regName').value.trim();
+                    var email = document.getElementById('regEmail').value.trim();
+                    var password = document.getElementById('regPassword').value;
+                    var confirmPassword = document.getElementById('regConfirmPassword').value;
+                    var facilityId = document.getElementById('regFacility').value;
+
+                    // Client-side validation
+                    if (password !== confirmPassword) {
+                        showMessage('loginMessage', 'Passwords do not match', 'error');
+                        return;
+                    }
+
+                    if (password.length < 8) {
+                        showMessage('loginMessage', 'Password must be at least 8 characters long', 'error');
+                        return;
+                    }
+
+                    // Submit registration
+                    var registrationData = {
+                        name: name,
+                        email: email,
+                        password: password,
+                        facility_id: facilityId || null
+                    };
+
+                    fetch('/api/auth/register', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(registrationData)
+                    })
+                    .then(function(response) { return response.json(); })
+                    .then(function(data) {
+                        if (data.success) {
+                            if (data.requiresEmailVerification) {
+                                showVerificationStatus();
+                            } else {
+                                showMessage('loginMessage', data.message, 'success');
+                                setTimeout(function() {
+                                    showLoginForm();
+                                }, 3000);
+                            }
+                            // Clear form
+                            registrationForm.reset();
+                        } else {
+                            showMessage('loginMessage', data.message, 'error');
+                        }
+                    })
+                    .catch(function(error) {
+                        console.error('Registration error:', error);
+                        showMessage('loginMessage', 'Registration failed. Please try again.', 'error');
+                    });
+                });
+            }
+
+            // Resend verification form handler
+            var resendForm = document.getElementById('resendForm');
+            if (resendForm) {
+                resendForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    
+                    var email = document.getElementById('resendEmail').value.trim();
+
+                    fetch('/api/auth/resend-verification', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email: email })
+                    })
+                    .then(function(response) { return response.json(); })
+                    .then(function(data) {
+                        if (data.success) {
+                            showMessage('loginMessage', data.message, 'success');
+                            setTimeout(function() {
+                                showVerificationStatus();
+                            }, 2000);
+                        } else {
+                            showMessage('loginMessage', data.message, 'error');
+                        }
+                    })
+                    .catch(function(error) {
+                        console.error('Resend verification error:', error);
+                        showMessage('loginMessage', 'Failed to resend verification email. Please try again.', 'error');
                     });
                 });
             }
@@ -1742,7 +1988,7 @@
             if (tableContainer) tableContainer.style.display = 'block';
             if (searchContainer) searchContainer.style.display = 'block';
             
-            // Find patient in the filtered list (instead of all patients)
+            // Find patient in the filtered list
             var patient = null;
             var trackingPatients = window.trackingPatients || patients || [];
             for (var i = 0; i < trackingPatients.length; i++) {
@@ -2212,13 +2458,24 @@
             if (!tbody) return;
             
             if (users.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="text-center">No users found</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center">No users found</td></tr>';
                 return;
             }
 
             var html = '';
             for (var i = 0; i < users.length; i++) {
                 var user = users[i];
+                
+                // Status badge logic
+                var statusBadge = '';
+                if (user.is_approved) {
+                    statusBadge = '<span style="background: #d1fae5; color: #065f46; padding: 2px 8px; border-radius: 4px; font-size: 12px;">Approved</span>';
+                } else if (user.email_verified) {
+                    statusBadge = '<span style="background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 4px; font-size: 12px;">Pending Approval</span>';
+                } else {
+                    statusBadge = '<span style="background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 4px; font-size: 12px;">Unverified</span>';
+                }
+                
                 var approveBtn = user.is_approved ? '' : 
                     '<button class="btn btn-success btn-small" onclick="approveUser(' + parseInt(user.id) + ')">Approve</button> ';
                 
@@ -2227,7 +2484,8 @@
                     '<td>' + escapeHtmlValue(user.email) + '</td>' +
                     '<td>' + escapeHtmlValue(user.role) + '</td>' +
                     '<td>' + escapeHtmlValue(user.facility_name || 'N/A') + '</td>' +
-                    '<td>' + escapeHtmlValue(user.is_approved ? 'Approved' : 'Pending') + '</td>' +
+                    '<td>' + (user.email_verified ? '✅ Verified' : '❌ Unverified') + '</td>' +
+                    '<td>' + statusBadge + '</td>' +
                     '<td>' +
                         approveBtn +
                         '<button class="btn btn-warning btn-small" onclick="editUser(' + parseInt(user.id) + ')">Edit</button> ' +
@@ -2300,7 +2558,7 @@
             reader.onload = function(e) {
                 var csvData = e.target.result;
                 
-                // Parse CSV using a simple parser (you could use Papa Parse library for more robust parsing)
+                // Parse CSV using a simple parser
                 var lines = csvData.split('\n');
                 var data = [];
                 
@@ -2428,7 +2686,6 @@
             
             var validPatients = [];
             var invalidPatients = [];
-            var duplicateMRNs = [];
             
             // Create a map of existing MRNs for duplicate checking
             var existingMRNs = {};
@@ -2795,72 +3052,7 @@
             if (targetContainer) {
                 targetContainer.insertBefore(msgDiv, targetContainer.firstChild);
             }
-            
-            setTimeout(function() {
-                if (msgDiv && msgDiv.parentNode) {
-                    msgDiv.remove();
-                }
-            }, 5000);
         }
-
-        function exportTrackingData() {
-            alert('Export functionality would generate CSV file with tracking data');
-        }
-
-        function importExcel() {
-            var input = document.createElement('input');
-            input.type = 'file';
-            input.accept = '.xlsx,.xls,.csv';
-            input.addEventListener('change', function(e) {
-                var file = e.target.files[0];
-                if (file) {
-                    alert('Would import file: ' + file.name);
-                }
-            });
-            input.click();
-        }
-
-        function editPatient(id) { 
-            alert('Edit patient ' + id + ' - Feature coming soon'); 
-        }
-        
-        function deletePatient(id) { 
-            if (!confirm('Are you sure you want to delete this patient? This action cannot be undone.')) {
-                return;
-            }
-
-            apiCall('/api/patients/' + id, {
-                method: 'DELETE'
-            }).then(function(response) {
-                if (response.success) {
-                    loadPatients();
-                    showMessage('Patient deleted successfully!', 'success');
-                } else {
-                    showMessage('Failed to delete patient: ' + (response.error || 'Unknown error'), 'error');
-                }
-            }).catch(function(error) {
-                console.error('Delete patient error:', error);
-                showMessage('Failed to delete patient', 'error');
-            });
-        }
-        
-        function deleteSupply(id) { 
-            if (confirm('Delete this supply?')) {
-                alert('Delete supply ' + id + ' - Feature coming soon'); 
-            }
-        }
-        
-        function showSystemReset() { 
-            if (confirm('This will reset all data. Are you sure?')) {
-                alert('System reset - Feature coming soon'); 
-            }
-        }
-
-        window.onclick = function(event) {
-            if (event && event.target && event.target.classList && event.target.classList.contains('modal')) {
-                event.target.style.display = 'none';
-            }
-        };
     </script>
 </body>
 </html>
