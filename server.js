@@ -106,7 +106,7 @@ async function initializeDatabase() {
             )
         `);
 
-        // Create users table with email verification fields
+        // Create users table
         await safeQuery(`
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
@@ -116,13 +116,37 @@ async function initializeDatabase() {
                 role VARCHAR(20) DEFAULT 'user' CHECK (role IN ('admin', 'user')),
                 facility_id INTEGER REFERENCES facilities(id) ON DELETE SET NULL,
                 is_approved BOOLEAN DEFAULT false,
-                email_verified BOOLEAN DEFAULT false,
-                email_verification_token VARCHAR(255),
-                email_verification_expires TIMESTAMP WITH TIME ZONE,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             )
         `);
+
+        // Add email verification columns if they don't exist (for existing databases)
+        try {
+            await safeQuery(`
+                ALTER TABLE users 
+                ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT false,
+                ADD COLUMN IF NOT EXISTS email_verification_token VARCHAR(255),
+                ADD COLUMN IF NOT EXISTS email_verification_expires TIMESTAMP WITH TIME ZONE
+            `);
+        } catch (error) {
+            // PostgreSQL versions before 9.6 don't support IF NOT EXISTS for ALTER TABLE
+            // Try adding columns individually
+            const columns = [
+                { name: 'email_verified', definition: 'BOOLEAN DEFAULT false' },
+                { name: 'email_verification_token', definition: 'VARCHAR(255)' },
+                { name: 'email_verification_expires', definition: 'TIMESTAMP WITH TIME ZONE' }
+            ];
+
+            for (const column of columns) {
+                try {
+                    await safeQuery(`ALTER TABLE users ADD COLUMN ${column.name} ${column.definition}`);
+                } catch (colError) {
+                    // Column might already exist, continue
+                    console.log(`Column ${column.name} might already exist, skipping...`);
+                }
+            }
+        }
 
         // Create patients table
         await safeQuery(`
