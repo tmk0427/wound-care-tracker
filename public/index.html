@@ -2381,10 +2381,19 @@
                     var totalCost = totalUnits * parseFloat(supply.cost || 0);
                     var woundDx = getWoundDxForSupply(supply.id);
                     
+                    // Convert month format from YYYY-MM to MM-YYYY
+                    var displayMonth = patient.month;
+                    if (patient.month && patient.month.indexOf('-') > 0) {
+                        var monthParts = patient.month.split('-');
+                        if (monthParts.length === 2) {
+                            displayMonth = monthParts[1] + '-' + monthParts[0]; // MM-YYYY
+                        }
+                    }
+                    
                     csvRows.push([
                         patient.name,
                         patient.mrn || '',
-                        patient.month,
+                        displayMonth,
                         patient.facility_name || '',
                         supply.code,
                         supply.description,
