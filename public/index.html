@@ -2356,6 +2356,18 @@
             
             var validPatients = [];
             var invalidPatients = [];
+            var duplicateMRNs = [];
+            
+            // Create a map of existing MRNs for duplicate checking
+            var existingMRNs = {};
+            for (var i = 0; i < allPatients.length; i++) {
+                if (allPatients[i].mrn) {
+                    existingMRNs[allPatients[i].mrn.toLowerCase()] = allPatients[i].name;
+                }
+            }
+            
+            // Track MRNs within the upload batch
+            var batchMRNs = {};
             
             // Validate all patients first
             for (var i = 0; i < window.bulkPatientData.length; i++) {
@@ -2363,6 +2375,29 @@
                 var validation = validatePatientRow(patient);
                 
                 if (validation === 'Valid') {
+                    // Check for duplicate MRN with existing patients
+                    if (patient.mrn && patient.mrn.trim()) {
+                        var mrnLower = patient.mrn.toLowerCase();
+                        if (existingMRNs[mrnLower]) {
+                            invalidPatients.push({
+                                patient: patient, 
+                                error: 'MRN "' + patient.mrn + '" already exists for patient: ' + existingMRNs[mrnLower]
+                            });
+                            continue;
+                        }
+                        
+                        // Check for duplicate MRN within the batch
+                        if (batchMRNs[mrnLower]) {
+                            invalidPatients.push({
+                                patient: patient, 
+                                error: 'Duplicate MRN "' + patient.mrn + '" in upload batch (first occurrence: ' + batchMRNs[mrnLower] + ')'
+                            });
+                            continue;
+                        }
+                        
+                        batchMRNs[mrnLower] = patient.name;
+                    }
+                    
                     validPatients.push(patient);
                 } else {
                     invalidPatients.push({patient: patient, error: validation});
@@ -2490,6 +2525,18 @@
                         month: document.getElementById('patientMonth').value,
                         facility_id: document.getElementById('patientFacility').value
                     };
+
+                    // Check for duplicate MRN if MRN is provided
+                    if (patientData.mrn && patientData.mrn.trim()) {
+                        var duplicateMRN = allPatients.find(function(patient) {
+                            return patient.mrn && patient.mrn.toLowerCase() === patientData.mrn.toLowerCase();
+                        });
+                        
+                        if (duplicateMRN) {
+                            showMessage('A patient with MRN "' + patientData.mrn + '" already exists: ' + duplicateMRN.name, 'error');
+                            return;
+                        }
+                    }
 
                     apiCall('/api/patients', {
                         method: 'POST',
@@ -2706,9 +2753,23 @@
         }
         
         function deletePatient(id) { 
-            if (confirm('Delete this patient?')) {
-                alert('Delete patient ' + id + ' - Feature coming soon'); 
+            if (!confirm('Are you sure you want to delete this patient? This action cannot be undone.')) {
+                return;
             }
+
+            apiCall('/api/patients/' + id, {
+                method: 'DELETE'
+            }).then(function(response) {
+                if (response.success) {
+                    loadPatients();
+                    showMessage('Patient deleted successfully!', 'success');
+                } else {
+                    showMessage('Failed to delete patient: ' + (response.error || 'Unknown error'), 'error');
+                }
+            }).catch(function(error) {
+                console.error('Delete patient error:', error);
+                showMessage('Failed to delete patient', 'error');
+            });
         }
         
         function deleteSupply(id) { 
