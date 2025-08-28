@@ -4,35 +4,13 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const path = require('path');
-const rateLimit = require('express-rate-limit');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'change-this-in-production-' + Math.random().toString(36);
-
-// Validate required environment variables
-if (!process.env.JWT_SECRET) {
-    console.warn('WARNING: JWT_SECRET not set in environment variables');
-}
+const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this-in-production';
 
 // ===== MIDDLEWARE =====
-app.use(cors({
-    origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : ['http://localhost:3000'],
-    credentials: true
-}));
-
-// Rate limiting (excluding supply tracking endpoints)
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // limit each IP to 100 requests per windowMs
-    message: { error: 'Too many requests, please try again later' },
-    skip: (req) => {
-        // Skip rate limiting for supply tracking endpoints
-        return req.path.includes('/api/tracking');
-    }
-});
-app.use('/api/', limiter);
-
+app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -42,45 +20,36 @@ const pool = new Pool({
     ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
     max: 10,
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 5000,
+    connectionTimeoutMillis: 2000,
 });
 
-// Test database connection with retry logic
-async function testDatabaseConnection(retries = 3) {
-    for (let i = 0; i < retries; i++) {
-        try {
-            const client = await pool.connect();
-            await client.query('SELECT NOW()');
-            client.release();
-            console.log('✓ Connected to PostgreSQL database');
-            return true;
-        } catch (error) {
-            console.error(`Database connection attempt ${i + 1} failed:`, error.message);
-            if (i === retries - 1) {
-                console.error('✗ Failed to connect to database after', retries, 'attempts');
-                return false;
+// Test database connection
+pool.connect((err, client, release) => {
+    if (err) {
+        console.error('Error connecting to database:', err);
+        console.error('Database URL exists:', !!process.env.DATABASE_URL);
+        console.error('Node ENV:', process.env.NODE_ENV);
+    } else {
+        console.log('Connected to PostgreSQL database');
+        client.query('SELECT NOW()', (err, result) => {
+            if (err) {
+                console.error('Database query test failed:', err);
+            } else {
+                console.log('Database query test successful:', result.rows[0].now);
             }
-            await new Promise(resolve => setTimeout(resolve, 2000));
-        }
+            release();
+        });
     }
-}
+});
 
 // ===== DATABASE HELPER FUNCTIONS =====
 async function safeQuery(query, params = []) {
-    let client;
     try {
-        if (process.env.NODE_ENV === 'development') {
-            console.log('Executing query:', query.substring(0, 100) + '...');
-            console.log('Parameters:', params);
-        }
+        console.log('Executing query:', query.substring(0, 100) + '...');
+        console.log('Parameters:', params);
         
-        client = await pool.connect();
-        const result = await client.query(query, params);
-        
-        if (process.env.NODE_ENV === 'development') {
-            console.log('Query successful, returned', result.rows.length, 'rows');
-        }
-        
+        const result = await pool.query(query, params);
+        console.log('Query successful, returned', result.rows.length, 'rows');
         return result;
     } catch (error) {
         console.error('Database query failed:');
@@ -89,28 +58,7 @@ async function safeQuery(query, params = []) {
         console.error('Error message:', error.message);
         console.error('Error code:', error.code);
         throw error;
-    } finally {
-        if (client) client.release();
     }
-}
-
-// Input validation helpers
-function validateEmail(email) {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-}
-
-function sanitizeString(str) {
-    if (typeof str !== 'string') return str;
-    return str.trim().replace(/[<>]/g, '');
-}
-
-function validateMonth(month) {
-    return month && month.match(/^\d{2}-\d{4}$/);
-}
-
-function validateRole(role) {
-    return ['admin', 'user'].includes(role);
 }
 
 // ===== DATABASE INITIALIZATION =====
@@ -128,27 +76,27 @@ async function initializeDatabase() {
             )
         `);
 
-        // Create supplies table with better constraints
+        // Create supplies table
         await safeQuery(`
             CREATE TABLE IF NOT EXISTS supplies (
                 id SERIAL PRIMARY KEY,
-                code INTEGER NOT NULL UNIQUE CHECK (code > 0),
-                description TEXT NOT NULL CHECK (length(description) >= 3),
+                code INTEGER NOT NULL UNIQUE,
+                description TEXT NOT NULL,
                 hcpcs VARCHAR(10),
-                cost DECIMAL(10,2) DEFAULT 0.00 CHECK (cost >= 0),
+                cost DECIMAL(10,2) DEFAULT 0.00,
                 is_custom BOOLEAN DEFAULT false,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             )
         `);
 
-        // Create users table with better constraints
+        // Create users table
         await safeQuery(`
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
-                name VARCHAR(255) NOT NULL CHECK (length(name) >= 2),
-                email VARCHAR(255) NOT NULL UNIQUE CHECK (email ~* '^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$'),
-                password VARCHAR(255) NOT NULL CHECK (length(password) >= 6),
+                name VARCHAR(255) NOT NULL,
+                email VARCHAR(255) NOT NULL UNIQUE,
+                password VARCHAR(255) NOT NULL,
                 role VARCHAR(20) DEFAULT 'user' CHECK (role IN ('admin', 'user')),
                 facility_id INTEGER REFERENCES facilities(id) ON DELETE SET NULL,
                 is_approved BOOLEAN DEFAULT false,
@@ -157,12 +105,12 @@ async function initializeDatabase() {
             )
         `);
 
-        // Create patients table with better constraints
+        // Create patients table
         await safeQuery(`
             CREATE TABLE IF NOT EXISTS patients (
                 id SERIAL PRIMARY KEY,
-                name VARCHAR(255) NOT NULL CHECK (length(name) >= 3),
-                month VARCHAR(7) NOT NULL CHECK (month ~ '^\\d{4}-\\d{2}$'),
+                name VARCHAR(255) NOT NULL,
+                month VARCHAR(7) NOT NULL,
                 mrn VARCHAR(50),
                 facility_id INTEGER NOT NULL REFERENCES facilities(id) ON DELETE CASCADE,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -171,14 +119,14 @@ async function initializeDatabase() {
             )
         `);
 
-        // Create tracking table with better constraints
+        // Create tracking table
         await safeQuery(`
             CREATE TABLE IF NOT EXISTS tracking (
                 id SERIAL PRIMARY KEY,
                 patient_id INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
                 supply_id INTEGER NOT NULL REFERENCES supplies(id) ON DELETE CASCADE,
                 day_of_month INTEGER NOT NULL CHECK (day_of_month >= 1 AND day_of_month <= 31),
-                quantity INTEGER NOT NULL DEFAULT 0 CHECK (quantity >= 0 AND quantity <= 9999),
+                quantity INTEGER NOT NULL DEFAULT 0 CHECK (quantity >= 0),
                 wound_dx TEXT,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -187,20 +135,15 @@ async function initializeDatabase() {
         `);
 
         // Create indexes for performance
-        const indexes = [
-            'CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)',
-            'CREATE INDEX IF NOT EXISTS idx_users_facility ON users(facility_id)',
-            'CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)',
-            'CREATE INDEX IF NOT EXISTS idx_patients_facility ON patients(facility_id)',
-            'CREATE INDEX IF NOT EXISTS idx_patients_month ON patients(month)',
-            'CREATE INDEX IF NOT EXISTS idx_tracking_patient ON tracking(patient_id)',
-            'CREATE INDEX IF NOT EXISTS idx_tracking_supply ON tracking(supply_id)',
-            'CREATE INDEX IF NOT EXISTS idx_supplies_code ON supplies(code)'
-        ];
-
-        for (const indexQuery of indexes) {
-            await safeQuery(indexQuery);
-        }
+        await safeQuery('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)');
+        await safeQuery('CREATE INDEX IF NOT EXISTS idx_users_facility ON users(facility_id)');
+        await safeQuery('CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)');
+        await safeQuery('CREATE INDEX IF NOT EXISTS idx_patients_facility ON patients(facility_id)');
+        await safeQuery('CREATE INDEX IF NOT EXISTS idx_patients_month ON patients(month)');
+        await safeQuery('CREATE INDEX IF NOT EXISTS idx_patients_mrn ON patients(mrn)');
+        await safeQuery('CREATE INDEX IF NOT EXISTS idx_tracking_patient ON tracking(patient_id)');
+        await safeQuery('CREATE INDEX IF NOT EXISTS idx_tracking_supply ON tracking(supply_id)');
+        await safeQuery('CREATE INDEX IF NOT EXISTS idx_supplies_code ON supplies(code)');
 
         // Create trigger function for updated_at
         await safeQuery(`
@@ -230,17 +173,15 @@ async function initializeDatabase() {
                     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()
                 `);
             } catch (err) {
-                if (process.env.NODE_ENV === 'development') {
-                    console.log(`Trigger ${trigger} already exists or failed to create`);
-                }
+                console.log(`Trigger ${trigger} already exists or failed to create`);
             }
         }
 
         await initializeDefaultData();
-        console.log('✓ Database initialization completed successfully');
+        console.log('Database initialization completed successfully');
         
     } catch (error) {
-        console.error('✗ Database initialization failed:', error);
+        console.error('Database initialization failed:', error);
         throw error;
     }
 }
@@ -264,7 +205,7 @@ async function initializeDefaultData() {
                     ('University Medical Center'),
                     ('Regional Health System')
                 `);
-                console.log('✓ Default facilities created');
+                console.log('Default facilities created');
             }
             
             const hashedPassword = await bcrypt.hash('admin123', 12);
@@ -273,13 +214,13 @@ async function initializeDefaultData() {
                 ['System Administrator', 'admin@system.com', hashedPassword, 'admin', true]
             );
             
-            console.log('✓ Admin user created: admin@system.com / admin123');
+            console.log('Admin user created: admin@system.com / admin123');
         }
 
         // Check if supplies exist
         const suppliesCheck = await safeQuery('SELECT COUNT(*) FROM supplies');
         if (parseInt(suppliesCheck.rows[0].count) === 0) {
-            console.log('Adding default supplies...');
+            console.log('Adding AR supplies...');
             
             // Complete AR supplies list
             const arSupplies = [
@@ -303,11 +244,11 @@ async function initializeDefaultData() {
                     [supply.code, supply.description, supply.hcpcs, supply.cost, false]
                 );
             }
-            console.log(`✓ Added ${arSupplies.length} default supplies`);
+            console.log(`Added ${arSupplies.length} AR supplies`);
         }
         
     } catch (error) {
-        console.error('✗ Failed to initialize default data:', error);
+        console.error('Failed to initialize default data:', error);
         throw error;
     }
 }
@@ -323,7 +264,6 @@ const authenticateToken = (req, res, next) => {
 
     jwt.verify(token, JWT_SECRET, (err, user) => {
         if (err) {
-            console.log('Token verification failed:', err.message);
             return res.status(403).json({ error: 'Invalid token' });
         }
         req.user = user;
@@ -341,13 +281,7 @@ const requireAdmin = (req, res, next) => {
 
 // ===== BASIC ROUTES =====
 app.get('/', (req, res) => {
-    const indexPath = path.join(__dirname, 'public', 'index.html');
-    res.sendFile(indexPath, (err) => {
-        if (err) {
-            console.error('Error serving index.html:', err);
-            res.status(404).send('Index file not found');
-        }
-    });
+    res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 app.get('/health', async (req, res) => {
@@ -356,8 +290,7 @@ app.get('/health', async (req, res) => {
         res.json({ 
             status: 'healthy', 
             timestamp: new Date().toISOString(),
-            database: 'connected',
-            version: '1.0.0'
+            database: 'connected' 
         });
     } catch (error) {
         res.status(500).json({ 
@@ -374,13 +307,8 @@ app.post('/api/auth/login', async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        // Input validation
         if (!email || !password) {
             return res.status(400).json({ success: false, message: 'Email and password required' });
-        }
-
-        if (!validateEmail(email)) {
-            return res.status(400).json({ success: false, message: 'Invalid email format' });
         }
 
         const result = await safeQuery(
@@ -388,7 +316,7 @@ app.post('/api/auth/login', async (req, res) => {
              FROM users u 
              LEFT JOIN facilities f ON u.facility_id = f.id 
              WHERE u.email = $1`,
-            [email.toLowerCase()]
+            [email]
         );
 
         if (result.rows.length === 0) {
@@ -441,12 +369,12 @@ app.get('/api/auth/verify', authenticateToken, async (req, res) => {
             `SELECT u.*, f.name as facility_name 
              FROM users u 
              LEFT JOIN facilities f ON u.facility_id = f.id 
-             WHERE u.id = $1 AND u.is_approved = true`,
+             WHERE u.id = $1`,
             [req.user.id]
         );
 
         if (result.rows.length === 0) {
-            return res.status(401).json({ error: 'Invalid token or account not approved' });
+            return res.status(401).json({ error: 'Invalid token' });
         }
 
         const user = result.rows[0];
@@ -481,15 +409,13 @@ app.post('/api/facilities', authenticateToken, requireAdmin, async (req, res) =>
     try {
         const { name } = req.body;
         
-        if (!name || name.trim().length < 2) {
-            return res.status(400).json({ success: false, error: 'Facility name must be at least 2 characters' });
+        if (!name) {
+            return res.status(400).json({ success: false, error: 'Facility name is required' });
         }
-
-        const sanitizedName = sanitizeString(name.trim());
 
         const result = await safeQuery(
             'INSERT INTO facilities (name) VALUES ($1) RETURNING *',
-            [sanitizedName]
+            [name]
         );
 
         res.json({ success: true, facility: result.rows[0] });
@@ -522,25 +448,9 @@ app.post('/api/supplies', authenticateToken, requireAdmin, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Code and description are required' });
         }
 
-        if (!Number.isInteger(Number(code)) || Number(code) <= 0) {
-            return res.status(400).json({ success: false, error: 'Code must be a positive integer' });
-        }
-
-        if (description.trim().length < 3) {
-            return res.status(400).json({ success: false, error: 'Description must be at least 3 characters' });
-        }
-
-        const sanitizedDescription = sanitizeString(description.trim());
-        const sanitizedHcpcs = hcpcs ? sanitizeString(hcpcs.trim()) : null;
-        const numericCost = parseFloat(cost) || 0;
-
-        if (numericCost < 0) {
-            return res.status(400).json({ success: false, error: 'Cost cannot be negative' });
-        }
-
         const result = await safeQuery(
             'INSERT INTO supplies (code, description, hcpcs, cost, is_custom) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-            [Number(code), sanitizedDescription, sanitizedHcpcs, numericCost, true]
+            [code, description, hcpcs || null, parseFloat(cost) || 0, true]
         );
 
         res.json({ success: true, supply: result.rows[0] });
@@ -557,35 +467,15 @@ app.post('/api/supplies', authenticateToken, requireAdmin, async (req, res) => {
 app.put('/api/supplies/:id', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { code, description, hcpcs, cost } = req.body;
-        const supplyId = parseInt(req.params.id);
-
-        if (!Number.isInteger(supplyId) || supplyId <= 0) {
-            return res.status(400).json({ success: false, error: 'Invalid supply ID' });
-        }
+        const supplyId = req.params.id;
 
         if (!code || !description) {
             return res.status(400).json({ success: false, error: 'Code and description are required' });
         }
 
-        if (!Number.isInteger(Number(code)) || Number(code) <= 0) {
-            return res.status(400).json({ success: false, error: 'Code must be a positive integer' });
-        }
-
-        if (description.trim().length < 3) {
-            return res.status(400).json({ success: false, error: 'Description must be at least 3 characters' });
-        }
-
-        const sanitizedDescription = sanitizeString(description.trim());
-        const sanitizedHcpcs = hcpcs ? sanitizeString(hcpcs.trim()) : null;
-        const numericCost = parseFloat(cost) || 0;
-
-        if (numericCost < 0) {
-            return res.status(400).json({ success: false, error: 'Cost cannot be negative' });
-        }
-
         const result = await safeQuery(
             'UPDATE supplies SET code = $1, description = $2, hcpcs = $3, cost = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5',
-            [Number(code), sanitizedDescription, sanitizedHcpcs, numericCost, supplyId]
+            [code, description, hcpcs || null, parseFloat(cost) || 0, supplyId]
         );
 
         if (result.rowCount === 0) {
@@ -619,12 +509,12 @@ app.get('/api/patients', authenticateToken, async (req, res) => {
         if (req.user.role !== 'admin' && req.user.facilityId) {
             conditions.push('p.facility_id = $' + (params.length + 1));
             params.push(req.user.facilityId);
-        } else if (facility_id && Number.isInteger(Number(facility_id))) {
+        } else if (facility_id) {
             conditions.push('p.facility_id = $' + (params.length + 1));
-            params.push(Number(facility_id));
+            params.push(facility_id);
         }
 
-        if (month && validateMonth(month)) {
+        if (month) {
             conditions.push('p.month = $' + (params.length + 1));
             params.push(month);
         }
@@ -652,33 +542,26 @@ app.post('/api/patients', authenticateToken, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Name, month, and facility are required' });
         }
 
-        if (name.trim().length < 3) {
-            return res.status(400).json({ success: false, error: 'Name must be at least 3 characters' });
-        }
-
-        if (!validateMonth(month)) {
-            return res.status(400).json({ success: false, error: 'Month must be in MM-YYYY format' });
-        }
-
-        // Convert MM-YYYY to YYYY-MM for database storage
-        const monthParts = month.split('-');
-        const dbMonth = `${monthParts[1]}-${monthParts[0]}`;
-
-        if (!Number.isInteger(Number(facility_id))) {
-            return res.status(400).json({ success: false, error: 'Invalid facility ID' });
-        }
-
         // Check permission for non-admin users
         if (req.user.role !== 'admin' && req.user.facilityId && req.user.facilityId != facility_id) {
             return res.status(403).json({ success: false, error: 'Cannot add patients to this facility' });
         }
 
-        const sanitizedName = sanitizeString(name.trim());
-        const sanitizedMrn = mrn ? sanitizeString(mrn.trim()) : null;
+        // Check for duplicate MRN if MRN is provided
+        if (mrn && mrn.trim()) {
+            const mrnCheck = await safeQuery('SELECT id, name FROM patients WHERE LOWER(mrn) = LOWER($1)', [mrn.trim()]);
+            
+            if (mrnCheck.rows.length > 0) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: `MRN "${mrn}" already exists for patient: ${mrnCheck.rows[0].name}`
+                });
+            }
+        }
 
         const result = await safeQuery(
             'INSERT INTO patients (name, month, mrn, facility_id) VALUES ($1, $2, $3, $4) RETURNING *',
-            [sanitizedName, dbMonth, sanitizedMrn, Number(facility_id)]
+            [name, month, mrn ? mrn.trim() : null, facility_id]
         );
 
         res.json({ success: true, patient: result.rows[0] });
@@ -689,6 +572,51 @@ app.post('/api/patients', authenticateToken, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Patient already exists for this month and facility' });
         }
         res.status(500).json({ success: false, error: 'Failed to create patient' });
+    }
+});
+
+app.delete('/api/patients/:id', authenticateToken, async (req, res) => {
+    try {
+        const patientId = req.params.id;
+        
+        if (!patientId) {
+            return res.status(400).json({ success: false, error: 'Patient ID is required' });
+        }
+
+        // Check if patient exists and get their info
+        const patientCheck = await safeQuery('SELECT * FROM patients WHERE id = $1', [patientId]);
+        
+        if (patientCheck.rows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Patient not found' });
+        }
+
+        const patient = patientCheck.rows[0];
+
+        // Check permission for non-admin users
+        if (req.user.role !== 'admin' && req.user.facilityId && req.user.facilityId != patient.facility_id) {
+            return res.status(403).json({ success: false, error: 'Access denied' });
+        }
+
+        // Delete patient (tracking data will be deleted automatically due to CASCADE)
+        const result = await safeQuery('DELETE FROM patients WHERE id = $1', [patientId]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ success: false, error: 'Patient not found' });
+        }
+
+        res.json({ 
+            success: true, 
+            message: 'Patient deleted successfully',
+            deletedPatient: {
+                id: patient.id,
+                name: patient.name,
+                mrn: patient.mrn
+            }
+        });
+
+    } catch (error) {
+        console.error('Error deleting patient:', error);
+        res.status(500).json({ success: false, error: 'Failed to delete patient' });
     }
 });
 
@@ -718,26 +646,34 @@ app.post('/api/patients/bulk', authenticateToken, async (req, res) => {
             facilityMap[facility.name.toLowerCase()] = facility.id;
         }
 
+        // Get existing MRNs for duplicate checking
+        const existingMRNsResult = await safeQuery('SELECT LOWER(mrn) as mrn_lower, name FROM patients WHERE mrn IS NOT NULL AND mrn != \'\'');
+        const existingMRNs = {};
+        for (const row of existingMRNsResult.rows) {
+            existingMRNs[row.mrn_lower] = row.name;
+        }
+
         const results = {
             successful: 0,
             failed: []
         };
 
+        // Track MRNs within the batch to prevent duplicates
+        const batchMRNs = {};
+
         // Process each patient
         for (const patientData of patients) {
             try {
-                let { name, mrn, month, facilityName } = patientData;
+                const { name, mrn, month, facilityName } = patientData;
                 
-                // Validate and sanitize name format "Last, First"
-                if (!name || typeof name !== 'string' || name.trim().length < 3) {
+                // Validate name format "Last, First"
+                if (!name || name.trim().length < 3) {
                     results.failed.push({ 
                         name: name || 'Unknown', 
                         error: 'Name must be at least 3 characters' 
                     });
                     continue;
                 }
-
-                name = sanitizeString(name.trim());
 
                 if (name.indexOf(',') === -1) {
                     results.failed.push({ 
@@ -789,15 +725,13 @@ app.post('/api/patients/bulk', authenticateToken, async (req, res) => {
                 // Convert MM-YYYY to YYYY-MM for database storage
                 const dbMonth = `${year}-${monthParts[0]}`;
 
-                if (!facilityName || typeof facilityName !== 'string' || facilityName.trim().length < 2) {
+                if (!facilityName || facilityName.trim().length < 2) {
                     results.failed.push({ 
                         name: name, 
                         error: 'Facility name is required' 
                     });
                     continue;
                 }
-
-                facilityName = sanitizeString(facilityName.trim());
 
                 // Find facility ID
                 const facilityId = facilityMap[facilityName.toLowerCase()];
@@ -818,17 +752,45 @@ app.post('/api/patients/bulk', authenticateToken, async (req, res) => {
                     continue;
                 }
 
+                // Check for duplicate MRN
+                if (mrn && mrn.trim()) {
+                    const mrnLower = mrn.trim().toLowerCase();
+                    
+                    // Check against existing patients
+                    if (existingMRNs[mrnLower]) {
+                        results.failed.push({ 
+                            name: name, 
+                            error: `MRN "${mrn}" already exists for patient: ${existingMRNs[mrnLower]}`
+                        });
+                        continue;
+                    }
+                    
+                    // Check against batch duplicates
+                    if (batchMRNs[mrnLower]) {
+                        results.failed.push({ 
+                            name: name, 
+                            error: `Duplicate MRN "${mrn}" in upload batch (first occurrence: ${batchMRNs[mrnLower]})`
+                        });
+                        continue;
+                    }
+                    
+                    batchMRNs[mrnLower] = name;
+                }
+
                 // Insert patient with cleaned name
                 const cleanName = `${nameParts[0].trim()}, ${nameParts[1].trim()}`;
-                const sanitizedMrn = mrn ? sanitizeString(mrn.toString().trim()) : null;
-
                 const insertResult = await safeQuery(
                     'INSERT INTO patients (name, mrn, month, facility_id) VALUES ($1, $2, $3, $4) RETURNING id',
-                    [cleanName, sanitizedMrn, dbMonth, facilityId]
+                    [cleanName, mrn ? mrn.trim() : null, dbMonth, facilityId]
                 );
 
                 if (insertResult.rows.length > 0) {
                     results.successful++;
+                    
+                    // Add to existing MRNs to prevent duplicates in subsequent records
+                    if (mrn && mrn.trim()) {
+                        existingMRNs[mrn.trim().toLowerCase()] = cleanName;
+                    }
                 }
 
             } catch (error) {
@@ -867,11 +829,7 @@ app.post('/api/patients/bulk', authenticateToken, async (req, res) => {
 // ===== TRACKING ROUTES =====
 app.get('/api/tracking/:patientId', authenticateToken, async (req, res) => {
     try {
-        const patientId = parseInt(req.params.patientId);
-
-        if (!Number.isInteger(patientId) || patientId <= 0) {
-            return res.status(400).json({ success: false, error: 'Invalid patient ID' });
-        }
+        const patientId = req.params.patientId;
 
         // Check if user has permission to view this patient
         const patientCheck = await safeQuery('SELECT * FROM patients WHERE id = $1', [patientId]);
@@ -911,29 +869,8 @@ app.post('/api/tracking', authenticateToken, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Patient ID, supply ID, and day are required' });
         }
 
-        const numericPatientId = parseInt(patientId);
-        const numericSupplyId = parseInt(supplyId);
-        const numericDay = parseInt(dayOfMonth);
-        const numericQuantity = parseInt(quantity) || 0;
-
-        if (!Number.isInteger(numericPatientId) || numericPatientId <= 0) {
-            return res.status(400).json({ success: false, error: 'Invalid patient ID' });
-        }
-
-        if (!Number.isInteger(numericSupplyId) || numericSupplyId <= 0) {
-            return res.status(400).json({ success: false, error: 'Invalid supply ID' });
-        }
-
-        if (!Number.isInteger(numericDay) || numericDay < 1 || numericDay > 31) {
-            return res.status(400).json({ success: false, error: 'Day must be between 1 and 31' });
-        }
-
-        if (numericQuantity < 0 || numericQuantity > 9999) {
-            return res.status(400).json({ success: false, error: 'Quantity must be between 0 and 9999' });
-        }
-
         // Check if user has permission
-        const patientCheck = await safeQuery('SELECT * FROM patients WHERE id = $1', [numericPatientId]);
+        const patientCheck = await safeQuery('SELECT * FROM patients WHERE id = $1', [patientId]);
         
         if (patientCheck.rows.length === 0) {
             return res.status(404).json({ success: false, error: 'Patient not found' });
@@ -945,8 +882,6 @@ app.post('/api/tracking', authenticateToken, async (req, res) => {
         if (req.user.role !== 'admin' && req.user.facilityId && req.user.facilityId != patient.facility_id) {
             return res.status(403).json({ success: false, error: 'Access denied' });
         }
-
-        const sanitizedWoundDx = woundDx ? sanitizeString(woundDx.trim()) : null;
 
         // Upsert tracking data
         await safeQuery(
@@ -961,7 +896,7 @@ app.post('/api/tracking', authenticateToken, async (req, res) => {
                     ELSE tracking.wound_dx 
                 END,
                 updated_at = CURRENT_TIMESTAMP`,
-            [numericPatientId, numericSupplyId, numericDay, numericQuantity, sanitizedWoundDx]
+            [patientId, supplyId, dayOfMonth, quantity || 0, woundDx || null]
         );
 
         res.json({ success: true, message: 'Tracking data saved successfully' });
@@ -973,23 +908,7 @@ app.post('/api/tracking', authenticateToken, async (req, res) => {
 
 app.get('/api/tracking', authenticateToken, async (req, res) => {
     try {
-        let query = `
-            SELECT t.*, p.name as patient_name, p.month, s.description as supply_description, s.code as supply_code
-            FROM tracking t 
-            LEFT JOIN patients p ON t.patient_id = p.id
-            LEFT JOIN supplies s ON t.supply_id = s.id
-        `;
-        let params = [];
-
-        // Apply facility filter if user is not admin
-        if (req.user.role !== 'admin' && req.user.facilityId) {
-            query += ' WHERE p.facility_id = $1';
-            params.push(req.user.facilityId);
-        }
-
-        query += ' ORDER BY t.updated_at DESC LIMIT 1000';
-
-        const result = await safeQuery(query, params);
+        const result = await safeQuery('SELECT * FROM tracking ORDER BY id DESC LIMIT 1000');
         res.json({ success: true, tracking: result.rows });
     } catch (error) {
         console.error('Error fetching all tracking data:', error);
@@ -1001,7 +920,7 @@ app.get('/api/tracking', authenticateToken, async (req, res) => {
 app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const result = await safeQuery(`
-            SELECT u.id, u.name, u.email, u.role, u.facility_id, u.is_approved, u.created_at, f.name as facility_name 
+            SELECT u.*, f.name as facility_name 
             FROM users u 
             LEFT JOIN facilities f ON u.facility_id = f.id 
             ORDER BY u.name ASC
@@ -1021,34 +940,16 @@ app.post('/api/admin/users', authenticateToken, requireAdmin, async (req, res) =
             return res.status(400).json({ success: false, error: 'Name, email, and password are required' });
         }
 
-        if (name.trim().length < 2) {
-            return res.status(400).json({ success: false, error: 'Name must be at least 2 characters' });
-        }
-
-        if (!validateEmail(email)) {
-            return res.status(400).json({ success: false, error: 'Invalid email format' });
-        }
-
-        if (password.length < 6) {
-            return res.status(400).json({ success: false, error: 'Password must be at least 6 characters' });
-        }
-
-        if (role && !validateRole(role)) {
-            return res.status(400).json({ success: false, error: 'Invalid role' });
-        }
-
-        const existingUser = await safeQuery('SELECT id FROM users WHERE email = $1', [email.toLowerCase()]);
+        const existingUser = await safeQuery('SELECT id FROM users WHERE email = $1', [email]);
         if (existingUser.rows.length > 0) {
             return res.status(400).json({ success: false, error: 'Email already exists' });
         }
 
         const hashedPassword = await bcrypt.hash(password, 12);
-        const sanitizedName = sanitizeString(name.trim());
-        const numericFacilityId = facility_id && Number.isInteger(Number(facility_id)) ? Number(facility_id) : null;
         
         const result = await safeQuery(
-            'INSERT INTO users (name, email, password, role, facility_id, is_approved) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, email, role, facility_id, is_approved, created_at',
-            [sanitizedName, email.toLowerCase(), hashedPassword, role || 'user', numericFacilityId, true]
+            'INSERT INTO users (name, email, password, role, facility_id, is_approved) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+            [name, email, hashedPassword, role || 'user', facility_id || null, true]
         );
 
         res.json({ success: true, user: result.rows[0] });
@@ -1059,23 +960,46 @@ app.post('/api/admin/users', authenticateToken, requireAdmin, async (req, res) =
     }
 });
 
-app.put('/api/admin/users/:id/approve', authenticateToken, requireAdmin, async (req, res) => {
+app.put('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
     try {
-        const userId = parseInt(req.params.id);
-
-        if (!Number.isInteger(userId) || userId <= 0) {
-            return res.status(400).json({ success: false, error: 'Invalid user ID' });
-        }
+        const userId = req.params.id;
+        const { name, email, role, facility_id } = req.body;
         
+        if (!name || !email || !role) {
+            return res.status(400).json({ success: false, error: 'Name, email, and role are required' });
+        }
+
+        // Check if email exists for another user
+        const existingUser = await safeQuery('SELECT id FROM users WHERE email = $1 AND id != $2', [email, userId]);
+        if (existingUser.rows.length > 0) {
+            return res.status(400).json({ success: false, error: 'Email already exists' });
+        }
+
         const result = await safeQuery(
-            'UPDATE users SET is_approved = true, updated_at = CURRENT_TIMESTAMP WHERE id = $1', 
-            [userId]
+            'UPDATE users SET name = $1, email = $2, role = $3, facility_id = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5',
+            [name, email, role, facility_id || null, userId]
         );
 
         if (result.rowCount === 0) {
             return res.status(404).json({ success: false, error: 'User not found' });
         }
 
+        res.json({ success: true, message: 'User updated successfully' });
+
+    } catch (error) {
+        console.error('Error updating user:', error);
+        res.status(500).json({ success: false, error: 'Failed to update user' });
+    }
+});
+
+app.put('/api/admin/users/:id/approve', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        await safeQuery(
+            'UPDATE users SET is_approved = true, updated_at = CURRENT_TIMESTAMP WHERE id = $1', 
+            [id]
+        );
         res.json({ success: true, message: 'User approved successfully' });
 
     } catch (error) {
@@ -1086,17 +1010,13 @@ app.put('/api/admin/users/:id/approve', authenticateToken, requireAdmin, async (
 
 app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
     try {
-        const userId = parseInt(req.params.id);
+        const { id } = req.params;
         
-        if (!Number.isInteger(userId) || userId <= 0) {
-            return res.status(400).json({ success: false, error: 'Invalid user ID' });
-        }
-
-        if (userId === req.user.id) {
+        if (parseInt(id) === req.user.id) {
             return res.status(400).json({ success: false, error: 'Cannot delete your own account' });
         }
         
-        const result = await safeQuery('DELETE FROM users WHERE id = $1', [userId]);
+        const result = await safeQuery('DELETE FROM users WHERE id = $1', [id]);
 
         if (result.rowCount === 0) {
             return res.status(404).json({ success: false, error: 'User not found' });
@@ -1127,61 +1047,41 @@ app.use((req, res) => {
 });
 
 // ===== GRACEFUL SHUTDOWN =====
-const gracefulShutdown = (signal) => {
-    console.log(`\n${signal} received. Closing HTTP server...`);
-    process.exit(0);
-};
-
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-
-process.on('uncaughtException', (error) => {
-    console.error('Uncaught Exception:', error);
-    process.exit(1);
+process.on('SIGTERM', () => {
+    console.log('Received SIGTERM signal, shutting down gracefully');
+    pool.end(() => {
+        console.log('Database pool closed');
+        process.exit(0);
+    });
 });
 
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-    process.exit(1);
+process.on('SIGINT', () => {
+    console.log('Received SIGINT signal, shutting down gracefully');
+    pool.end(() => {
+        console.log('Database pool closed');
+        process.exit(0);
+    });
 });
 
 // ===== SERVER STARTUP =====
 async function startServer() {
     try {
-        const dbConnected = await testDatabaseConnection();
-        if (!dbConnected) {
-            console.error('✗ Cannot start server without database connection');
-            process.exit(1);
-        }
-
         await initializeDatabase();
         
-        const server = app.listen(PORT, () => {
+        app.listen(PORT, () => {
             console.log('');
             console.log('================================');
-            console.log('   Wound Care RT Supply Tracker');
+            console.log('Wound Care RT Supply Tracker');
             console.log('================================');
-            console.log(`🚀 Server running on port ${PORT}`);
-            console.log(`🌐 Server URL: http://localhost:${PORT}`);
-            console.log(`❤️  Health check: http://localhost:${PORT}/health`);
+            console.log(`Server running on port ${PORT}`);
+            console.log(`Server URL: http://localhost:${PORT}`);
+            console.log(`Health check: http://localhost:${PORT}/health`);
             console.log('');
-            console.log('👤 Default credentials: admin@system.com / admin123');
-            console.log('🔒 Remember to change default passwords');
+            console.log('Default credentials: admin@system.com / admin123');
             console.log('================================');
         });
-
-        // Handle server errors
-        server.on('error', (error) => {
-            if (error.code === 'EADDRINUSE') {
-                console.error(`✗ Port ${PORT} is already in use`);
-            } else {
-                console.error('✗ Server error:', error);
-            }
-            process.exit(1);
-        });
-
     } catch (error) {
-        console.error('✗ Failed to start server:', error);
+        console.error('Failed to start server:', error);
         process.exit(1);
     }
 }
