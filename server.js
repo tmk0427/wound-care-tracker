@@ -259,6 +259,13 @@ async function initializeDefaultData() {
             );
             
             console.log('Admin user created: admin@system.com / admin123');
+        } else {
+            // Update existing admin users to have email verification enabled
+            console.log('Updating existing admin users for email verification...');
+            await safeQuery(
+                'UPDATE users SET email_verified = true, is_approved = true WHERE role = $1 AND (email_verified IS NULL OR email_verified = false OR is_approved = false)',
+                ['admin']
+            );
         }
 
         // Check if supplies exist
