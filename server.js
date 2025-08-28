@@ -826,6 +826,33 @@ app.post('/api/patients/bulk', authenticateToken, async (req, res) => {
     }
 });
 
+// ===== DEBUG DASHBOARD ENDPOINT =====
+app.get('/api/dashboard/debug', authenticateToken, async (req, res) => {
+    try {
+        const { facility_id } = req.query;
+        
+        // Get current month in MM-YYYY format (matching patient month format)
+        const now = new Date();
+        const currentMonth = `${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()}`;
+        
+        // Build query with facility filtering
+        let query = `
+            SELECT t.*, s.cost as supply_cost, s.description as supply_description, 
+                   s.code as supply_code, p.month as patient_month, p.name as patient_name, 
+                   p.facility_id, f.name as facility_name
+            FROM tracking t 
+            LEFT JOIN supplies s ON t.supply_id = s.id 
+            LEFT JOIN patients p ON t.patient_id = p.id 
+            LEFT JOIN facilities f ON p.facility_id = f.id
+        `;
+        
+        let params = [];
+        let conditions = [];
+
+        // Apply facility filter if user is not admin or if facility_id is specified
+        if (req.user.role !== 'admin' && req.user.facilityId) {
+            conditions.push('p.facility_id = 
+
 // ===== TRACKING ROUTES =====
 app.get('/api/tracking/:patientId', authenticateToken, async (req, res) => {
     try {
@@ -908,8 +935,1763 @@ app.post('/api/tracking', authenticateToken, async (req, res) => {
 
 app.get('/api/tracking', authenticateToken, async (req, res) => {
     try {
-        const result = await safeQuery('SELECT * FROM tracking ORDER BY id DESC LIMIT 1000');
+        const { facility_id } = req.query;
+        
+        // Get current month in MM-YYYY format (matching patient month format)
+        const now = new Date();
+        const currentMonth = `${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()}`;
+        
+        // Build query with facility filtering
+        let query = `
+            SELECT t.*, s.cost as supply_cost, s.description as supply_description, 
+                   s.code as supply_code, p.month as patient_month, p.facility_id
+            FROM tracking t 
+            LEFT JOIN supplies s ON t.supply_id = s.id 
+            LEFT JOIN patients p ON t.patient_id = p.id 
+        `;
+        
+        let params = [];
+        let conditions = [];
+
+        // Apply facility filter if user is not admin or if facility_id is specified
+        if (req.user.role !== 'admin' && req.user.facilityId) {
+            conditions.push('p.facility_id = 
+
+// ===== ADMIN ROUTES =====
+app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const result = await safeQuery(`
+            SELECT u.*, f.name as facility_name 
+            FROM users u 
+            LEFT JOIN facilities f ON u.facility_id = f.id 
+            ORDER BY u.name ASC
+        `);
+        res.json({ success: true, users: result.rows });
+    } catch (error) {
+        console.error('Error fetching users:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch users' });
+    }
+});
+
+app.post('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { name, email, password, role, facility_id } = req.body;
+        
+        if (!name || !email || !password) {
+            return res.status(400).json({ success: false, error: 'Name, email, and password are required' });
+        }
+
+        const existingUser = await safeQuery('SELECT id FROM users WHERE email = $1', [email]);
+        if (existingUser.rows.length > 0) {
+            return res.status(400).json({ success: false, error: 'Email already exists' });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 12);
+        
+        const result = await safeQuery(
+            'INSERT INTO users (name, email, password, role, facility_id, is_approved) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+            [name, email, hashedPassword, role || 'user', facility_id || null, true]
+        );
+
+        res.json({ success: true, user: result.rows[0] });
+
+    } catch (error) {
+        console.error('Error creating user:', error);
+        res.status(500).json({ success: false, error: 'Failed to create user' });
+    }
+});
+
+app.put('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const { name, email, role, facility_id } = req.body;
+        
+        if (!name || !email || !role) {
+            return res.status(400).json({ success: false, error: 'Name, email, and role are required' });
+        }
+
+        // Check if email exists for another user
+        const existingUser = await safeQuery('SELECT id FROM users WHERE email = $1 AND id != $2', [email, userId]);
+        if (existingUser.rows.length > 0) {
+            return res.status(400).json({ success: false, error: 'Email already exists' });
+        }
+
+        const result = await safeQuery(
+            'UPDATE users SET name = $1, email = $2, role = $3, facility_id = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5',
+            [name, email, role, facility_id || null, userId]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+
+        res.json({ success: true, message: 'User updated successfully' });
+
+    } catch (error) {
+        console.error('Error updating user:', error);
+        res.status(500).json({ success: false, error: 'Failed to update user' });
+    }
+});
+
+app.put('/api/admin/users/:id/approve', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        await safeQuery(
+            'UPDATE users SET is_approved = true, updated_at = CURRENT_TIMESTAMP WHERE id = $1', 
+            [id]
+        );
+        res.json({ success: true, message: 'User approved successfully' });
+
+    } catch (error) {
+        console.error('Error approving user:', error);
+        res.status(500).json({ success: false, error: 'Failed to approve user' });
+    }
+});
+
+app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        if (parseInt(id) === req.user.id) {
+            return res.status(400).json({ success: false, error: 'Cannot delete your own account' });
+        }
+        
+        const result = await safeQuery('DELETE FROM users WHERE id = $1', [id]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+
+        res.json({ success: true, message: 'User deleted successfully' });
+
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        res.status(500).json({ success: false, error: 'Failed to delete user' });
+    }
+});
+
+// ===== ERROR HANDLING MIDDLEWARE =====
+app.use((err, req, res, next) => {
+    console.error('Unhandled error:', err);
+    res.status(500).json({ 
+        success: false, 
+        error: 'Internal server error',
+        message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
+    });
+});
+
+// 404 handler
+app.use((req, res) => {
+    console.log('404 - Route not found:', req.method, req.path);
+    res.status(404).json({ error: 'Route not found' });
+});
+
+// ===== GRACEFUL SHUTDOWN =====
+process.on('SIGTERM', () => {
+    console.log('Received SIGTERM signal, shutting down gracefully');
+    pool.end(() => {
+        console.log('Database pool closed');
+        process.exit(0);
+    });
+});
+
+process.on('SIGINT', () => {
+    console.log('Received SIGINT signal, shutting down gracefully');
+    pool.end(() => {
+        console.log('Database pool closed');
+        process.exit(0);
+    });
+});
+
+// ===== SERVER STARTUP =====
+async function startServer() {
+    try {
+        await initializeDatabase();
+        
+        app.listen(PORT, () => {
+            console.log('');
+            console.log('================================');
+            console.log('Wound Care RT Supply Tracker');
+            console.log('================================');
+            console.log(`Server running on port ${PORT}`);
+            console.log(`Server URL: http://localhost:${PORT}`);
+            console.log(`Health check: http://localhost:${PORT}/health`);
+            console.log('');
+            console.log('Default credentials: admin@system.com / admin123');
+            console.log('================================');
+        });
+    } catch (error) {
+        console.error('Failed to start server:', error);
+        process.exit(1);
+    }
+}
+
+startServer();
+
+module.exports = app; + (params.length + 1));
+            params.push(req.user.facilityId);
+        } else if (facility_id) {
+            conditions.push('p.facility_id = 
+
+// ===== ADMIN ROUTES =====
+app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const result = await safeQuery(`
+            SELECT u.*, f.name as facility_name 
+            FROM users u 
+            LEFT JOIN facilities f ON u.facility_id = f.id 
+            ORDER BY u.name ASC
+        `);
+        res.json({ success: true, users: result.rows });
+    } catch (error) {
+        console.error('Error fetching users:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch users' });
+    }
+});
+
+app.post('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { name, email, password, role, facility_id } = req.body;
+        
+        if (!name || !email || !password) {
+            return res.status(400).json({ success: false, error: 'Name, email, and password are required' });
+        }
+
+        const existingUser = await safeQuery('SELECT id FROM users WHERE email = $1', [email]);
+        if (existingUser.rows.length > 0) {
+            return res.status(400).json({ success: false, error: 'Email already exists' });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 12);
+        
+        const result = await safeQuery(
+            'INSERT INTO users (name, email, password, role, facility_id, is_approved) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+            [name, email, hashedPassword, role || 'user', facility_id || null, true]
+        );
+
+        res.json({ success: true, user: result.rows[0] });
+
+    } catch (error) {
+        console.error('Error creating user:', error);
+        res.status(500).json({ success: false, error: 'Failed to create user' });
+    }
+});
+
+app.put('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const { name, email, role, facility_id } = req.body;
+        
+        if (!name || !email || !role) {
+            return res.status(400).json({ success: false, error: 'Name, email, and role are required' });
+        }
+
+        // Check if email exists for another user
+        const existingUser = await safeQuery('SELECT id FROM users WHERE email = $1 AND id != $2', [email, userId]);
+        if (existingUser.rows.length > 0) {
+            return res.status(400).json({ success: false, error: 'Email already exists' });
+        }
+
+        const result = await safeQuery(
+            'UPDATE users SET name = $1, email = $2, role = $3, facility_id = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5',
+            [name, email, role, facility_id || null, userId]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+
+        res.json({ success: true, message: 'User updated successfully' });
+
+    } catch (error) {
+        console.error('Error updating user:', error);
+        res.status(500).json({ success: false, error: 'Failed to update user' });
+    }
+});
+
+app.put('/api/admin/users/:id/approve', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        await safeQuery(
+            'UPDATE users SET is_approved = true, updated_at = CURRENT_TIMESTAMP WHERE id = $1', 
+            [id]
+        );
+        res.json({ success: true, message: 'User approved successfully' });
+
+    } catch (error) {
+        console.error('Error approving user:', error);
+        res.status(500).json({ success: false, error: 'Failed to approve user' });
+    }
+});
+
+app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        if (parseInt(id) === req.user.id) {
+            return res.status(400).json({ success: false, error: 'Cannot delete your own account' });
+        }
+        
+        const result = await safeQuery('DELETE FROM users WHERE id = $1', [id]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+
+        res.json({ success: true, message: 'User deleted successfully' });
+
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        res.status(500).json({ success: false, error: 'Failed to delete user' });
+    }
+});
+
+// ===== ERROR HANDLING MIDDLEWARE =====
+app.use((err, req, res, next) => {
+    console.error('Unhandled error:', err);
+    res.status(500).json({ 
+        success: false, 
+        error: 'Internal server error',
+        message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
+    });
+});
+
+// 404 handler
+app.use((req, res) => {
+    console.log('404 - Route not found:', req.method, req.path);
+    res.status(404).json({ error: 'Route not found' });
+});
+
+// ===== GRACEFUL SHUTDOWN =====
+process.on('SIGTERM', () => {
+    console.log('Received SIGTERM signal, shutting down gracefully');
+    pool.end(() => {
+        console.log('Database pool closed');
+        process.exit(0);
+    });
+});
+
+process.on('SIGINT', () => {
+    console.log('Received SIGINT signal, shutting down gracefully');
+    pool.end(() => {
+        console.log('Database pool closed');
+        process.exit(0);
+    });
+});
+
+// ===== SERVER STARTUP =====
+async function startServer() {
+    try {
+        await initializeDatabase();
+        
+        app.listen(PORT, () => {
+            console.log('');
+            console.log('================================');
+            console.log('Wound Care RT Supply Tracker');
+            console.log('================================');
+            console.log(`Server running on port ${PORT}`);
+            console.log(`Server URL: http://localhost:${PORT}`);
+            console.log(`Health check: http://localhost:${PORT}/health`);
+            console.log('');
+            console.log('Default credentials: admin@system.com / admin123');
+            console.log('================================');
+        });
+    } catch (error) {
+        console.error('Failed to start server:', error);
+        process.exit(1);
+    }
+}
+
+startServer();
+
+module.exports = app; + (params.length + 1));
+            params.push(facility_id);
+        }
+
+        if (conditions.length > 0) {
+            query += ' WHERE ' + conditions.join(' AND ');
+        }
+
+        query += ' ORDER BY t.id DESC LIMIT 2000';
+        
+        const result = await safeQuery(query, params);
+        
+        // Filter for current month records
+        const allRecords = result.rows;
+        const currentMonthRecords = allRecords.filter(record => 
+            record.patient_month === currentMonth
+        );
+
+        res.json({ 
+            success: true, 
+            tracking: allRecords,
+            monthlyTracking: currentMonthRecords,
+            currentMonth: currentMonth
+        });
+    } catch (error) {
+        console.error('Error fetching all tracking data:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch tracking data' });
+    }
+});
+
+// ===== ADMIN ROUTES =====
+app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const result = await safeQuery(`
+            SELECT u.*, f.name as facility_name 
+            FROM users u 
+            LEFT JOIN facilities f ON u.facility_id = f.id 
+            ORDER BY u.name ASC
+        `);
+        res.json({ success: true, users: result.rows });
+    } catch (error) {
+        console.error('Error fetching users:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch users' });
+    }
+});
+
+app.post('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { name, email, password, role, facility_id } = req.body;
+        
+        if (!name || !email || !password) {
+            return res.status(400).json({ success: false, error: 'Name, email, and password are required' });
+        }
+
+        const existingUser = await safeQuery('SELECT id FROM users WHERE email = $1', [email]);
+        if (existingUser.rows.length > 0) {
+            return res.status(400).json({ success: false, error: 'Email already exists' });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 12);
+        
+        const result = await safeQuery(
+            'INSERT INTO users (name, email, password, role, facility_id, is_approved) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+            [name, email, hashedPassword, role || 'user', facility_id || null, true]
+        );
+
+        res.json({ success: true, user: result.rows[0] });
+
+    } catch (error) {
+        console.error('Error creating user:', error);
+        res.status(500).json({ success: false, error: 'Failed to create user' });
+    }
+});
+
+app.put('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const { name, email, role, facility_id } = req.body;
+        
+        if (!name || !email || !role) {
+            return res.status(400).json({ success: false, error: 'Name, email, and role are required' });
+        }
+
+        // Check if email exists for another user
+        const existingUser = await safeQuery('SELECT id FROM users WHERE email = $1 AND id != $2', [email, userId]);
+        if (existingUser.rows.length > 0) {
+            return res.status(400).json({ success: false, error: 'Email already exists' });
+        }
+
+        const result = await safeQuery(
+            'UPDATE users SET name = $1, email = $2, role = $3, facility_id = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5',
+            [name, email, role, facility_id || null, userId]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+
+        res.json({ success: true, message: 'User updated successfully' });
+
+    } catch (error) {
+        console.error('Error updating user:', error);
+        res.status(500).json({ success: false, error: 'Failed to update user' });
+    }
+});
+
+app.put('/api/admin/users/:id/approve', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        await safeQuery(
+            'UPDATE users SET is_approved = true, updated_at = CURRENT_TIMESTAMP WHERE id = $1', 
+            [id]
+        );
+        res.json({ success: true, message: 'User approved successfully' });
+
+    } catch (error) {
+        console.error('Error approving user:', error);
+        res.status(500).json({ success: false, error: 'Failed to approve user' });
+    }
+});
+
+app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        if (parseInt(id) === req.user.id) {
+            return res.status(400).json({ success: false, error: 'Cannot delete your own account' });
+        }
+        
+        const result = await safeQuery('DELETE FROM users WHERE id = $1', [id]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+
+        res.json({ success: true, message: 'User deleted successfully' });
+
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        res.status(500).json({ success: false, error: 'Failed to delete user' });
+    }
+});
+
+// ===== ERROR HANDLING MIDDLEWARE =====
+app.use((err, req, res, next) => {
+    console.error('Unhandled error:', err);
+    res.status(500).json({ 
+        success: false, 
+        error: 'Internal server error',
+        message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
+    });
+});
+
+// 404 handler
+app.use((req, res) => {
+    console.log('404 - Route not found:', req.method, req.path);
+    res.status(404).json({ error: 'Route not found' });
+});
+
+// ===== GRACEFUL SHUTDOWN =====
+process.on('SIGTERM', () => {
+    console.log('Received SIGTERM signal, shutting down gracefully');
+    pool.end(() => {
+        console.log('Database pool closed');
+        process.exit(0);
+    });
+});
+
+process.on('SIGINT', () => {
+    console.log('Received SIGINT signal, shutting down gracefully');
+    pool.end(() => {
+        console.log('Database pool closed');
+        process.exit(0);
+    });
+});
+
+// ===== SERVER STARTUP =====
+async function startServer() {
+    try {
+        await initializeDatabase();
+        
+        app.listen(PORT, () => {
+            console.log('');
+            console.log('================================');
+            console.log('Wound Care RT Supply Tracker');
+            console.log('================================');
+            console.log(`Server running on port ${PORT}`);
+            console.log(`Server URL: http://localhost:${PORT}`);
+            console.log(`Health check: http://localhost:${PORT}/health`);
+            console.log('');
+            console.log('Default credentials: admin@system.com / admin123');
+            console.log('================================');
+        });
+    } catch (error) {
+        console.error('Failed to start server:', error);
+        process.exit(1);
+    }
+}
+
+startServer();
+
+module.exports = app; + (params.length + 1));
+            params.push(req.user.facilityId);
+        } else if (facility_id) {
+            conditions.push('p.facility_id = 
+
+// ===== TRACKING ROUTES =====
+app.get('/api/tracking/:patientId', authenticateToken, async (req, res) => {
+    try {
+        const patientId = req.params.patientId;
+
+        // Check if user has permission to view this patient
+        const patientCheck = await safeQuery('SELECT * FROM patients WHERE id = $1', [patientId]);
+        
+        if (patientCheck.rows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Patient not found' });
+        }
+
+        const patient = patientCheck.rows[0];
+
+        // Check permission
+        if (req.user.role !== 'admin' && req.user.facilityId && req.user.facilityId != patient.facility_id) {
+            return res.status(403).json({ success: false, error: 'Access denied' });
+        }
+
+        const result = await safeQuery(
+            `SELECT t.*, s.description as supply_description, s.cost as supply_cost, s.hcpcs, s.code as supply_code
+             FROM tracking t 
+             LEFT JOIN supplies s ON t.supply_id = s.id 
+             WHERE t.patient_id = $1 
+             ORDER BY s.code, t.day_of_month`,
+            [patientId]
+        );
+
         res.json({ success: true, tracking: result.rows });
+    } catch (error) {
+        console.error('Error fetching tracking data:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch tracking data' });
+    }
+});
+
+app.post('/api/tracking', authenticateToken, async (req, res) => {
+    try {
+        const { patientId, supplyId, dayOfMonth, quantity, woundDx } = req.body;
+
+        if (!patientId || !supplyId || !dayOfMonth) {
+            return res.status(400).json({ success: false, error: 'Patient ID, supply ID, and day are required' });
+        }
+
+        // Check if user has permission
+        const patientCheck = await safeQuery('SELECT * FROM patients WHERE id = $1', [patientId]);
+        
+        if (patientCheck.rows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Patient not found' });
+        }
+
+        const patient = patientCheck.rows[0];
+
+        // Check permission
+        if (req.user.role !== 'admin' && req.user.facilityId && req.user.facilityId != patient.facility_id) {
+            return res.status(403).json({ success: false, error: 'Access denied' });
+        }
+
+        // Upsert tracking data
+        await safeQuery(
+            `INSERT INTO tracking (patient_id, supply_id, day_of_month, quantity, wound_dx, updated_at) 
+             VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+             ON CONFLICT (patient_id, supply_id, day_of_month) 
+             DO UPDATE SET 
+                quantity = EXCLUDED.quantity,
+                wound_dx = CASE 
+                    WHEN EXCLUDED.wound_dx IS NOT NULL AND EXCLUDED.wound_dx != '' 
+                    THEN EXCLUDED.wound_dx 
+                    ELSE tracking.wound_dx 
+                END,
+                updated_at = CURRENT_TIMESTAMP`,
+            [patientId, supplyId, dayOfMonth, quantity || 0, woundDx || null]
+        );
+
+        res.json({ success: true, message: 'Tracking data saved successfully' });
+    } catch (error) {
+        console.error('Error saving tracking data:', error);
+        res.status(500).json({ success: false, error: 'Failed to save tracking data' });
+    }
+});
+
+app.get('/api/tracking', authenticateToken, async (req, res) => {
+    try {
+        const { facility_id } = req.query;
+        
+        // Get current month in MM-YYYY format (matching patient month format)
+        const now = new Date();
+        const currentMonth = `${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()}`;
+        
+        // Build query with facility filtering
+        let query = `
+            SELECT t.*, s.cost as supply_cost, s.description as supply_description, 
+                   s.code as supply_code, p.month as patient_month, p.facility_id
+            FROM tracking t 
+            LEFT JOIN supplies s ON t.supply_id = s.id 
+            LEFT JOIN patients p ON t.patient_id = p.id 
+        `;
+        
+        let params = [];
+        let conditions = [];
+
+        // Apply facility filter if user is not admin or if facility_id is specified
+        if (req.user.role !== 'admin' && req.user.facilityId) {
+            conditions.push('p.facility_id = 
+
+// ===== ADMIN ROUTES =====
+app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const result = await safeQuery(`
+            SELECT u.*, f.name as facility_name 
+            FROM users u 
+            LEFT JOIN facilities f ON u.facility_id = f.id 
+            ORDER BY u.name ASC
+        `);
+        res.json({ success: true, users: result.rows });
+    } catch (error) {
+        console.error('Error fetching users:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch users' });
+    }
+});
+
+app.post('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { name, email, password, role, facility_id } = req.body;
+        
+        if (!name || !email || !password) {
+            return res.status(400).json({ success: false, error: 'Name, email, and password are required' });
+        }
+
+        const existingUser = await safeQuery('SELECT id FROM users WHERE email = $1', [email]);
+        if (existingUser.rows.length > 0) {
+            return res.status(400).json({ success: false, error: 'Email already exists' });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 12);
+        
+        const result = await safeQuery(
+            'INSERT INTO users (name, email, password, role, facility_id, is_approved) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+            [name, email, hashedPassword, role || 'user', facility_id || null, true]
+        );
+
+        res.json({ success: true, user: result.rows[0] });
+
+    } catch (error) {
+        console.error('Error creating user:', error);
+        res.status(500).json({ success: false, error: 'Failed to create user' });
+    }
+});
+
+app.put('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const { name, email, role, facility_id } = req.body;
+        
+        if (!name || !email || !role) {
+            return res.status(400).json({ success: false, error: 'Name, email, and role are required' });
+        }
+
+        // Check if email exists for another user
+        const existingUser = await safeQuery('SELECT id FROM users WHERE email = $1 AND id != $2', [email, userId]);
+        if (existingUser.rows.length > 0) {
+            return res.status(400).json({ success: false, error: 'Email already exists' });
+        }
+
+        const result = await safeQuery(
+            'UPDATE users SET name = $1, email = $2, role = $3, facility_id = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5',
+            [name, email, role, facility_id || null, userId]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+
+        res.json({ success: true, message: 'User updated successfully' });
+
+    } catch (error) {
+        console.error('Error updating user:', error);
+        res.status(500).json({ success: false, error: 'Failed to update user' });
+    }
+});
+
+app.put('/api/admin/users/:id/approve', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        await safeQuery(
+            'UPDATE users SET is_approved = true, updated_at = CURRENT_TIMESTAMP WHERE id = $1', 
+            [id]
+        );
+        res.json({ success: true, message: 'User approved successfully' });
+
+    } catch (error) {
+        console.error('Error approving user:', error);
+        res.status(500).json({ success: false, error: 'Failed to approve user' });
+    }
+});
+
+app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        if (parseInt(id) === req.user.id) {
+            return res.status(400).json({ success: false, error: 'Cannot delete your own account' });
+        }
+        
+        const result = await safeQuery('DELETE FROM users WHERE id = $1', [id]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+
+        res.json({ success: true, message: 'User deleted successfully' });
+
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        res.status(500).json({ success: false, error: 'Failed to delete user' });
+    }
+});
+
+// ===== ERROR HANDLING MIDDLEWARE =====
+app.use((err, req, res, next) => {
+    console.error('Unhandled error:', err);
+    res.status(500).json({ 
+        success: false, 
+        error: 'Internal server error',
+        message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
+    });
+});
+
+// 404 handler
+app.use((req, res) => {
+    console.log('404 - Route not found:', req.method, req.path);
+    res.status(404).json({ error: 'Route not found' });
+});
+
+// ===== GRACEFUL SHUTDOWN =====
+process.on('SIGTERM', () => {
+    console.log('Received SIGTERM signal, shutting down gracefully');
+    pool.end(() => {
+        console.log('Database pool closed');
+        process.exit(0);
+    });
+});
+
+process.on('SIGINT', () => {
+    console.log('Received SIGINT signal, shutting down gracefully');
+    pool.end(() => {
+        console.log('Database pool closed');
+        process.exit(0);
+    });
+});
+
+// ===== SERVER STARTUP =====
+async function startServer() {
+    try {
+        await initializeDatabase();
+        
+        app.listen(PORT, () => {
+            console.log('');
+            console.log('================================');
+            console.log('Wound Care RT Supply Tracker');
+            console.log('================================');
+            console.log(`Server running on port ${PORT}`);
+            console.log(`Server URL: http://localhost:${PORT}`);
+            console.log(`Health check: http://localhost:${PORT}/health`);
+            console.log('');
+            console.log('Default credentials: admin@system.com / admin123');
+            console.log('================================');
+        });
+    } catch (error) {
+        console.error('Failed to start server:', error);
+        process.exit(1);
+    }
+}
+
+startServer();
+
+module.exports = app; + (params.length + 1));
+            params.push(req.user.facilityId);
+        } else if (facility_id) {
+            conditions.push('p.facility_id = 
+
+// ===== ADMIN ROUTES =====
+app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const result = await safeQuery(`
+            SELECT u.*, f.name as facility_name 
+            FROM users u 
+            LEFT JOIN facilities f ON u.facility_id = f.id 
+            ORDER BY u.name ASC
+        `);
+        res.json({ success: true, users: result.rows });
+    } catch (error) {
+        console.error('Error fetching users:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch users' });
+    }
+});
+
+app.post('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { name, email, password, role, facility_id } = req.body;
+        
+        if (!name || !email || !password) {
+            return res.status(400).json({ success: false, error: 'Name, email, and password are required' });
+        }
+
+        const existingUser = await safeQuery('SELECT id FROM users WHERE email = $1', [email]);
+        if (existingUser.rows.length > 0) {
+            return res.status(400).json({ success: false, error: 'Email already exists' });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 12);
+        
+        const result = await safeQuery(
+            'INSERT INTO users (name, email, password, role, facility_id, is_approved) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+            [name, email, hashedPassword, role || 'user', facility_id || null, true]
+        );
+
+        res.json({ success: true, user: result.rows[0] });
+
+    } catch (error) {
+        console.error('Error creating user:', error);
+        res.status(500).json({ success: false, error: 'Failed to create user' });
+    }
+});
+
+app.put('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const { name, email, role, facility_id } = req.body;
+        
+        if (!name || !email || !role) {
+            return res.status(400).json({ success: false, error: 'Name, email, and role are required' });
+        }
+
+        // Check if email exists for another user
+        const existingUser = await safeQuery('SELECT id FROM users WHERE email = $1 AND id != $2', [email, userId]);
+        if (existingUser.rows.length > 0) {
+            return res.status(400).json({ success: false, error: 'Email already exists' });
+        }
+
+        const result = await safeQuery(
+            'UPDATE users SET name = $1, email = $2, role = $3, facility_id = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5',
+            [name, email, role, facility_id || null, userId]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+
+        res.json({ success: true, message: 'User updated successfully' });
+
+    } catch (error) {
+        console.error('Error updating user:', error);
+        res.status(500).json({ success: false, error: 'Failed to update user' });
+    }
+});
+
+app.put('/api/admin/users/:id/approve', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        await safeQuery(
+            'UPDATE users SET is_approved = true, updated_at = CURRENT_TIMESTAMP WHERE id = $1', 
+            [id]
+        );
+        res.json({ success: true, message: 'User approved successfully' });
+
+    } catch (error) {
+        console.error('Error approving user:', error);
+        res.status(500).json({ success: false, error: 'Failed to approve user' });
+    }
+});
+
+app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        if (parseInt(id) === req.user.id) {
+            return res.status(400).json({ success: false, error: 'Cannot delete your own account' });
+        }
+        
+        const result = await safeQuery('DELETE FROM users WHERE id = $1', [id]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+
+        res.json({ success: true, message: 'User deleted successfully' });
+
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        res.status(500).json({ success: false, error: 'Failed to delete user' });
+    }
+});
+
+// ===== ERROR HANDLING MIDDLEWARE =====
+app.use((err, req, res, next) => {
+    console.error('Unhandled error:', err);
+    res.status(500).json({ 
+        success: false, 
+        error: 'Internal server error',
+        message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
+    });
+});
+
+// 404 handler
+app.use((req, res) => {
+    console.log('404 - Route not found:', req.method, req.path);
+    res.status(404).json({ error: 'Route not found' });
+});
+
+// ===== GRACEFUL SHUTDOWN =====
+process.on('SIGTERM', () => {
+    console.log('Received SIGTERM signal, shutting down gracefully');
+    pool.end(() => {
+        console.log('Database pool closed');
+        process.exit(0);
+    });
+});
+
+process.on('SIGINT', () => {
+    console.log('Received SIGINT signal, shutting down gracefully');
+    pool.end(() => {
+        console.log('Database pool closed');
+        process.exit(0);
+    });
+});
+
+// ===== SERVER STARTUP =====
+async function startServer() {
+    try {
+        await initializeDatabase();
+        
+        app.listen(PORT, () => {
+            console.log('');
+            console.log('================================');
+            console.log('Wound Care RT Supply Tracker');
+            console.log('================================');
+            console.log(`Server running on port ${PORT}`);
+            console.log(`Server URL: http://localhost:${PORT}`);
+            console.log(`Health check: http://localhost:${PORT}/health`);
+            console.log('');
+            console.log('Default credentials: admin@system.com / admin123');
+            console.log('================================');
+        });
+    } catch (error) {
+        console.error('Failed to start server:', error);
+        process.exit(1);
+    }
+}
+
+startServer();
+
+module.exports = app; + (params.length + 1));
+            params.push(facility_id);
+        }
+
+        if (conditions.length > 0) {
+            query += ' WHERE ' + conditions.join(' AND ');
+        }
+
+        query += ' ORDER BY t.id DESC LIMIT 2000';
+        
+        const result = await safeQuery(query, params);
+        
+        // Filter for current month records
+        const allRecords = result.rows;
+        const currentMonthRecords = allRecords.filter(record => 
+            record.patient_month === currentMonth
+        );
+
+        res.json({ 
+            success: true, 
+            tracking: allRecords,
+            monthlyTracking: currentMonthRecords,
+            currentMonth: currentMonth
+        });
+    } catch (error) {
+        console.error('Error fetching all tracking data:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch tracking data' });
+    }
+});
+
+// ===== ADMIN ROUTES =====
+app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const result = await safeQuery(`
+            SELECT u.*, f.name as facility_name 
+            FROM users u 
+            LEFT JOIN facilities f ON u.facility_id = f.id 
+            ORDER BY u.name ASC
+        `);
+        res.json({ success: true, users: result.rows });
+    } catch (error) {
+        console.error('Error fetching users:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch users' });
+    }
+});
+
+app.post('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { name, email, password, role, facility_id } = req.body;
+        
+        if (!name || !email || !password) {
+            return res.status(400).json({ success: false, error: 'Name, email, and password are required' });
+        }
+
+        const existingUser = await safeQuery('SELECT id FROM users WHERE email = $1', [email]);
+        if (existingUser.rows.length > 0) {
+            return res.status(400).json({ success: false, error: 'Email already exists' });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 12);
+        
+        const result = await safeQuery(
+            'INSERT INTO users (name, email, password, role, facility_id, is_approved) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+            [name, email, hashedPassword, role || 'user', facility_id || null, true]
+        );
+
+        res.json({ success: true, user: result.rows[0] });
+
+    } catch (error) {
+        console.error('Error creating user:', error);
+        res.status(500).json({ success: false, error: 'Failed to create user' });
+    }
+});
+
+app.put('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const { name, email, role, facility_id } = req.body;
+        
+        if (!name || !email || !role) {
+            return res.status(400).json({ success: false, error: 'Name, email, and role are required' });
+        }
+
+        // Check if email exists for another user
+        const existingUser = await safeQuery('SELECT id FROM users WHERE email = $1 AND id != $2', [email, userId]);
+        if (existingUser.rows.length > 0) {
+            return res.status(400).json({ success: false, error: 'Email already exists' });
+        }
+
+        const result = await safeQuery(
+            'UPDATE users SET name = $1, email = $2, role = $3, facility_id = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5',
+            [name, email, role, facility_id || null, userId]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+
+        res.json({ success: true, message: 'User updated successfully' });
+
+    } catch (error) {
+        console.error('Error updating user:', error);
+        res.status(500).json({ success: false, error: 'Failed to update user' });
+    }
+});
+
+app.put('/api/admin/users/:id/approve', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        await safeQuery(
+            'UPDATE users SET is_approved = true, updated_at = CURRENT_TIMESTAMP WHERE id = $1', 
+            [id]
+        );
+        res.json({ success: true, message: 'User approved successfully' });
+
+    } catch (error) {
+        console.error('Error approving user:', error);
+        res.status(500).json({ success: false, error: 'Failed to approve user' });
+    }
+});
+
+app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        if (parseInt(id) === req.user.id) {
+            return res.status(400).json({ success: false, error: 'Cannot delete your own account' });
+        }
+        
+        const result = await safeQuery('DELETE FROM users WHERE id = $1', [id]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+
+        res.json({ success: true, message: 'User deleted successfully' });
+
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        res.status(500).json({ success: false, error: 'Failed to delete user' });
+    }
+});
+
+// ===== ERROR HANDLING MIDDLEWARE =====
+app.use((err, req, res, next) => {
+    console.error('Unhandled error:', err);
+    res.status(500).json({ 
+        success: false, 
+        error: 'Internal server error',
+        message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
+    });
+});
+
+// 404 handler
+app.use((req, res) => {
+    console.log('404 - Route not found:', req.method, req.path);
+    res.status(404).json({ error: 'Route not found' });
+});
+
+// ===== GRACEFUL SHUTDOWN =====
+process.on('SIGTERM', () => {
+    console.log('Received SIGTERM signal, shutting down gracefully');
+    pool.end(() => {
+        console.log('Database pool closed');
+        process.exit(0);
+    });
+});
+
+process.on('SIGINT', () => {
+    console.log('Received SIGINT signal, shutting down gracefully');
+    pool.end(() => {
+        console.log('Database pool closed');
+        process.exit(0);
+    });
+});
+
+// ===== SERVER STARTUP =====
+async function startServer() {
+    try {
+        await initializeDatabase();
+        
+        app.listen(PORT, () => {
+            console.log('');
+            console.log('================================');
+            console.log('Wound Care RT Supply Tracker');
+            console.log('================================');
+            console.log(`Server running on port ${PORT}`);
+            console.log(`Server URL: http://localhost:${PORT}`);
+            console.log(`Health check: http://localhost:${PORT}/health`);
+            console.log('');
+            console.log('Default credentials: admin@system.com / admin123');
+            console.log('================================');
+        });
+    } catch (error) {
+        console.error('Failed to start server:', error);
+        process.exit(1);
+    }
+}
+
+startServer();
+
+module.exports = app; + (params.length + 1));
+            params.push(facility_id);
+        }
+
+        if (conditions.length > 0) {
+            query += ' WHERE ' + conditions.join(' AND ');
+        }
+
+        query += ' ORDER BY t.created_at DESC LIMIT 100';
+        
+        const trackingResult = await safeQuery(query, params);
+        
+        const allTracking = trackingResult.rows;
+        const monthlyTracking = allTracking.filter(record => 
+            record.patient_month === currentMonth
+        );
+        
+        // Calculate costs
+        let totalCost = 0;
+        for (const record of monthlyTracking) {
+            const cost = parseFloat(record.supply_cost || 0);
+            const quantity = parseInt(record.quantity || 0);
+            totalCost += cost * quantity;
+        }
+        
+        res.json({
+            success: true,
+            currentMonth,
+            facilityFilter: facility_id || (req.user.role !== 'admin' ? req.user.facilityId : 'All'),
+            totalTrackingRecords: allTracking.length,
+            monthlyTrackingRecords: monthlyTracking.length,
+            totalSupplyUsageCost: totalCost,
+            sampleMonthlyRecords: monthlyTracking.slice(0, 5).map(record => ({
+                patient: record.patient_name,
+                facility: record.facility_name,
+                supply: record.supply_description,
+                quantity: record.quantity,
+                cost: record.supply_cost,
+                lineTotal: (parseFloat(record.supply_cost || 0) * parseInt(record.quantity || 0)).toFixed(2)
+            }))
+        });
+    } catch (error) {
+        console.error('Error fetching dashboard debug data:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch debug data' });
+    }
+});
+
+// ===== TRACKING ROUTES =====
+app.get('/api/tracking/:patientId', authenticateToken, async (req, res) => {
+    try {
+        const patientId = req.params.patientId;
+
+        // Check if user has permission to view this patient
+        const patientCheck = await safeQuery('SELECT * FROM patients WHERE id = $1', [patientId]);
+        
+        if (patientCheck.rows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Patient not found' });
+        }
+
+        const patient = patientCheck.rows[0];
+
+        // Check permission
+        if (req.user.role !== 'admin' && req.user.facilityId && req.user.facilityId != patient.facility_id) {
+            return res.status(403).json({ success: false, error: 'Access denied' });
+        }
+
+        const result = await safeQuery(
+            `SELECT t.*, s.description as supply_description, s.cost as supply_cost, s.hcpcs, s.code as supply_code
+             FROM tracking t 
+             LEFT JOIN supplies s ON t.supply_id = s.id 
+             WHERE t.patient_id = $1 
+             ORDER BY s.code, t.day_of_month`,
+            [patientId]
+        );
+
+        res.json({ success: true, tracking: result.rows });
+    } catch (error) {
+        console.error('Error fetching tracking data:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch tracking data' });
+    }
+});
+
+app.post('/api/tracking', authenticateToken, async (req, res) => {
+    try {
+        const { patientId, supplyId, dayOfMonth, quantity, woundDx } = req.body;
+
+        if (!patientId || !supplyId || !dayOfMonth) {
+            return res.status(400).json({ success: false, error: 'Patient ID, supply ID, and day are required' });
+        }
+
+        // Check if user has permission
+        const patientCheck = await safeQuery('SELECT * FROM patients WHERE id = $1', [patientId]);
+        
+        if (patientCheck.rows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Patient not found' });
+        }
+
+        const patient = patientCheck.rows[0];
+
+        // Check permission
+        if (req.user.role !== 'admin' && req.user.facilityId && req.user.facilityId != patient.facility_id) {
+            return res.status(403).json({ success: false, error: 'Access denied' });
+        }
+
+        // Upsert tracking data
+        await safeQuery(
+            `INSERT INTO tracking (patient_id, supply_id, day_of_month, quantity, wound_dx, updated_at) 
+             VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+             ON CONFLICT (patient_id, supply_id, day_of_month) 
+             DO UPDATE SET 
+                quantity = EXCLUDED.quantity,
+                wound_dx = CASE 
+                    WHEN EXCLUDED.wound_dx IS NOT NULL AND EXCLUDED.wound_dx != '' 
+                    THEN EXCLUDED.wound_dx 
+                    ELSE tracking.wound_dx 
+                END,
+                updated_at = CURRENT_TIMESTAMP`,
+            [patientId, supplyId, dayOfMonth, quantity || 0, woundDx || null]
+        );
+
+        res.json({ success: true, message: 'Tracking data saved successfully' });
+    } catch (error) {
+        console.error('Error saving tracking data:', error);
+        res.status(500).json({ success: false, error: 'Failed to save tracking data' });
+    }
+});
+
+app.get('/api/tracking', authenticateToken, async (req, res) => {
+    try {
+        const { facility_id } = req.query;
+        
+        // Get current month in MM-YYYY format (matching patient month format)
+        const now = new Date();
+        const currentMonth = `${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()}`;
+        
+        // Build query with facility filtering
+        let query = `
+            SELECT t.*, s.cost as supply_cost, s.description as supply_description, 
+                   s.code as supply_code, p.month as patient_month, p.facility_id
+            FROM tracking t 
+            LEFT JOIN supplies s ON t.supply_id = s.id 
+            LEFT JOIN patients p ON t.patient_id = p.id 
+        `;
+        
+        let params = [];
+        let conditions = [];
+
+        // Apply facility filter if user is not admin or if facility_id is specified
+        if (req.user.role !== 'admin' && req.user.facilityId) {
+            conditions.push('p.facility_id = 
+
+// ===== ADMIN ROUTES =====
+app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const result = await safeQuery(`
+            SELECT u.*, f.name as facility_name 
+            FROM users u 
+            LEFT JOIN facilities f ON u.facility_id = f.id 
+            ORDER BY u.name ASC
+        `);
+        res.json({ success: true, users: result.rows });
+    } catch (error) {
+        console.error('Error fetching users:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch users' });
+    }
+});
+
+app.post('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { name, email, password, role, facility_id } = req.body;
+        
+        if (!name || !email || !password) {
+            return res.status(400).json({ success: false, error: 'Name, email, and password are required' });
+        }
+
+        const existingUser = await safeQuery('SELECT id FROM users WHERE email = $1', [email]);
+        if (existingUser.rows.length > 0) {
+            return res.status(400).json({ success: false, error: 'Email already exists' });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 12);
+        
+        const result = await safeQuery(
+            'INSERT INTO users (name, email, password, role, facility_id, is_approved) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+            [name, email, hashedPassword, role || 'user', facility_id || null, true]
+        );
+
+        res.json({ success: true, user: result.rows[0] });
+
+    } catch (error) {
+        console.error('Error creating user:', error);
+        res.status(500).json({ success: false, error: 'Failed to create user' });
+    }
+});
+
+app.put('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const { name, email, role, facility_id } = req.body;
+        
+        if (!name || !email || !role) {
+            return res.status(400).json({ success: false, error: 'Name, email, and role are required' });
+        }
+
+        // Check if email exists for another user
+        const existingUser = await safeQuery('SELECT id FROM users WHERE email = $1 AND id != $2', [email, userId]);
+        if (existingUser.rows.length > 0) {
+            return res.status(400).json({ success: false, error: 'Email already exists' });
+        }
+
+        const result = await safeQuery(
+            'UPDATE users SET name = $1, email = $2, role = $3, facility_id = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5',
+            [name, email, role, facility_id || null, userId]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+
+        res.json({ success: true, message: 'User updated successfully' });
+
+    } catch (error) {
+        console.error('Error updating user:', error);
+        res.status(500).json({ success: false, error: 'Failed to update user' });
+    }
+});
+
+app.put('/api/admin/users/:id/approve', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        await safeQuery(
+            'UPDATE users SET is_approved = true, updated_at = CURRENT_TIMESTAMP WHERE id = $1', 
+            [id]
+        );
+        res.json({ success: true, message: 'User approved successfully' });
+
+    } catch (error) {
+        console.error('Error approving user:', error);
+        res.status(500).json({ success: false, error: 'Failed to approve user' });
+    }
+});
+
+app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        if (parseInt(id) === req.user.id) {
+            return res.status(400).json({ success: false, error: 'Cannot delete your own account' });
+        }
+        
+        const result = await safeQuery('DELETE FROM users WHERE id = $1', [id]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+
+        res.json({ success: true, message: 'User deleted successfully' });
+
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        res.status(500).json({ success: false, error: 'Failed to delete user' });
+    }
+});
+
+// ===== ERROR HANDLING MIDDLEWARE =====
+app.use((err, req, res, next) => {
+    console.error('Unhandled error:', err);
+    res.status(500).json({ 
+        success: false, 
+        error: 'Internal server error',
+        message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
+    });
+});
+
+// 404 handler
+app.use((req, res) => {
+    console.log('404 - Route not found:', req.method, req.path);
+    res.status(404).json({ error: 'Route not found' });
+});
+
+// ===== GRACEFUL SHUTDOWN =====
+process.on('SIGTERM', () => {
+    console.log('Received SIGTERM signal, shutting down gracefully');
+    pool.end(() => {
+        console.log('Database pool closed');
+        process.exit(0);
+    });
+});
+
+process.on('SIGINT', () => {
+    console.log('Received SIGINT signal, shutting down gracefully');
+    pool.end(() => {
+        console.log('Database pool closed');
+        process.exit(0);
+    });
+});
+
+// ===== SERVER STARTUP =====
+async function startServer() {
+    try {
+        await initializeDatabase();
+        
+        app.listen(PORT, () => {
+            console.log('');
+            console.log('================================');
+            console.log('Wound Care RT Supply Tracker');
+            console.log('================================');
+            console.log(`Server running on port ${PORT}`);
+            console.log(`Server URL: http://localhost:${PORT}`);
+            console.log(`Health check: http://localhost:${PORT}/health`);
+            console.log('');
+            console.log('Default credentials: admin@system.com / admin123');
+            console.log('================================');
+        });
+    } catch (error) {
+        console.error('Failed to start server:', error);
+        process.exit(1);
+    }
+}
+
+startServer();
+
+module.exports = app; + (params.length + 1));
+            params.push(req.user.facilityId);
+        } else if (facility_id) {
+            conditions.push('p.facility_id = 
+
+// ===== ADMIN ROUTES =====
+app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const result = await safeQuery(`
+            SELECT u.*, f.name as facility_name 
+            FROM users u 
+            LEFT JOIN facilities f ON u.facility_id = f.id 
+            ORDER BY u.name ASC
+        `);
+        res.json({ success: true, users: result.rows });
+    } catch (error) {
+        console.error('Error fetching users:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch users' });
+    }
+});
+
+app.post('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { name, email, password, role, facility_id } = req.body;
+        
+        if (!name || !email || !password) {
+            return res.status(400).json({ success: false, error: 'Name, email, and password are required' });
+        }
+
+        const existingUser = await safeQuery('SELECT id FROM users WHERE email = $1', [email]);
+        if (existingUser.rows.length > 0) {
+            return res.status(400).json({ success: false, error: 'Email already exists' });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 12);
+        
+        const result = await safeQuery(
+            'INSERT INTO users (name, email, password, role, facility_id, is_approved) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+            [name, email, hashedPassword, role || 'user', facility_id || null, true]
+        );
+
+        res.json({ success: true, user: result.rows[0] });
+
+    } catch (error) {
+        console.error('Error creating user:', error);
+        res.status(500).json({ success: false, error: 'Failed to create user' });
+    }
+});
+
+app.put('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const { name, email, role, facility_id } = req.body;
+        
+        if (!name || !email || !role) {
+            return res.status(400).json({ success: false, error: 'Name, email, and role are required' });
+        }
+
+        // Check if email exists for another user
+        const existingUser = await safeQuery('SELECT id FROM users WHERE email = $1 AND id != $2', [email, userId]);
+        if (existingUser.rows.length > 0) {
+            return res.status(400).json({ success: false, error: 'Email already exists' });
+        }
+
+        const result = await safeQuery(
+            'UPDATE users SET name = $1, email = $2, role = $3, facility_id = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5',
+            [name, email, role, facility_id || null, userId]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+
+        res.json({ success: true, message: 'User updated successfully' });
+
+    } catch (error) {
+        console.error('Error updating user:', error);
+        res.status(500).json({ success: false, error: 'Failed to update user' });
+    }
+});
+
+app.put('/api/admin/users/:id/approve', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        await safeQuery(
+            'UPDATE users SET is_approved = true, updated_at = CURRENT_TIMESTAMP WHERE id = $1', 
+            [id]
+        );
+        res.json({ success: true, message: 'User approved successfully' });
+
+    } catch (error) {
+        console.error('Error approving user:', error);
+        res.status(500).json({ success: false, error: 'Failed to approve user' });
+    }
+});
+
+app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        if (parseInt(id) === req.user.id) {
+            return res.status(400).json({ success: false, error: 'Cannot delete your own account' });
+        }
+        
+        const result = await safeQuery('DELETE FROM users WHERE id = $1', [id]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+
+        res.json({ success: true, message: 'User deleted successfully' });
+
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        res.status(500).json({ success: false, error: 'Failed to delete user' });
+    }
+});
+
+// ===== ERROR HANDLING MIDDLEWARE =====
+app.use((err, req, res, next) => {
+    console.error('Unhandled error:', err);
+    res.status(500).json({ 
+        success: false, 
+        error: 'Internal server error',
+        message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
+    });
+});
+
+// 404 handler
+app.use((req, res) => {
+    console.log('404 - Route not found:', req.method, req.path);
+    res.status(404).json({ error: 'Route not found' });
+});
+
+// ===== GRACEFUL SHUTDOWN =====
+process.on('SIGTERM', () => {
+    console.log('Received SIGTERM signal, shutting down gracefully');
+    pool.end(() => {
+        console.log('Database pool closed');
+        process.exit(0);
+    });
+});
+
+process.on('SIGINT', () => {
+    console.log('Received SIGINT signal, shutting down gracefully');
+    pool.end(() => {
+        console.log('Database pool closed');
+        process.exit(0);
+    });
+});
+
+// ===== SERVER STARTUP =====
+async function startServer() {
+    try {
+        await initializeDatabase();
+        
+        app.listen(PORT, () => {
+            console.log('');
+            console.log('================================');
+            console.log('Wound Care RT Supply Tracker');
+            console.log('================================');
+            console.log(`Server running on port ${PORT}`);
+            console.log(`Server URL: http://localhost:${PORT}`);
+            console.log(`Health check: http://localhost:${PORT}/health`);
+            console.log('');
+            console.log('Default credentials: admin@system.com / admin123');
+            console.log('================================');
+        });
+    } catch (error) {
+        console.error('Failed to start server:', error);
+        process.exit(1);
+    }
+}
+
+startServer();
+
+module.exports = app; + (params.length + 1));
+            params.push(facility_id);
+        }
+
+        if (conditions.length > 0) {
+            query += ' WHERE ' + conditions.join(' AND ');
+        }
+
+        query += ' ORDER BY t.id DESC LIMIT 2000';
+        
+        const result = await safeQuery(query, params);
+        
+        // Filter for current month records
+        const allRecords = result.rows;
+        const currentMonthRecords = allRecords.filter(record => 
+            record.patient_month === currentMonth
+        );
+
+        res.json({ 
+            success: true, 
+            tracking: allRecords,
+            monthlyTracking: currentMonthRecords,
+            currentMonth: currentMonth
+        });
     } catch (error) {
         console.error('Error fetching all tracking data:', error);
         res.status(500).json({ success: false, error: 'Failed to fetch tracking data' });
