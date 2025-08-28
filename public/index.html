@@ -2966,12 +2966,15 @@
             
             if (!confirm('Reset password for this user? They will need to use the new password to login.')) return;
 
+            console.log('Resetting password for user ID:', userId); // Debug log
+
             apiCall('/api/admin/users/' + userId + '/reset-password', {
                 method: 'PUT',
                 body: JSON.stringify({ newPassword: newPassword })
             }).then(function(response) {
+                console.log('Password reset response:', response); // Debug log
                 if (response.success) {
-                    showMessage('Password reset successfully! User can now login with the new password.', 'success');
+                    showMessage('Password reset successfully! New password: ' + newPassword, 'success');
                 } else {
                     showMessage('Failed to reset password: ' + (response.error || 'Unknown error'), 'error');
                 }
