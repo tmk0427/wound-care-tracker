@@ -1176,7 +1176,7 @@
                 .replace(/\r?\n/g, ' ')
                 .replace(/\r/g, ' ')
                 .replace(/\t/g, ' ')
-                .replace(/[\x00-\x1F\x7F-\x9F]/g, ''); // Remove control characters
+                .replace(/[\x00-\x1F\x7F-\x9F]/g, ' '); // Replace control characters with spaces
         }
 
         /* Utility function to safely escape values for use in JavaScript strings */
@@ -1186,10 +1186,10 @@
                 .replace(/\\/g, '\\\\')
                 .replace(/'/g, "\\'")
                 .replace(/"/g, '\\"')
-                .replace(/\r?\n/g, '\\n')
-                .replace(/\r/g, '\\r')
-                .replace(/\t/g, '\\t')
-                .replace(/[\x00-\x1F\x7F-\x9F]/g, ''); // Remove control characters
+                .replace(/\r?\n/g, ' ')
+                .replace(/\r/g, ' ')
+                .replace(/\t/g, ' ')
+                .replace(/[\x00-\x1F\x7F-\x9F]/g, ' '); // Replace control characters with spaces
         }
 
         /* Generate month options */
@@ -1997,6 +1997,20 @@
                     for (var j = 0; j < containers.length; j++) {
                         var elem = document.getElementById(containers[j]);
                         if (elem) elem.style.display = 'none';
+                    }
+                    
+                    var exportBtn = document.getElementById('exportBtn');
+                    var saveAllBtn = document.getElementById('saveAllBtn');
+                    var saveAllBtnUser = document.getElementById('saveAllBtnUser');
+                    
+                    if (currentUser && currentUser.role === 'admin') {
+                        if (exportBtn) exportBtn.style.display = 'block';
+                        if (saveAllBtn) saveAllBtn.style.display = 'block';
+                        if (saveAllBtnUser) saveAllBtnUser.style.display = 'none';
+                    } else {
+                        if (exportBtn) exportBtn.style.display = 'none';
+                        if (saveAllBtn) saveAllBtn.style.display = 'none';
+                        if (saveAllBtnUser) saveAllBtnUser.style.display = 'block';
                     }
                     
                     var exportBtn = document.getElementById('exportBtn');
