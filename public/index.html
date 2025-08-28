@@ -580,11 +580,7 @@
             </div>
             <button type="submit" class="btn btn-primary" style="width: 100%;">Sign In</button>
             
-            <div style="text-align: center; margin: 20px 0;">
-                <a href="#" onclick="showRegistrationForm()" style="color: #4f46e5; text-decoration: none;">
-                    Don't have an account? Create one
-                </a>
-            </div>
+            <!-- Registration link removed for security - admins create accounts -->
         </form>
 
         <!-- Registration Form -->
@@ -2795,6 +2791,78 @@
             closeModal('bulkPatientUploadModal');
             loadPatients(); // Refresh the patients list
             showMessage('Bulk upload completed successfully!', 'success');
+        }
+
+        // Missing delete functions for patients and supplies
+        function deletePatient(patientId) {
+            if (!confirm('Are you sure you want to delete this patient? This will also delete all associated tracking data.')) {
+                return;
+            }
+
+            apiCall('/api/patients/' + patientId, {
+                method: 'DELETE'
+            }).then(function(response) {
+                if (response.success) {
+                    showMessage('Patient deleted successfully!', 'success');
+                    loadPatients(); // Refresh the patients list
+                    loadDashboardData(); // Update dashboard stats
+                } else {
+                    showMessage('Failed to delete patient: ' + (response.error || 'Unknown error'), 'error');
+                }
+            }).catch(function(error) {
+                console.error('Error deleting patient:', error);
+                showMessage('Failed to delete patient', 'error');
+            });
+        }
+
+        function deleteSupply(supplyId) {
+            if (!confirm('Are you sure you want to delete this supply? This action cannot be undone.')) {
+                return;
+            }
+
+            apiCall('/api/supplies/' + supplyId, {
+                method: 'DELETE'
+            }).then(function(response) {
+                if (response.success) {
+                    showMessage('Supply deleted successfully!', 'success');
+                    loadSupplies(); // Refresh the supplies list
+                } else {
+                    showMessage('Failed to delete supply: ' + (response.error || 'Unknown error'), 'error');
+                }
+            }).catch(function(error) {
+                console.error('Error deleting supply:', error);
+                showMessage('Failed to delete supply', 'error');
+            });
+        }
+
+        function editPatient(patientId) {
+            // Find patient in the current list
+            var patient = allPatients.find(function(p) { return p.id == patientId; });
+            if (!patient) {
+                showMessage('Patient not found', 'error');
+                return;
+            }
+
+            // Populate edit form (you would need to create this modal)
+            showMessage('Edit patient feature needs to be implemented with a modal form', 'info');
+        }
+
+        // Missing import Excel function
+        function importExcel() {
+            showMessage('Excel import feature needs file upload modal implementation', 'info');
+        }
+
+        // Missing system reset function
+        function showSystemReset() {
+            if (!confirm('WARNING: This will delete ALL data including patients, tracking, and custom supplies. This cannot be undone. Are you absolutely sure?')) {
+                return;
+            }
+            
+            if (!confirm('Last chance: This will permanently delete everything. Continue?')) {
+                return;
+            }
+
+            showMessage('System reset feature would need to be implemented with admin confirmation', 'warning');
         }
 
         function approveUser(userId) {
