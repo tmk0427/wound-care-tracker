@@ -1180,7 +1180,8 @@
         // Utility functions
         function escapeHtml(unsafe) {
             if (!unsafe) return '';
-            return String(unsafe)
+            var str = String(unsafe);
+            return str
                 .replace(/&/g, '&amp;')
                 .replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;')
@@ -1188,7 +1189,13 @@
                 .replace(/'/g, '&#39;')
                 .replace(/\r\n/g, ' ')
                 .replace(/\r/g, ' ')
-                .replace(/\n/g, ' ');
+                .replace(/\n/g, ' ')
+                .replace(/\t/g, ' ')
+                .replace(/\f/g, ' ')
+                .replace(/\v/g, ' ')
+                .replace(/\u0085/g, ' ')
+                .replace(/\u2028/g, ' ')
+                .replace(/\u2029/g, ' ');
         }
 
         function showMessage(message, type, containerId = 'loginMessage') {
@@ -1294,17 +1301,17 @@
             
             // Show/hide elements based on user role
             var adminElements = document.querySelectorAll('.admin-only');
-            adminElements.forEach(el => {
-                el.style.display = currentUser.role === 'admin' ? 'block' : 'none';
-            });
+            for (var i = 0; i < adminElements.length; i++) {
+                adminElements[i].style.display = currentUser.role === 'admin' ? 'block' : 'none';
+            }
 
             initializeMonthDropdowns();
-            Promise.all([
+            return Promise.all([
                 loadDashboardData(),
                 loadPatients(),
                 loadSupplies(),
                 loadFacilities()
-            ]).catch(error => {
+            ]).catch(function(error) {
                 console.error('Error loading initial data:', error);
             });
         }
@@ -1319,13 +1326,15 @@
         // Panel navigation
         function showPanel(panelName) {
             // Hide all panels and remove active class
-            document.querySelectorAll('.panel').forEach(panel => {
-                panel.classList.remove('active');
-            });
+            var panels = document.querySelectorAll('.panel');
+            for (var i = 0; i < panels.length; i++) {
+                panels[i].classList.remove('active');
+            }
             
-            document.querySelectorAll('.tab-btn').forEach(tab => {
-                tab.classList.remove('active');
-            });
+            var tabs = document.querySelectorAll('.tab-btn');
+            for (var j = 0; j < tabs.length; j++) {
+                tabs[j].classList.remove('active');
+            }
             
             // Show target panel and activate tab
             var targetPanel = document.getElementById(panelName + 'Panel');
@@ -1393,7 +1402,7 @@
             var months = generateMonthOptions();
             
             var dropdowns = ['patientMonthFilter', 'trackingMonthFilter', 'patientMonth', 'editPatientMonth'];
-            dropdowns.forEach(id => {
+            dropdowns.forEach(function(id) {
                 var dropdown = document.getElementById(id);
                 if (dropdown) {
                     var currentValue = dropdown.value;
@@ -1401,7 +1410,7 @@
                         '<option value="">Select Month</option>' : 
                         '<option value="">All Months</option>';
                     
-                    months.forEach(month => {
+                    months.forEach(function(month) {
                         var option = document.createElement('option');
                         option.value = month.value;
                         option.textContent = month.label;
@@ -1427,7 +1436,7 @@
                 for (var month = start; month <= end; month++) {
                     var value = year + '-' + (month < 10 ? '0' + month : month);
                     var label = monthNames[month - 1] + ' ' + year;
-                    months.push({ value, label });
+                    months.push({ value: value, label: label });
                 }
             }
             
@@ -1456,7 +1465,7 @@
             var monthFilter = document.getElementById('patientMonthFilter').value;
             var sortBy = document.getElementById('patientSortBy').value;
             
-            var filtered = allPatients.filter(patient => {
+            var filtered = allPatients.filter(function(patient) {
                 var matchesSearch = patient.name.toLowerCase().includes(searchTerm) ||
                                   (patient.mrn && patient.mrn.toLowerCase().includes(searchTerm));
                 var matchesFacility = !facilityFilter || patient.facility_id.toString() === facilityFilter;
@@ -1580,7 +1589,7 @@
 
         function filterSupplies() {
             var searchTerm = document.getElementById('supplySearch').value.toLowerCase();
-            var filtered = supplies.filter(supply => {
+            var filtered = supplies.filter(function(supply) {
                 return supply.description.toLowerCase().includes(searchTerm) ||
                        supply.code.toString().includes(searchTerm) ||
                        (supply.hcpcs && supply.hcpcs.toLowerCase().includes(searchTerm));
@@ -1693,16 +1702,17 @@
                             message += ', Skipped: ' + data.results.skipped;
                             message += ', Failed: ' + data.results.failed.length;
                             
-                            if (data.results.failed.length > 0) {
-                                var failedList = [];
-                                data.results.failed.slice(0, 3).forEach(failure => {
-                                    failedList.push('Code ' + failure.code + ': ' + failure.error);
-                                });
-                                if (data.results.failed.length > 3) {
-                                    failedList.push('... and ' + (data.results.failed.length - 3) + ' more');
-                                }
-                                message += '. Failed: ' + failedList.join(', ');
-                            }
+                    if (data.results.failed.length > 0) {
+                        var failedList = [];
+                        for (var f = 0; f < Math.min(3, data.results.failed.length); f++) {
+                            var failure = data.results.failed[f];
+                            failedList.push('Code ' + failure.code + ': ' + failure.error);
+                        }
+                        if (data.results.failed.length > 3) {
+                            failedList.push('... and ' + (data.results.failed.length - 3) + ' more');
+                        }
+                        message += '. Failed: ' + failedList.join(', ');
+                    }
                         }
                         showMessage(message, 'success');
                         loadSupplies(); // Refresh supplies list
@@ -1822,7 +1832,7 @@
             
             select.innerHTML = '<option value="">Select Patient...</option>';
             
-            var filteredPatients = (window.trackingPatients || []).filter(patient => {
+            var filteredPatients = (window.trackingPatients || []).filter(function(patient) {
                 var matchesFacility = !facilityFilter || patient.facility_id.toString() === facilityFilter;
                 var matchesMonth = !monthFilter || patient.month === monthFilter;
                 return matchesFacility && matchesMonth;
@@ -1872,21 +1882,24 @@
             }
             
             // Load tracking data
-            Promise.all([
+            return Promise.all([
                 apiCall('/api/tracking/' + patientId),
                 Promise.resolve(supplies)
-            ]).then(([trackingResponse, suppliesData]) => {
+            ]).then(function(results) {
+                var trackingResponse = results[0];
+                var suppliesData = results[1];
                 var trackingRecords = trackingResponse.tracking || [];
                 
                 // Convert to lookup object
                 trackingData = {};
-                trackingRecords.forEach(record => {
+                for (var i = 0; i < trackingRecords.length; i++) {
+                    var record = trackingRecords[i];
                     var key = record.supply_id + '_' + record.day_of_month;
                     trackingData[key] = record;
-                });
+                }
                 
                 renderTrackingTable();
-            }).catch(error => {
+            }).catch(function(error) {
                 console.error('Failed to load tracking data:', error);
                 showMessage('Failed to load tracking data', 'error');
             });
@@ -1951,7 +1964,7 @@
                 var suppliesWithData = [];
                 var suppliesWithoutData = [];
                 
-                supplies.forEach(supply => {
+                supplies.forEach(function(supply) {
                     var totalUnits = getTotalUnitsForSupply(supply.id);
                     if (totalUnits > 0) {
                         suppliesWithData.push(supply);
@@ -1963,7 +1976,7 @@
                 return suppliesWithData.concat(suppliesWithoutData);
             }
             
-            return supplies.filter(supply => {
+            return supplies.filter(function(supply) {
                 return supply.description.toLowerCase().includes(searchTerm) ||
                        supply.code.toString().includes(searchTerm) ||
                        (supply.hcpcs && supply.hcpcs.toLowerCase().includes(searchTerm));
@@ -2082,18 +2095,19 @@
                 }
             }
 
-            Promise.all(savePromises).then(() => {
+            Promise.all(savePromises).then(function() {
                 showMessage('All tracking data saved successfully!', 'success');
                 // Refresh dashboard statistics
                 loadDashboardData();
                 // Reload tracking to get fresh data
-                setTimeout(() => {
+                setTimeout(function() {
                     loadPatientTracking();
                 }, 1000);
-            }).catch(error => {
+                saveBtn.disabled = false;
+                saveBtn.textContent = '💾 Save All';
+            }).catch(function(error) {
                 console.error('Failed to save tracking data:', error);
                 showMessage('Failed to save some tracking data', 'error');
-            }).finally(() => {
                 saveBtn.disabled = false;
                 saveBtn.textContent = '💾 Save All';
             });
@@ -2166,23 +2180,27 @@
         function loadAdminData() {
             if (currentUser.role !== 'admin') return;
 
-            Promise.all([
+            return Promise.all([
                 apiCall('/api/admin/users'),
                 apiCall('/api/facilities')
-            ]).then(([usersData, facilitiesData]) => {
+            ]).then(function(results) {
+                var usersData = results[0];
+                var facilitiesData = results[1];
+                
                 document.getElementById('totalUsers').textContent = (usersData.users && usersData.users.length) || 0;
                 document.getElementById('totalFacilities').textContent = (facilitiesData.facilities && facilitiesData.facilities.length) || 0;
                 
                 var pendingUsers = 0;
                 if (usersData.users) {
-                    usersData.users.forEach(user => {
+                    for (var i = 0; i < usersData.users.length; i++) {
+                        var user = usersData.users[i];
                         if (!user.is_approved) pendingUsers++;
-                    });
+                    }
                 }
                 document.getElementById('pendingApprovals').textContent = pendingUsers;
 
                 renderUsersTable(usersData.users || []);
-            }).catch(error => {
+            }).catch(function(error) {
                 console.error('Failed to load admin data:', error);
             });
         }
@@ -2420,14 +2438,16 @@
             }
 
             // Convert to API format
-            var formattedPatients = patients.map(function(p) {
-                return {
-                    name: p.name,
-                    mrn: p.mrn || '',
-                    month: p.month,
-                    facilityName: p.facility
-                };
-            });
+            var formattedPatients = [];
+            for (var p = 0; p < patients.length; p++) {
+                var patient = patients[p];
+                formattedPatients.push({
+                    name: patient.name,
+                    mrn: patient.mrn || '',
+                    month: patient.month,
+                    facilityName: patient.facility
+                });
+            }
 
             // Upload to API
             apiCall('/api/patients/bulk', {
@@ -2440,9 +2460,10 @@
                 
                 if (response.failed.length > 0) {
                     html += '<h5>Failed Records:</h5><ul>';
-                    response.failed.forEach(function(failure) {
+                    for (var f = 0; f < response.failed.length; f++) {
+                        var failure = response.failed[f];
                         html += '<li>' + escapeHtml(failure.name) + ': ' + escapeHtml(failure.error) + '</li>';
-                    });
+                    }
                     html += '</ul>';
                 }
                 
