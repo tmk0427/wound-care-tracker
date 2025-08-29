@@ -323,8 +323,8 @@
             font-weight: 600;
             text-align: center;
             position: sticky;
-            top: 220px;
-            z-index: 10;
+            top: 260px;
+            z-index: 15;
             border-bottom: 2px solid #3b37cf;
             font-size: 11px;
         }
@@ -395,9 +395,9 @@
         .days-grid {
             display: grid;
             grid-template-columns: repeat(10, 1fr);
-            gap: 3px;
+            gap: 4px;
             justify-content: center;
-            max-width: 280px;
+            max-width: 360px;
         }
 
         .days-row-label {
@@ -413,14 +413,14 @@
         }
 
         .day-input {
-            width: 26px;
-            height: 26px;
-            padding: 2px;
+            width: 35px;
+            height: 32px;
+            padding: 4px;
             border: 1px solid #d1d5db;
             border-radius: 4px;
             text-align: center;
-            font-size: 10px;
-            font-weight: 500;
+            font-size: 14px;
+            font-weight: 600;
             background: white;
         }
 
@@ -2080,6 +2080,10 @@
                 return;
             }
 
+            // Convert month from YYYY-MM to MM-YYYY format
+            var monthParts = patient.month.split('-');
+            var formattedMonth = monthParts.length === 2 ? monthParts[1] + '-' + monthParts[0] : patient.month;
+
             var csvRows = [];
             csvRows.push(['Name', 'MRN', 'Month', 'Facility', 'Code', 'Description', 'HCPCS', 'Wound DX', 'Total Units', 'Unit Cost', 'Total Cost']);
 
@@ -2092,7 +2096,7 @@
                     csvRows.push([
                         patient.name,
                         patient.mrn || '',
-                        patient.month,
+                        formattedMonth,
                         patient.facility_name || '',
                         supply.code,
                         supply.description,
@@ -2115,7 +2119,7 @@
             var url = window.URL.createObjectURL(blob);
             var a = document.createElement('a');
             a.href = url;
-            a.download = 'Supply_Report_' + patient.name.replace(/\s+/g, '_') + '_' + patient.month.replace('-', '_') + '.csv';
+            a.download = 'Supply_Report_' + patient.name.replace(/\s+/g, '_') + '_' + formattedMonth.replace('-', '_') + '.csv';
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
