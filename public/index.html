@@ -3401,10 +3401,10 @@
                     var currentData = trackingData[key];
                     var quantity = currentData ? currentData.quantity : 0;
                     
-                    html += '<input type="number" class="day-input" title="Day ' + day + '" ' +
-                           'value="' + (quantity || '') + '" min="0" max="99" placeholder="' + day + '" ' +
-                           'data-supply-id="' + supply.id + '" data-day="' + day + '" ' +
-                           'onchange="updateTrackingValue(' + supply.id + ', ' + day + ', this.value)">';
+                    html += '<input type="number" class="day-input" title="Day ' + day + '"' +
+                           ' value="' + (quantity || '') + '" min="0" max="99" placeholder="' + day + '"' +
+                           ' data-supply-id="' + supply.id + '" data-day="' + day + '"' +
+                           ' onchange="updateTrackingValue(' + supply.id + ', ' + day + ', this.value)">';
                 }
                 
                 // Row 2: Days 11-20
@@ -3414,10 +3414,10 @@
                     var currentData = trackingData[key];
                     var quantity = currentData ? currentData.quantity : 0;
                     
-                    html += '<input type="number" class="day-input" title="Day ' + day + '" ' +
-                           'value="' + (quantity || '') + '" min="0" max="99" placeholder="' + day + '" ' +
-                           'data-supply-id="' + supply.id + '" data-day="' + day + '" ' +
-                           'onchange="updateTrackingValue(' + supply.id + ', ' + day + ', this.value)">';
+                    html += '<input type="number" class="day-input" title="Day ' + day + '"' +
+                           ' value="' + (quantity || '') + '" min="0" max="99" placeholder="' + day + '"' +
+                           ' data-supply-id="' + supply.id + '" data-day="' + day + '"' +
+                           ' onchange="updateTrackingValue(' + supply.id + ', ' + day + ', this.value)">';
                 }
                 
                 // Row 3: Days 21-31
@@ -3427,14 +3427,14 @@
                     var currentData = trackingData[key];
                     var quantity = currentData ? currentData.quantity : 0;
                     
-                    html += '<input type="number" class="day-input" title="Day ' + day + '" ' +
-                           'value="' + (quantity || '') + '" min="0" max="99" placeholder="' + day + '" ' +
-                           'data-supply-id="' + supply.id + '" data-day="' + day + '" ' +
-                           'onchange="updateTrackingValue(' + supply.id + ', ' + day + ', this.value)">';
+                    html += '<input type="number" class="day-input" title="Day ' + day + '"' +
+                           ' value="' + (quantity || '') + '" min="0" max="99" placeholder="' + day + '"' +
+                           ' data-supply-id="' + supply.id + '" data-day="' + day + '"' +
+                           ' onchange="updateTrackingValue(' + supply.id + ', ' + day + ', this.value)">';
                 }
                 
-                html += '</div>'; // Close days-grid
-                html += '</td>'; // Close days-container
+                html += '</div>';
+                html += '</td>';
                 html += '</tr>';
             });
             
