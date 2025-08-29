@@ -323,7 +323,7 @@
             font-weight: 600;
             text-align: center;
             position: sticky;
-            top: 200px;
+            top: 240px;
             z-index: 20;
             border-bottom: 2px solid #3b37cf;
             font-size: 12px;
@@ -336,94 +336,74 @@
             vertical-align: top;
         }
 
-        .supply-info-container {
-            background: #f8fafc;
-            padding: 12px;
-            border-radius: 8px;
-            margin: 4px;
-            min-width: 300px;
-            text-align: left;
-        }
-
-        .supply-info-row {
+        .supply-row-container {
             display: flex;
-            justify-content: space-between;
+            flex-direction: column;
+            width: 100%;
+            border-bottom: 2px solid #e5e7eb;
+            background: white;
+        }
+
+        .supply-info-header {
+            display: grid;
+            grid-template-columns: 120px 200px 80px 100px 80px 80px 100px;
+            gap: 8px;
+            background: #4f46e5;
+            color: white;
+            padding: 12px 8px;
+            font-size: 12px;
+            font-weight: 600;
+            position: sticky;
+            top: 240px;
+            z-index: 20;
+            border-bottom: 2px solid #3b37cf;
+        }
+
+        .supply-info-values {
+            display: grid;
+            grid-template-columns: 120px 200px 80px 100px 80px 80px 100px;
+            gap: 8px;
+            padding: 8px;
             align-items: center;
-            margin-bottom: 8px;
-            padding: 4px 0;
+            font-size: 13px;
         }
 
-        .supply-info-row:last-child {
-            margin-bottom: 0;
-        }
-
-        .supply-code {
+        .supply-code-value {
             font-weight: bold;
             color: #4f46e5;
             font-size: 16px;
         }
 
-        .supply-description {
+        .supply-description-value {
             font-weight: 600;
             color: #374151;
-            font-size: 14px;
-            max-width: 200px;
+            word-wrap: break-word;
         }
 
-        .supply-wound-dx {
-            min-width: 80px;
-        }
-
-        .supply-hcpcs {
-            font-size: 11px;
-            color: #666;
-        }
-
-        .supply-cost {
-            font-weight: 600;
-            color: #059669;
-            font-size: 13px;
-        }
-
-        .supply-units {
-            font-weight: bold;
-            color: #374151;
-            background: #e5e7eb;
-            padding: 4px 8px;
-            border-radius: 4px;
-        }
-
-        .supply-total {
-            font-weight: bold;
-            color: #1e40af;
-            background: #dbeafe;
-            padding: 4px 8px;
-            border-radius: 4px;
-        }
-
-        .days-container-new {
+        .days-section {
             padding: 8px;
-            min-width: 400px;
         }
 
-        .days-header {
-            display: flex;
-            justify-content: space-between;
+        .days-row {
             margin-bottom: 8px;
-            font-size: 10px;
-            color: #666;
-            font-weight: 500;
+        }
+
+        .days-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: #4f46e5;
+            margin-bottom: 4px;
         }
 
         .days-grid-new {
             display: grid;
-            grid-template-columns: repeat(31, 1fr);
-            gap: 2px;
-            justify-content: space-between;
+            grid-template-columns: repeat(15, 1fr);
+            gap: 4px;
+            margin-bottom: 4px;
         }
 
         .day-number {
-            font-size: 9px;
+            font-size: 10px;
             color: #666;
             text-align: center;
             margin-bottom: 2px;
@@ -431,7 +411,7 @@
         }
 
         .day-input-new {
-            width: 38px;
+            width: 45px;
             height: 35px;
             padding: 2px;
             border: 1px solid #d1d5db;
@@ -631,7 +611,7 @@
                 top: 140px;
             }
 
-            .supply-tracking-table th {
+            .supply-info-header {
                 top: 200px;
             }
 
@@ -654,6 +634,24 @@
 
             .logo h1 {
                 font-size: 1.5rem;
+            }
+
+            .supply-info-header,
+            .supply-info-values {
+                grid-template-columns: 80px 150px 60px 80px 60px 60px 80px;
+                gap: 4px;
+                font-size: 11px;
+            }
+
+            .days-grid-new {
+                grid-template-columns: repeat(15, 1fr);
+                gap: 2px;
+            }
+
+            .day-input-new {
+                width: 35px;
+                height: 30px;
+                font-size: 11px;
             }
         }
 
@@ -933,6 +931,7 @@
         </div>
     </div>
 
+    <!-- Modals -->
     <div id="addPatientModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -1834,53 +1833,62 @@
             var isAdmin = currentUser.role === 'admin';
             var filteredSupplies = getFilteredSupplies();
             
-            var html = '<div style="overflow-x: auto;"><table class="supply-tracking-table">';
-            html += '<thead><tr>';
-            html += '<th style="min-width: 320px;">Supply Information</th>';
-            html += '<th style="min-width: 1200px;">Daily Quantities (Days 1-31)</th>';
-            html += '</tr></thead><tbody>';
+            var html = '<div style="overflow-x: auto;">';
+            
+            // Header row
+            html += '<div class="supply-info-header">';
+            html += '<div>Code</div>';
+            html += '<div>Description</div>';
+            html += '<div>Wound DX</div>';
+            html += '<div>HCPCS</div>';
+            html += '<div>Unit Cost</div>';
+            html += '<div>Total Units</div>';
+            html += '<div>Total Cost</div>';
+            html += '</div>';
             
             filteredSupplies.forEach(function(supply) {
                 var totalUnits = getTotalUnitsForSupply(supply.id);
                 var unitCost = parseFloat(supply.cost || 0);
                 var totalCost = totalUnits * unitCost;
                 
-                html += '<tr>';
-                html += '<td style="padding: 8px; vertical-align: top;">';
-                html += '<div class="supply-info-container">';
-                html += '<div class="supply-info-row">';
-                html += '<div class="supply-code">' + escapeHtml(supply.code) + '</div>';
-                html += '<div class="supply-description">' + escapeHtml(supply.description) + '</div>';
+                html += '<div class="supply-row-container">';
+                
+                // Supply info row
+                html += '<div class="supply-info-values">';
+                html += '<div class="supply-code-value">' + escapeHtml(supply.code) + '</div>';
+                html += '<div class="supply-description-value">' + escapeHtml(supply.description) + '</div>';
                 
                 if (isAdmin) {
-                    html += '<div class="supply-wound-dx"><input type="text" class="wound-dx-input-new" placeholder="Wound DX" value="' + escapeHtml(getWoundDxForSupply(supply.id)) + '" onchange="updateWoundDx(' + supply.id + ', this.value)"></div>';
+                    html += '<div><input type="text" class="wound-dx-input-new" placeholder="Wound DX" value="' + escapeHtml(getWoundDxForSupply(supply.id)) + '" onchange="updateWoundDx(' + supply.id + ', this.value)" style="width: 70px; font-size: 11px;"></div>';
+                } else {
+                    html += '<div style="font-size: 11px;">' + escapeHtml(getWoundDxForSupply(supply.id) || 'N/A') + '</div>';
                 }
-                html += '</div>';
                 
-                html += '<div class="supply-info-row">';
+                html += '<div style="font-size: 11px; color: #666;">' + escapeHtml(supply.hcpcs || 'N/A') + '</div>';
+                html += '<div style="font-weight: 600; color: #059669;">$' + unitCost.toFixed(2) + '</div>';
+                html += '<div class="supply-units" id="total-units-' + supply.id + '" style="font-weight: bold; color: #374151; background: #e5e7eb; padding: 4px 6px; border-radius: 4px; text-align: center;">' + totalUnits + '</div>';
+                
                 if (isAdmin) {
-                    html += '<div class="supply-hcpcs">HCPCS: ' + escapeHtml(supply.hcpcs || 'N/A') + '</div>';
+                    html += '<div class="supply-total" id="total-cost-' + supply.id + '" style="font-weight: bold; color: #1e40af; background: #dbeafe; padding: 4px 6px; border-radius: 4px; text-align: center;">$' + totalCost.toFixed(2) + '</div>';
+                } else {
+                    html += '<div style="font-weight: bold; color: #1e40af;">$' + totalCost.toFixed(2) + '</div>';
                 }
-                html += '<div class="supply-cost">Unit: $' + unitCost.toFixed(2) + '</div>';
-                html += '<div class="supply-units" id="total-units-' + supply.id + '">Units: ' + totalUnits + '</div>';
-                if (isAdmin) {
-                    html += '<div class="supply-total" id="total-cost-' + supply.id + '">Total: $' + totalCost.toFixed(2) + '</div>';
-                }
-                html += '</div>';
-                html += '</div>';
-                html += '</td>';
                 
-                html += '<td style="padding: 8px; vertical-align: top;">';
-                html += '<div class="days-container-new">';
-                html += '<div class="days-grid-new" style="margin-bottom: 4px;">';
+                html += '</div>';
                 
-                for (var day = 1; day <= 31; day++) {
+                // Days section
+                html += '<div class="days-section">';
+                
+                // Days 1-15
+                html += '<div class="days-row">';
+                html += '<div class="days-label">Days 1-15</div>';
+                html += '<div class="days-grid-new">';
+                for (var day = 1; day <= 15; day++) {
                     html += '<div class="day-number">' + day + '</div>';
                 }
                 html += '</div>';
-                
                 html += '<div class="days-grid-new">';
-                for (var day = 1; day <= 31; day++) {
+                for (var day = 1; day <= 15; day++) {
                     var key = supply.id + '_' + day;
                     var currentData = trackingData[key];
                     var quantity = currentData ? currentData.quantity : 0;
@@ -1888,11 +1896,30 @@
                 }
                 html += '</div>';
                 html += '</div>';
-                html += '</td>';
-                html += '</tr>';
+                
+                // Days 16-31
+                html += '<div class="days-row">';
+                html += '<div class="days-label">Days 16-31</div>';
+                html += '<div class="days-grid-new">';
+                for (var day = 16; day <= 31; day++) {
+                    html += '<div class="day-number">' + day + '</div>';
+                }
+                html += '</div>';
+                html += '<div class="days-grid-new">';
+                for (var day = 16; day <= 31; day++) {
+                    var key = supply.id + '_' + day;
+                    var currentData = trackingData[key];
+                    var quantity = currentData ? currentData.quantity : 0;
+                    html += '<input type="number" class="day-input-new" title="Day ' + day + '" value="' + (quantity || '') + '" min="0" max="99" placeholder="0" data-supply-id="' + supply.id + '" data-day="' + day + '" onchange="updateTrackingValue(' + supply.id + ', ' + day + ', this.value)">';
+                }
+                html += '</div>';
+                html += '</div>';
+                
+                html += '</div>'; // end days-section
+                html += '</div>'; // end supply-row-container
             });
             
-            html += '</tbody></table></div>';
+            html += '</div>';
             document.getElementById('trackingContent').innerHTML = html;
         }
 
@@ -1967,7 +1994,7 @@
             var totalUnits = getTotalUnitsForSupply(supplyId);
             var totalElement = document.getElementById('total-units-' + supplyId);
             if (totalElement) {
-                totalElement.textContent = 'Units: ' + totalUnits;
+                totalElement.textContent = totalUnits;
             }
             
             if (currentUser.role === 'admin') {
@@ -1977,7 +2004,7 @@
                     var totalCost = totalUnits * unitCost;
                     var costElement = document.getElementById('total-cost-' + supplyId);
                     if (costElement) {
-                        costElement.textContent = 'Total: $' + totalCost.toFixed(2);
+                        costElement.textContent = '$' + totalCost.toFixed(2);
                     }
                 }
             }
