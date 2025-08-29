@@ -1461,7 +1461,7 @@
                 return matchesSearch && matchesFacility && matchesMonth;
             });
 
-            filtered.sort((a, b) => {
+            filtered.sort(function(a, b) {
                 switch(sortBy) {
                     case 'name':
                         return a.name.localeCompare(b.name);
@@ -1513,7 +1513,14 @@
         }
 
         function editPatient(patientId) {
-            var patient = allPatients.find(p => p.id === patientId);
+            var patient = null;
+            for (var i = 0; i < allPatients.length; i++) {
+                if (allPatients[i].id === patientId) {
+                    patient = allPatients[i];
+                    break;
+                }
+            }
+            
             if (!patient) {
                 showMessage('Patient not found', 'error');
                 return;
@@ -1525,7 +1532,7 @@
             document.getElementById('editPatientMonth').value = patient.month;
             
             loadFacilityOptions('editPatientFacility');
-            setTimeout(() => {
+            setTimeout(function() {
                 document.getElementById('editPatientFacility').value = patient.facility_id;
             }, 100);
             
@@ -1605,7 +1612,14 @@
         }
 
         function editSupply(supplyId) {
-            var supply = supplies.find(s => s.id === supplyId);
+            var supply = null;
+            for (var i = 0; i < supplies.length; i++) {
+                if (supplies[i].id === supplyId) {
+                    supply = supplies[i];
+                    break;
+                }
+            }
+            
             if (!supply) {
                 showMessage('Supply not found', 'error');
                 return;
@@ -1664,18 +1678,19 @@
                     if (data.success) {
                         var message = data.message;
                         if (data.results) {
-                            message += '\nSuccessful: ' + data.results.successful;
-                            message += '\nSkipped (already exist): ' + data.results.skipped;
-                            message += '\nFailed: ' + data.results.failed.length;
+                            message += ' Successful: ' + data.results.successful;
+                            message += ', Skipped: ' + data.results.skipped;
+                            message += ', Failed: ' + data.results.failed.length;
                             
                             if (data.results.failed.length > 0) {
-                                message += '\n\nFailed records:';
-                                data.results.failed.slice(0, 5).forEach(failure => {
-                                    message += '\n- Code ' + failure.code + ': ' + failure.error;
+                                var failedList = [];
+                                data.results.failed.slice(0, 3).forEach(failure => {
+                                    failedList.push('Code ' + failure.code + ': ' + failure.error);
                                 });
-                                if (data.results.failed.length > 5) {
-                                    message += '\n... and ' + (data.results.failed.length - 5) + ' more';
+                                if (data.results.failed.length > 3) {
+                                    failedList.push('... and ' + (data.results.failed.length - 3) + ' more');
                                 }
+                                message += '. Failed: ' + failedList.join(', ');
                             }
                         }
                         showMessage(message, 'success');
@@ -1712,7 +1727,13 @@
                     
                     if (currentUser.role !== 'admin' && currentUser.facility_id) {
                         // Non-admin users only see their facility
-                        var userFacility = facilities.find(f => f.id == currentUser.facility_id);
+                        var userFacility = null;
+                        for (var f = 0; f < facilities.length; f++) {
+                            if (facilities[f].id == currentUser.facility_id) {
+                                userFacility = facilities[f];
+                                break;
+                            }
+                        }
                         if (userFacility) {
                             var option = document.createElement('option');
                             option.value = userFacility.id;
@@ -1741,7 +1762,13 @@
             
             if (currentUser.role !== 'admin' && currentUser.facility_id) {
                 // Non-admin users can only add to their facility
-                var userFacility = facilities.find(f => f.id == currentUser.facility_id);
+                var userFacility = null;
+                for (var f = 0; f < facilities.length; f++) {
+                    if (facilities[f].id == currentUser.facility_id) {
+                        userFacility = facilities[f];
+                        break;
+                    }
+                }
                 if (userFacility) {
                     var option = document.createElement('option');
                     option.value = userFacility.id;
@@ -1790,7 +1817,9 @@
                 return matchesFacility && matchesMonth;
             });
 
-            filteredPatients.sort((a, b) => a.name.localeCompare(b.name));
+            filteredPatients.sort(function(a, b) {
+                return a.name.localeCompare(b.name);
+            });
 
             filteredPatients.forEach(patient => {
                 var option = document.createElement('option');
@@ -1815,7 +1844,14 @@
             document.getElementById('supplySearchContainer').style.display = 'block';
             
             // Find patient info
-            var patient = (window.trackingPatients || []).find(p => p.id == patientId);
+            var patient = null;
+            var trackingPatients = window.trackingPatients || [];
+            for (var i = 0; i < trackingPatients.length; i++) {
+                if (trackingPatients[i].id == patientId) {
+                    patient = trackingPatients[i];
+                    break;
+                }
+            }
             if (patient) {
                 document.getElementById('patientInfo').innerHTML = 
                     '<strong>Patient:</strong> ' + escapeHtml(patient.name) + ' | ' +
@@ -2058,7 +2094,14 @@
                 return;
             }
 
-            var patient = (window.trackingPatients || []).find(p => p.id == currentTrackingPatient);
+            var patient = null;
+            var trackingPatients = window.trackingPatients || [];
+            for (var p = 0; p < trackingPatients.length; p++) {
+                if (trackingPatients[p].id == currentTrackingPatient) {
+                    patient = trackingPatients[p];
+                    break;
+                }
+            }
             if (!patient) {
                 showMessage('Patient not found', 'error');
                 return;
@@ -2176,8 +2219,16 @@
         }
 
         function editUser(userId) {
-            apiCall('/api/admin/users').then(data => {
-                var user = (data.users || []).find(u => u.id === userId);
+            apiCall('/api/admin/users').then(function(data) {
+                var users = data.users || [];
+                var user = null;
+                for (var i = 0; i < users.length; i++) {
+                    if (users[i].id === userId) {
+                        user = users[i];
+                        break;
+                    }
+                }
+                
                 if (!user) {
                     showMessage('User not found', 'error');
                     return;
@@ -2189,12 +2240,12 @@
                 document.getElementById('editUserRole').value = user.role;
                 
                 loadFacilityOptions('editUserFacility');
-                setTimeout(() => {
+                setTimeout(function() {
                     document.getElementById('editUserFacility').value = user.facility_id || '';
                 }, 100);
                 
                 document.getElementById('editUserModal').style.display = 'block';
-            }).catch(error => {
+            }).catch(function(error) {
                 showMessage('Failed to load user data', 'error');
             });
         }
@@ -2298,11 +2349,11 @@
 
         function processCsvData(csv) {
             var lines = csv.split('\n');
-            var headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+            var headers = lines[0].split(',').map(function(h) { return h.trim().toLowerCase(); });
             
             // Validate headers
             var requiredHeaders = ['name', 'month', 'facility'];
-            var missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
+            var missingHeaders = requiredHeaders.filter(function(h) { return headers.indexOf(h) === -1; });
             
             if (missingHeaders.length > 0) {
                 document.getElementById('uploadResults').innerHTML = 
@@ -2316,11 +2367,27 @@
                 var line = lines[i].trim();
                 if (!line) continue;
                 
-                var values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+                // Simple CSV parsing - handles basic quoted values
+                var values = [];
+                var currentValue = '';
+                var inQuotes = false;
+                
+                for (var j = 0; j < line.length; j++) {
+                    var char = line[j];
+                    if (char === '"') {
+                        inQuotes = !inQuotes;
+                    } else if (char === ',' && !inQuotes) {
+                        values.push(currentValue.trim());
+                        currentValue = '';
+                    } else {
+                        currentValue += char;
+                    }
+                }
+                values.push(currentValue.trim()); // Add the last value
                 
                 if (values.length >= 3) {
                     var patient = {};
-                    headers.forEach((header, index) => {
+                    headers.forEach(function(header, index) {
                         if (values[index]) {
                             patient[header] = values[index];
                         }
@@ -2335,25 +2402,27 @@
             }
 
             // Convert to API format
-            var formattedPatients = patients.map(p => ({
-                name: p.name,
-                mrn: p.mrn || '',
-                month: p.month,
-                facilityName: p.facility
-            }));
+            var formattedPatients = patients.map(function(p) {
+                return {
+                    name: p.name,
+                    mrn: p.mrn || '',
+                    month: p.month,
+                    facilityName: p.facility
+                };
+            });
 
             // Upload to API
             apiCall('/api/patients/bulk', {
                 method: 'POST',
                 body: JSON.stringify({ patients: formattedPatients })
-            }).then(response => {
+            }).then(function(response) {
                 var html = '<h4>Upload Complete</h4>';
                 html += '<p><strong>Successful:</strong> ' + response.successful + '</p>';
                 html += '<p><strong>Failed:</strong> ' + response.failed.length + '</p>';
                 
                 if (response.failed.length > 0) {
                     html += '<h5>Failed Records:</h5><ul>';
-                    response.failed.forEach(failure => {
+                    response.failed.forEach(function(failure) {
                         html += '<li>' + escapeHtml(failure.name) + ': ' + escapeHtml(failure.error) + '</li>';
                     });
                     html += '</ul>';
@@ -2364,7 +2433,7 @@
                 if (response.successful > 0) {
                     loadPatients(); // Refresh patient list
                 }
-            }).catch(error => {
+            }).catch(function(error) {
                 document.getElementById('uploadResults').innerHTML = '<p style="color: red;">Upload failed: ' + error.message + '</p>';
             });
         }
@@ -2607,7 +2676,7 @@
                            'value="' + (quantity || '') + '" min="0" max="999" placeholder="0" ' +
                            'data-supply-id="' + supply.id + '" data-day="' + day + '" ' +
                            'onchange="updateTrackingValue(' + supply.id + ', ' + day + ', this.value)" ' +
-                           'title="Day ' + day + ': ' + supply.description + '"></td>';
+                           'title="Day ' + day + ': ' + escapeHtml(supply.description) + '"></td>';
                 }
                 
                 html += '<td class="total-cost" id="total-units-' + supply.id + '">' + totalUnits + '</td>';
