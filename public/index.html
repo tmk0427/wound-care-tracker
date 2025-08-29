@@ -1190,20 +1190,15 @@
 
         function escapeHtml(unsafe) {
             if (!unsafe) return '';
-            return String(unsafe)
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#39;');
+            return String(unsafe).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
         }
 
-        function showMessage(message, type, containerId = 'loginMessage') {
+        function showMessage(message, type, containerId) {
+            containerId = containerId || 'loginMessage';
             var container = document.getElementById(containerId);
             if (container) {
                 var alertClass = 'alert-' + type;
                 container.innerHTML = '<div class="alert ' + alertClass + '">' + escapeHtml(message) + '</div>';
-                
                 if (type === 'success') {
                     setTimeout(function() {
                         container.innerHTML = '';
@@ -1217,7 +1212,8 @@
             if (modal) modal.style.display = 'none';
         }
 
-        function apiCall(endpoint, options = {}) {
+        function apiCall(endpoint, options) {
+            options = options || {};
             var headers = {
                 'Content-Type': 'application/json'
             };
@@ -1231,19 +1227,15 @@
             }
 
             return fetch(endpoint, {
-                ...options,
-                headers: headers
+                method: options.method || 'GET',
+                headers: headers,
+                body: options.body
             }).then(function(response) {
                 if (!response.ok) {
                     throw new Error('HTTP error! status: ' + response.status);
                 }
                 return response.json();
             });
-        }
-
-        function clearLoginMessage() {
-            var msgContainer = document.getElementById('loginMessage');
-            if (msgContainer) msgContainer.innerHTML = '';
         }
 
         function setupLoginForm() {
@@ -1384,8 +1376,8 @@
 
         function initializeMonthDropdowns() {
             var months = generateMonthOptions();
-            
             var dropdowns = ['patientMonthFilter', 'trackingMonthFilter', 'patientMonth', 'editPatientMonth'];
+            
             dropdowns.forEach(function(id) {
                 var dropdown = document.getElementById(id);
                 if (dropdown) {
@@ -1447,7 +1439,6 @@
                 var matchesSearch = patient.name.toLowerCase().includes(searchTerm) || (patient.mrn && patient.mrn.toLowerCase().includes(searchTerm));
                 var matchesFacility = !facilityFilter || patient.facility_id.toString() === facilityFilter;
                 var matchesMonth = !monthFilter || patient.month === monthFilter;
-                
                 return matchesSearch && matchesFacility && matchesMonth;
             });
 
@@ -1482,7 +1473,6 @@
             var html = '';
             patients.forEach(function(patient) {
                 var actions = (currentUser.role === 'admin' || currentUser.facility_id == patient.facility_id) ? '<button class="btn btn-warning btn-small" onclick="editPatient(' + patient.id + ')">Edit</button> <button class="btn btn-danger btn-small" onclick="deletePatient(' + patient.id + ')">Delete</button>' : '<span style="color: #666;">No Access</span>';
-                    
                 html += '<tr><td>' + escapeHtml(patient.name) + '</td><td>' + escapeHtml(patient.mrn || 'N/A') + '</td><td>' + escapeHtml(patient.month) + '</td><td>' + escapeHtml(patient.facility_name || 'N/A') + '</td><td>' + actions + '</td></tr>';
             });
             tbody.innerHTML = html;
@@ -1550,7 +1540,8 @@
             renderSuppliesTable(filtered);
         }
 
-        function renderSuppliesTable(filteredSupplies = supplies) {
+        function renderSuppliesTable(filteredSupplies) {
+            filteredSupplies = filteredSupplies || supplies;
             var tbody = document.getElementById('suppliesTable');
             if (!tbody) return;
             
@@ -1562,7 +1553,6 @@
             var html = '';
             filteredSupplies.forEach(function(supply) {
                 var actions = currentUser.role === 'admin' ? '<button class="btn btn-warning btn-small" onclick="editSupply(' + supply.id + ')">Edit</button>' + (supply.is_custom ? ' <button class="btn btn-danger btn-small" onclick="deleteSupply(' + supply.id + ')">Delete</button>' : '') : '<span>View Only</span>';
-                
                 html += '<tr><td>' + escapeHtml(supply.code) + '</td><td>' + escapeHtml(supply.description) + '</td><td>' + escapeHtml(supply.hcpcs || 'N/A') + '</td><td>$' + parseFloat(supply.cost || 0).toFixed(2) + '</td><td>' + (supply.is_custom ? 'Custom' : 'AR Standard') + '</td><td>' + actions + '</td></tr>';
             });
             tbody.innerHTML = html;
@@ -1856,1427 +1846,39 @@
                 var totalCost = totalUnits * unitCost;
                 
                 html += '<tr>';
-                
-                // Supply Information Box
                 html += '<td style="padding: 8px; vertical-align: top;">';
                 html += '<div class="supply-info-container">';
-                
-                // Top row: Code, Description, Wound DX
                 html += '<div class="supply-info-row">';
                 html += '<div class="supply-code">' + escapeHtml(supply.code) + '</div>';
                 html += '<div class="supply-description">' + escapeHtml(supply.description) + '</div>';
+                
                 if (isAdmin) {
                     html += '<div class="supply-wound-dx"><input type="text" class="wound-dx-input-new" placeholder="Wound DX" value="' + escapeHtml(getWoundDxForSupply(supply.id)) + '" onchange="updateWoundDx(' + supply.id + ', this.value)"></div>';
                 }
                 html += '</div>';
                 
-                // Bottom row: HCPCS, Unit Cost, Units, Total Cost
                 html += '<div class="supply-info-row">';
                 if (isAdmin) {
                     html += '<div class="supply-hcpcs">HCPCS: ' + escapeHtml(supply.hcpcs || 'N/A') + '</div>';
                 }
-                html += '<div class="supply-cost">Unit: 
-
-        function getFilteredSupplies() {
-            var searchTerm = document.getElementById('trackingSupplySearch').value.toLowerCase();
-            
-            if (!searchTerm) {
-                var suppliesWithData = [];
-                var suppliesWithoutData = [];
-                
-                supplies.forEach(function(supply) {
-                    var totalUnits = getTotalUnitsForSupply(supply.id);
-                    if (totalUnits > 0) {
-                        suppliesWithData.push(supply);
-                    } else {
-                        suppliesWithoutData.push(supply);
-                    }
-                });
-                
-                return suppliesWithData.concat(suppliesWithoutData);
-            }
-            
-            return supplies.filter(function(supply) {
-                return supply.description.toLowerCase().includes(searchTerm) || supply.code.toString().includes(searchTerm) || (supply.hcpcs && supply.hcpcs.toLowerCase().includes(searchTerm));
-            });
-        }
-
-        function filterTrackingTable() {
-            if (currentTrackingPatient) {
-                renderTrackingTable();
-            }
-        }
-
-        function getTotalUnitsForSupply(supplyId) {
-            var total = 0;
-            for (var day = 1; day <= 31; day++) {
-                var key = supplyId + '_' + day;
-                var data = trackingData[key];
-                if (data && data.quantity) {
-                    total += parseInt(data.quantity) || 0;
-                }
-            }
-            return total;
-        }
-
-        function getWoundDxForSupply(supplyId) {
-            for (var day = 1; day <= 31; day++) {
-                var key = supplyId + '_' + day;
-                var data = trackingData[key];
-                if (data && data.wound_dx) {
-                    return data.wound_dx;
-                }
-            }
-            return '';
-        }
-
-        function updateTrackingValue(supplyId, day, value) {
-            var key = String(supplyId) + '_' + String(day);
-            var quantity = parseInt(value) || 0;
-            
-            if (!trackingData[key]) {
-                trackingData[key] = {
-                    patient_id: currentTrackingPatient,
-                    supply_id: supplyId,
-                    day_of_month: day,
-                    quantity: quantity
-                };
-            } else {
-                trackingData[key].quantity = quantity;
-            }
-            
-            var totalUnits = getTotalUnitsForSupply(supplyId);
-            var totalElement = document.getElementById('total-units-' + supplyId);
-            if (totalElement) {
-                totalElement.textContent = totalUnits;
-            }
-            
-            if (currentUser.role === 'admin') {
-                var supply = supplies.find(function(s) { return s.id == supplyId; });
-                if (supply) {
-                    var unitCost = parseFloat(supply.cost || 0);
-                    var totalCost = totalUnits * unitCost;
-                    var costElement = document.getElementById('total-cost-' + supplyId);
-                    if (costElement) {
-                        costElement.textContent = '$' + totalCost.toFixed(2);
-                    }
-                }
-            }
-            
-            updateDashboardTotalCost();
-        }
-
-        function updateDashboardTotalCost() {
-            var totalCost = 0;
-            
-            if (currentTrackingPatient && trackingData) {
-                supplies.forEach(function(supply) {
-                    var totalUnits = getTotalUnitsForSupply(supply.id);
-                    var unitCost = parseFloat(supply.cost || 0);
-                    totalCost += totalUnits * unitCost;
-                });
-            }
-            
-            var dashboardCostElement = document.getElementById('totalCost');
-            if (dashboardCostElement) {
-                dashboardCostElement.textContent = '$' + totalCost.toFixed(2);
-            }
-        }
-
-        function updateWoundDx(supplyId, value) {
-            for (var day = 1; day <= 31; day++) {
-                var key = supplyId + '_' + day;
-                if (trackingData[key]) {
-                    trackingData[key].wound_dx = value;
-                } else if (value) {
-                    trackingData[key] = {
-                        patient_id: currentTrackingPatient,
-                        supply_id: supplyId,
-                        day_of_month: day,
-                        quantity: 0,
-                        wound_dx: value
-                    };
-                }
-            }
-        }
-
-        function saveAllTrackingData() {
-            if (!currentTrackingPatient) {
-                showMessage('No patient selected', 'error');
-                return;
-            }
-
-            var savePromises = [];
-            
-            for (var key in trackingData) {
-                var data = trackingData[key];
-                if (data.quantity >= 0) {
-                    var promise = apiCall('/api/tracking', {
-                        method: 'POST',
-                        body: JSON.stringify({
-                            patientId: data.patient_id || currentTrackingPatient,
-                            supplyId: data.supply_id,
-                            dayOfMonth: data.day_of_month,
-                            quantity: data.quantity || 0,
-                            woundDx: data.wound_dx || null
-                        })
-                    });
-                    savePromises.push(promise);
-                }
-            }
-
-            var saveBtn = document.getElementById('saveAllBtn');
-            if (saveBtn) {
-                saveBtn.disabled = true;
-                saveBtn.textContent = 'Saving...';
-            }
-
-            Promise.all(savePromises).then(function() {
-                showMessage('All tracking data saved successfully!', 'success');
-                loadPatientTracking();
-                loadDashboardData();
-            }).catch(function(error) {
-                console.error('Failed to save tracking data:', error);
-                showMessage('Failed to save some tracking data', 'error');
-            }).finally(function() {
-                if (saveBtn) {
-                    saveBtn.disabled = false;
-                    saveBtn.textContent = '💾 Save All';
-                }
-            });
-        }
-
-        function exportTrackingReport() {
-            if (!currentTrackingPatient) {
-                showMessage('No patient selected', 'error');
-                return;
-            }
-
-            var patient = (window.trackingPatients || []).find(function(p) { return p.id == currentTrackingPatient; });
-            if (!patient) {
-                showMessage('Patient not found', 'error');
-                return;
-            }
-
-            // Convert month from YYYY-MM to MM-YYYY format
-            var monthParts = patient.month.split('-');
-            var formattedMonth = monthParts.length === 2 ? monthParts[1] + '-' + monthParts[0] : patient.month;
-
-            var csvRows = [];
-            csvRows.push(['Name', 'MRN', 'Month', 'Facility', 'Code', 'Description', 'HCPCS', 'Wound DX', 'Total Units', 'Unit Cost', 'Total Cost']);
-
-            supplies.forEach(function(supply) {
-                var totalUnits = getTotalUnitsForSupply(supply.id);
-                if (totalUnits > 0) {
-                    var totalCost = totalUnits * parseFloat(supply.cost || 0);
-                    var woundDx = getWoundDxForSupply(supply.id);
-                    
-                    csvRows.push([
-                        patient.name,
-                        patient.mrn || '',
-                        formattedMonth,
-                        patient.facility_name || '',
-                        supply.code,
-                        supply.description,
-                        supply.hcpcs || '',
-                        woundDx || '',
-                        totalUnits,
-                        parseFloat(supply.cost || 0).toFixed(2),
-                        totalCost.toFixed(2)
-                    ]);
-                }
-            });
-
-            var csvContent = csvRows.map(function(row) {
-                return row.map(function(field) {
-                    return '"' + String(field).replace(/"/g, '""') + '"';
-                }).join(',');
-            }).join('\n');
-
-            var blob = new Blob([csvContent], { type: 'text/csv' });
-            var url = window.URL.createObjectURL(blob);
-            var a = document.createElement('a');
-            a.href = url;
-            a.download = 'Supply_Report_' + patient.name.replace(/\s+/g, '_') + '_' + formattedMonth.replace('-', '_') + '.csv';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-            
-            showMessage('Report exported successfully!', 'success');
-        }
-
-        function loadAdminData() {
-            if (currentUser.role !== 'admin') return;
-
-            Promise.all([
-                apiCall('/api/admin/users'),
-                apiCall('/api/facilities')
-            ]).then(function(results) {
-                var usersData = results[0];
-                var facilitiesData = results[1];
-                
-                document.getElementById('totalUsers').textContent = (usersData.users && usersData.users.length) || 0;
-                document.getElementById('totalFacilities').textContent = (facilitiesData.facilities && facilitiesData.facilities.length) || 0;
-                
-                var pendingUsers = 0;
-                if (usersData.users) {
-                    usersData.users.forEach(function(user) {
-                        if (!user.is_approved) pendingUsers++;
-                    });
-                }
-                document.getElementById('pendingApprovals').textContent = pendingUsers;
-
-                renderUsersTable(usersData.users || []);
-            }).catch(function(error) {
-                console.error('Failed to load admin data:', error);
-            });
-        }
-
-        function renderUsersTable(users) {
-            var tbody = document.getElementById('usersTable');
-            if (!tbody) return;
-            
-            if (users.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="text-center">No users found</td></tr>';
-                return;
-            }
-
-            var html = '';
-            users.forEach(function(user) {
-                var statusBadge = user.is_approved ? '<span style="background: #d1fae5; color: #065f46; padding: 2px 8px; border-radius: 4px; font-size: 12px;">Approved</span>' : '<span style="background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 4px; font-size: 12px;">Pending</span>';
-                
-                var approveBtn = user.is_approved ? '' : '<button class="btn btn-success btn-small" onclick="approveUser(' + user.id + ')">Approve</button> ';
-                
-                html += '<tr><td>' + escapeHtml(user.name) + '</td><td>' + escapeHtml(user.email) + '</td><td>' + escapeHtml(user.role) + '</td><td>' + escapeHtml(user.facility_name || 'N/A') + '</td><td>' + statusBadge + '</td><td>' + approveBtn + '<button class="btn btn-warning btn-small" onclick="editUser(' + user.id + ')">Edit</button> <button class="btn btn-primary btn-small" onclick="resetUserPassword(' + user.id + ')">Reset Password</button> <button class="btn btn-danger btn-small" onclick="deleteUser(' + user.id + ')">Delete</button></td></tr>';
-            });
-            tbody.innerHTML = html;
-        }
-
-        function showAddUserModal() {
-            document.getElementById('addUserModal').style.display = 'block';
-            loadFacilityOptions('userFacility');
-        }
-
-        function showAddFacilityModal() {
-            document.getElementById('addFacilityModal').style.display = 'block';
-        }
-
-        function editUser(userId) {
-            apiCall('/api/admin/users').then(function(data) {
-                var user = (data.users || []).find(function(u) { return u.id === userId; });
-                if (!user) {
-                    showMessage('User not found', 'error');
-                    return;
-                }
-
-                document.getElementById('editUserId').value = user.id;
-                document.getElementById('editUserName').value = user.name;
-                document.getElementById('editUserEmail').value = user.email;
-                document.getElementById('editUserRole').value = user.role;
-                
-                loadFacilityOptions('editUserFacility');
-                setTimeout(function() {
-                    document.getElementById('editUserFacility').value = user.facility_id || '';
-                }, 100);
-                
-                document.getElementById('editUserModal').style.display = 'block';
-            }).catch(function(error) {
-                showMessage('Failed to load user data', 'error');
-            });
-        }
-
-        function approveUser(userId) {
-            apiCall('/api/admin/users/' + userId + '/approve', {
-                method: 'PUT'
-            }).then(function() {
-                loadAdminData();
-                showMessage('User approved successfully!', 'success');
-            }).catch(function(error) {
-                showMessage('Failed to approve user', 'error');
-            });
-        }
-
-        function deleteUser(userId) {
-            if (!confirm('Are you sure you want to delete this user?')) return;
-
-            apiCall('/api/admin/users/' + userId, {
-                method: 'DELETE'
-            }).then(function() {
-                loadAdminData();
-                showMessage('User deleted successfully!', 'success');
-            }).catch(function(error) {
-                showMessage('Failed to delete user', 'error');
-            });
-        }
-
-        function resetUserPassword(userId) {
-            var newPassword = prompt('Enter new password for this user (minimum 8 characters):');
-            if (!newPassword) return;
-            
-            if (newPassword.length < 8) {
-                showMessage('Password must be at least 8 characters long', 'error');
-                return;
-            }
-            
-            if (!confirm('Reset password for this user? They will need to use the new password to login.')) return;
-
-            apiCall('/api/admin/users/' + userId + '/reset-password', {
-                method: 'PUT',
-                body: JSON.stringify({ newPassword: newPassword })
-            }).then(function(response) {
-                if (response.success) {
-                    showMessage('Password reset successfully! New password: ' + newPassword, 'success');
-                } else {
-                    showMessage('Failed to reset password: ' + response.error, 'error');
-                }
-            }).catch(function(error) {
-                showMessage('Failed to reset password', 'error');
-            });
-        }
-
-        function showBulkPatientUploadModal() {
-            document.getElementById('bulkPatientUploadModal').style.display = 'block';
-        }
-
-        function dragOverHandler(ev) {
-            ev.preventDefault();
-            document.getElementById('csvUploadZone').classList.add('dragover');
-        }
-
-        function dragLeaveHandler(ev) {
-            document.getElementById('csvUploadZone').classList.remove('dragover');
-        }
-
-        function dropHandler(ev) {
-            ev.preventDefault();
-            document.getElementById('csvUploadZone').classList.remove('dragover');
-            
-            var files = ev.dataTransfer.files;
-            if (files.length > 0) {
-                handleFile(files[0]);
-            }
-        }
-
-        function handleFileSelect(event) {
-            var file = event.target.files[0];
-            if (file) {
-                handleFile(file);
-            }
-        }
-
-        function handleFile(file) {
-            if (file.type !== 'text/csv' && !file.name.endsWith('.csv')) {
-                showMessage('Please select a CSV file', 'error');
-                return;
-            }
-
-            document.getElementById('uploadProgress').style.display = 'block';
-            document.getElementById('uploadResults').innerHTML = 'Processing file...';
-
-            var reader = new FileReader();
-            reader.onload = function(e) {
-                var csv = e.target.result;
-                processCsvData(csv);
-            };
-            reader.readAsText(file);
-        }
-
-        function processCsvData(csv) {
-            var lines = csv.split('\n');
-            var headers = lines[0].split(',').map(function(h) { return h.trim().toLowerCase(); });
-            
-            var requiredHeaders = ['name', 'month', 'facility'];
-            var missingHeaders = requiredHeaders.filter(function(h) { return !headers.includes(h); });
-            
-            if (missingHeaders.length > 0) {
-                document.getElementById('uploadResults').innerHTML = '<p style="color: red;">Missing required columns: ' + missingHeaders.join(', ') + '</p><p>Required columns: Name, Month, Facility (MRN is optional)</p>';
-                return;
-            }
-
-            var patients = [];
-            for (var i = 1; i < lines.length; i++) {
-                var line = lines[i].trim();
-                if (!line) continue;
-                
-                var values = line.split(',').map(function(v) { return v.trim().replace(/^"|"$/g, ''); });
-                
-                if (values.length >= 3) {
-                    var patient = {};
-                    headers.forEach(function(header, index) {
-                        if (values[index]) {
-                            patient[header] = values[index];
-                        }
-                    });
-                    patients.push(patient);
-                }
-            }
-
-            if (patients.length === 0) {
-                document.getElementById('uploadResults').innerHTML = '<p style="color: red;">No valid patient data found</p>';
-                return;
-            }
-
-            var formattedPatients = patients.map(function(p) {
-                return {
-                    name: p.name,
-                    mrn: p.mrn || '',
-                    month: p.month,
-                    facilityName: p.facility
-                };
-            });
-
-            apiCall('/api/patients/bulk', {
-                method: 'POST',
-                body: JSON.stringify({ patients: formattedPatients })
-            }).then(function(response) {
-                var html = '<h4>Upload Complete</h4>';
-                html += '<p><strong>Successful:</strong> ' + response.successful + '</p>';
-                html += '<p><strong>Failed:</strong> ' + response.failed.length + '</p>';
-                
-                if (response.failed.length > 0) {
-                    html += '<h5>Failed Records:</h5><ul>';
-                    response.failed.forEach(function(failure) {
-                        html += '<li>' + escapeHtml(failure.name) + ': ' + escapeHtml(failure.error) + '</li>';
-                    });
-                    html += '</ul>';
-                }
-                
-                document.getElementById('uploadResults').innerHTML = html;
-                
-                if (response.successful > 0) {
-                    loadPatients();
-                }
-            }).catch(function(error) {
-                document.getElementById('uploadResults').innerHTML = '<p style="color: red;">Upload failed: ' + error.message + '</p>';
-            });
-        }
-
-        function setupFormHandlers() {
-            var forms = [
-                { id: 'addPatientForm', handler: handleAddPatient },
-                { id: 'editPatientForm', handler: handleEditPatient },
-                { id: 'addSupplyForm', handler: handleAddSupply },
-                { id: 'editSupplyForm', handler: handleEditSupply },
-                { id: 'addUserForm', handler: handleAddUser },
-                { id: 'editUserForm', handler: handleEditUser },
-                { id: 'addFacilityForm', handler: handleAddFacility }
-            ];
-
-            forms.forEach(function(form) {
-                var formElement = document.getElementById(form.id);
-                if (formElement) {
-                    formElement.addEventListener('submit', form.handler);
-                }
-            });
-        }
-
-        function handleAddPatient(e) {
-            e.preventDefault();
-            
-            var data = {
-                name: document.getElementById('patientName').value,
-                mrn: document.getElementById('patientMRN').value,
-                month: document.getElementById('patientMonth').value,
-                facility_id: document.getElementById('patientFacility').value
-            };
-
-            apiCall('/api/patients', {
-                method: 'POST',
-                body: JSON.stringify(data)
-            }).then(function(response) {
-                if (response.success) {
-                    closeModal('addPatientModal');
-                    document.getElementById('addPatientForm').reset();
-                    loadPatients();
-                    showMessage('Patient added successfully!', 'success');
-                } else {
-                    showMessage('Failed to add patient: ' + response.error, 'error');
-                }
-            }).catch(function(error) {
-                showMessage('Failed to add patient', 'error');
-            });
-        }
-
-        function handleEditPatient(e) {
-            e.preventDefault();
-            
-            var patientId = document.getElementById('editPatientId').value;
-            var data = {
-                name: document.getElementById('editPatientName').value,
-                mrn: document.getElementById('editPatientMRN').value,
-                month: document.getElementById('editPatientMonth').value,
-                facility_id: document.getElementById('editPatientFacility').value
-            };
-
-            apiCall('/api/patients/' + patientId, {
-                method: 'PUT',
-                body: JSON.stringify(data)
-            }).then(function(response) {
-                if (response.success) {
-                    closeModal('editPatientModal');
-                    loadPatients();
-                    showMessage('Patient updated successfully!', 'success');
-                } else {
-                    showMessage('Failed to update patient: ' + response.error, 'error');
-                }
-            }).catch(function(error) {
-                showMessage('Failed to update patient', 'error');
-            });
-        }
-
-        function handleAddSupply(e) {
-            e.preventDefault();
-            
-            var data = {
-                code: document.getElementById('supplyCode').value,
-                description: document.getElementById('supplyDescription').value,
-                hcpcs: document.getElementById('supplyHCPCS').value,
-                cost: document.getElementById('supplyCost').value
-            };
-
-            apiCall('/api/supplies', {
-                method: 'POST',
-                body: JSON.stringify(data)
-            }).then(function(response) {
-                if (response.success) {
-                    closeModal('addSupplyModal');
-                    document.getElementById('addSupplyForm').reset();
-                    loadSupplies();
-                    showMessage('Supply added successfully!', 'success');
-                } else {
-                    showMessage('Failed to add supply: ' + response.error, 'error');
-                }
-            }).catch(function(error) {
-                showMessage('Failed to add supply', 'error');
-            });
-        }
-
-        function handleEditSupply(e) {
-            e.preventDefault();
-            
-            var supplyId = document.getElementById('editSupplyId').value;
-            var data = {
-                code: document.getElementById('editSupplyCode').value,
-                description: document.getElementById('editSupplyDescription').value,
-                hcpcs: document.getElementById('editSupplyHCPCS').value,
-                cost: document.getElementById('editSupplyCost').value
-            };
-
-            apiCall('/api/supplies/' + supplyId, {
-                method: 'PUT',
-                body: JSON.stringify(data)
-            }).then(function(response) {
-                if (response.success) {
-                    closeModal('editSupplyModal');
-                    loadSupplies();
-                    showMessage('Supply updated successfully!', 'success');
-                } else {
-                    showMessage('Failed to update supply: ' + response.error, 'error');
-                }
-            }).catch(function(error) {
-                showMessage('Failed to update supply', 'error');
-            });
-        }
-
-        function handleAddUser(e) {
-            e.preventDefault();
-            
-            var data = {
-                name: document.getElementById('userName').value,
-                email: document.getElementById('userEmail').value,
-                password: document.getElementById('userPassword').value,
-                role: document.getElementById('userRole').value,
-                facility_id: document.getElementById('userFacility').value || null
-            };
-
-            apiCall('/api/admin/users', {
-                method: 'POST',
-                body: JSON.stringify(data)
-            }).then(function(response) {
-                if (response.success) {
-                    closeModal('addUserModal');
-                    document.getElementById('addUserForm').reset();
-                    loadAdminData();
-                    showMessage('User added successfully!', 'success');
-                } else {
-                    showMessage('Failed to add user: ' + response.error, 'error');
-                }
-            }).catch(function(error) {
-                showMessage('Failed to add user', 'error');
-            });
-        }
-
-        function handleEditUser(e) {
-            e.preventDefault();
-            
-            var userId = document.getElementById('editUserId').value;
-            var data = {
-                name: document.getElementById('editUserName').value,
-                email: document.getElementById('editUserEmail').value,
-                role: document.getElementById('editUserRole').value,
-                facility_id: document.getElementById('editUserFacility').value || null
-            };
-
-            apiCall('/api/admin/users/' + userId, {
-                method: 'PUT',
-                body: JSON.stringify(data)
-            }).then(function(response) {
-                if (response.success) {
-                    closeModal('editUserModal');
-                    loadAdminData();
-                    showMessage('User updated successfully!', 'success');
-                } else {
-                    showMessage('Failed to update user: ' + response.error, 'error');
-                }
-            }).catch(function(error) {
-                showMessage('Failed to update user', 'error');
-            });
-        }
-
-        function handleAddFacility(e) {
-            e.preventDefault();
-            
-            var data = {
-                name: document.getElementById('facilityName').value
-            };
-
-            apiCall('/api/facilities', {
-                method: 'POST',
-                body: JSON.stringify(data)
-            }).then(function(response) {
-                if (response.success) {
-                    closeModal('addFacilityModal');
-                    document.getElementById('addFacilityForm').reset();
-                    loadFacilities();
-                    loadAdminData();
-                    showMessage('Facility added successfully!', 'success');
-                } else {
-                    showMessage('Failed to add facility: ' + response.error, 'error');
-                }
-            }).catch(function(error) {
-                showMessage('Failed to add facility', 'error');
-            });
-        }
-
-        window.addEventListener('load', function() {
-            setupLoginForm();
-            setupFormHandlers();
-        });
-    </script>
-</body>
-</html> + unitCost.toFixed(2) + '</div>';
+                html += '<div class="supply-cost">Unit: $' + unitCost.toFixed(2) + '</div>';
                 html += '<div class="supply-units" id="total-units-' + supply.id + '">Units: ' + totalUnits + '</div>';
                 if (isAdmin) {
-                    html += '<div class="supply-total" id="total-cost-' + supply.id + '">Total: 
-
-        function getFilteredSupplies() {
-            var searchTerm = document.getElementById('trackingSupplySearch').value.toLowerCase();
-            
-            if (!searchTerm) {
-                var suppliesWithData = [];
-                var suppliesWithoutData = [];
-                
-                supplies.forEach(function(supply) {
-                    var totalUnits = getTotalUnitsForSupply(supply.id);
-                    if (totalUnits > 0) {
-                        suppliesWithData.push(supply);
-                    } else {
-                        suppliesWithoutData.push(supply);
-                    }
-                });
-                
-                return suppliesWithData.concat(suppliesWithoutData);
-            }
-            
-            return supplies.filter(function(supply) {
-                return supply.description.toLowerCase().includes(searchTerm) || supply.code.toString().includes(searchTerm) || (supply.hcpcs && supply.hcpcs.toLowerCase().includes(searchTerm));
-            });
-        }
-
-        function filterTrackingTable() {
-            if (currentTrackingPatient) {
-                renderTrackingTable();
-            }
-        }
-
-        function getTotalUnitsForSupply(supplyId) {
-            var total = 0;
-            for (var day = 1; day <= 31; day++) {
-                var key = supplyId + '_' + day;
-                var data = trackingData[key];
-                if (data && data.quantity) {
-                    total += parseInt(data.quantity) || 0;
-                }
-            }
-            return total;
-        }
-
-        function getWoundDxForSupply(supplyId) {
-            for (var day = 1; day <= 31; day++) {
-                var key = supplyId + '_' + day;
-                var data = trackingData[key];
-                if (data && data.wound_dx) {
-                    return data.wound_dx;
-                }
-            }
-            return '';
-        }
-
-        function updateTrackingValue(supplyId, day, value) {
-            var key = String(supplyId) + '_' + String(day);
-            var quantity = parseInt(value) || 0;
-            
-            if (!trackingData[key]) {
-                trackingData[key] = {
-                    patient_id: currentTrackingPatient,
-                    supply_id: supplyId,
-                    day_of_month: day,
-                    quantity: quantity
-                };
-            } else {
-                trackingData[key].quantity = quantity;
-            }
-            
-            var totalUnits = getTotalUnitsForSupply(supplyId);
-            var totalElement = document.getElementById('total-units-' + supplyId);
-            if (totalElement) {
-                totalElement.textContent = totalUnits;
-            }
-            
-            if (currentUser.role === 'admin') {
-                var supply = supplies.find(function(s) { return s.id == supplyId; });
-                if (supply) {
-                    var unitCost = parseFloat(supply.cost || 0);
-                    var totalCost = totalUnits * unitCost;
-                    var costElement = document.getElementById('total-cost-' + supplyId);
-                    if (costElement) {
-                        costElement.textContent = '$' + totalCost.toFixed(2);
-                    }
-                }
-            }
-            
-            updateDashboardTotalCost();
-        }
-
-        function updateDashboardTotalCost() {
-            var totalCost = 0;
-            
-            if (currentTrackingPatient && trackingData) {
-                supplies.forEach(function(supply) {
-                    var totalUnits = getTotalUnitsForSupply(supply.id);
-                    var unitCost = parseFloat(supply.cost || 0);
-                    totalCost += totalUnits * unitCost;
-                });
-            }
-            
-            var dashboardCostElement = document.getElementById('totalCost');
-            if (dashboardCostElement) {
-                dashboardCostElement.textContent = '$' + totalCost.toFixed(2);
-            }
-        }
-
-        function updateWoundDx(supplyId, value) {
-            for (var day = 1; day <= 31; day++) {
-                var key = supplyId + '_' + day;
-                if (trackingData[key]) {
-                    trackingData[key].wound_dx = value;
-                } else if (value) {
-                    trackingData[key] = {
-                        patient_id: currentTrackingPatient,
-                        supply_id: supplyId,
-                        day_of_month: day,
-                        quantity: 0,
-                        wound_dx: value
-                    };
-                }
-            }
-        }
-
-        function saveAllTrackingData() {
-            if (!currentTrackingPatient) {
-                showMessage('No patient selected', 'error');
-                return;
-            }
-
-            var savePromises = [];
-            
-            for (var key in trackingData) {
-                var data = trackingData[key];
-                if (data.quantity >= 0) {
-                    var promise = apiCall('/api/tracking', {
-                        method: 'POST',
-                        body: JSON.stringify({
-                            patientId: data.patient_id || currentTrackingPatient,
-                            supplyId: data.supply_id,
-                            dayOfMonth: data.day_of_month,
-                            quantity: data.quantity || 0,
-                            woundDx: data.wound_dx || null
-                        })
-                    });
-                    savePromises.push(promise);
-                }
-            }
-
-            var saveBtn = document.getElementById('saveAllBtn');
-            if (saveBtn) {
-                saveBtn.disabled = true;
-                saveBtn.textContent = 'Saving...';
-            }
-
-            Promise.all(savePromises).then(function() {
-                showMessage('All tracking data saved successfully!', 'success');
-                loadPatientTracking();
-                loadDashboardData();
-            }).catch(function(error) {
-                console.error('Failed to save tracking data:', error);
-                showMessage('Failed to save some tracking data', 'error');
-            }).finally(function() {
-                if (saveBtn) {
-                    saveBtn.disabled = false;
-                    saveBtn.textContent = '💾 Save All';
-                }
-            });
-        }
-
-        function exportTrackingReport() {
-            if (!currentTrackingPatient) {
-                showMessage('No patient selected', 'error');
-                return;
-            }
-
-            var patient = (window.trackingPatients || []).find(function(p) { return p.id == currentTrackingPatient; });
-            if (!patient) {
-                showMessage('Patient not found', 'error');
-                return;
-            }
-
-            // Convert month from YYYY-MM to MM-YYYY format
-            var monthParts = patient.month.split('-');
-            var formattedMonth = monthParts.length === 2 ? monthParts[1] + '-' + monthParts[0] : patient.month;
-
-            var csvRows = [];
-            csvRows.push(['Name', 'MRN', 'Month', 'Facility', 'Code', 'Description', 'HCPCS', 'Wound DX', 'Total Units', 'Unit Cost', 'Total Cost']);
-
-            supplies.forEach(function(supply) {
-                var totalUnits = getTotalUnitsForSupply(supply.id);
-                if (totalUnits > 0) {
-                    var totalCost = totalUnits * parseFloat(supply.cost || 0);
-                    var woundDx = getWoundDxForSupply(supply.id);
-                    
-                    csvRows.push([
-                        patient.name,
-                        patient.mrn || '',
-                        formattedMonth,
-                        patient.facility_name || '',
-                        supply.code,
-                        supply.description,
-                        supply.hcpcs || '',
-                        woundDx || '',
-                        totalUnits,
-                        parseFloat(supply.cost || 0).toFixed(2),
-                        totalCost.toFixed(2)
-                    ]);
-                }
-            });
-
-            var csvContent = csvRows.map(function(row) {
-                return row.map(function(field) {
-                    return '"' + String(field).replace(/"/g, '""') + '"';
-                }).join(',');
-            }).join('\n');
-
-            var blob = new Blob([csvContent], { type: 'text/csv' });
-            var url = window.URL.createObjectURL(blob);
-            var a = document.createElement('a');
-            a.href = url;
-            a.download = 'Supply_Report_' + patient.name.replace(/\s+/g, '_') + '_' + formattedMonth.replace('-', '_') + '.csv';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-            
-            showMessage('Report exported successfully!', 'success');
-        }
-
-        function loadAdminData() {
-            if (currentUser.role !== 'admin') return;
-
-            Promise.all([
-                apiCall('/api/admin/users'),
-                apiCall('/api/facilities')
-            ]).then(function(results) {
-                var usersData = results[0];
-                var facilitiesData = results[1];
-                
-                document.getElementById('totalUsers').textContent = (usersData.users && usersData.users.length) || 0;
-                document.getElementById('totalFacilities').textContent = (facilitiesData.facilities && facilitiesData.facilities.length) || 0;
-                
-                var pendingUsers = 0;
-                if (usersData.users) {
-                    usersData.users.forEach(function(user) {
-                        if (!user.is_approved) pendingUsers++;
-                    });
-                }
-                document.getElementById('pendingApprovals').textContent = pendingUsers;
-
-                renderUsersTable(usersData.users || []);
-            }).catch(function(error) {
-                console.error('Failed to load admin data:', error);
-            });
-        }
-
-        function renderUsersTable(users) {
-            var tbody = document.getElementById('usersTable');
-            if (!tbody) return;
-            
-            if (users.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="text-center">No users found</td></tr>';
-                return;
-            }
-
-            var html = '';
-            users.forEach(function(user) {
-                var statusBadge = user.is_approved ? '<span style="background: #d1fae5; color: #065f46; padding: 2px 8px; border-radius: 4px; font-size: 12px;">Approved</span>' : '<span style="background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 4px; font-size: 12px;">Pending</span>';
-                
-                var approveBtn = user.is_approved ? '' : '<button class="btn btn-success btn-small" onclick="approveUser(' + user.id + ')">Approve</button> ';
-                
-                html += '<tr><td>' + escapeHtml(user.name) + '</td><td>' + escapeHtml(user.email) + '</td><td>' + escapeHtml(user.role) + '</td><td>' + escapeHtml(user.facility_name || 'N/A') + '</td><td>' + statusBadge + '</td><td>' + approveBtn + '<button class="btn btn-warning btn-small" onclick="editUser(' + user.id + ')">Edit</button> <button class="btn btn-primary btn-small" onclick="resetUserPassword(' + user.id + ')">Reset Password</button> <button class="btn btn-danger btn-small" onclick="deleteUser(' + user.id + ')">Delete</button></td></tr>';
-            });
-            tbody.innerHTML = html;
-        }
-
-        function showAddUserModal() {
-            document.getElementById('addUserModal').style.display = 'block';
-            loadFacilityOptions('userFacility');
-        }
-
-        function showAddFacilityModal() {
-            document.getElementById('addFacilityModal').style.display = 'block';
-        }
-
-        function editUser(userId) {
-            apiCall('/api/admin/users').then(function(data) {
-                var user = (data.users || []).find(function(u) { return u.id === userId; });
-                if (!user) {
-                    showMessage('User not found', 'error');
-                    return;
-                }
-
-                document.getElementById('editUserId').value = user.id;
-                document.getElementById('editUserName').value = user.name;
-                document.getElementById('editUserEmail').value = user.email;
-                document.getElementById('editUserRole').value = user.role;
-                
-                loadFacilityOptions('editUserFacility');
-                setTimeout(function() {
-                    document.getElementById('editUserFacility').value = user.facility_id || '';
-                }, 100);
-                
-                document.getElementById('editUserModal').style.display = 'block';
-            }).catch(function(error) {
-                showMessage('Failed to load user data', 'error');
-            });
-        }
-
-        function approveUser(userId) {
-            apiCall('/api/admin/users/' + userId + '/approve', {
-                method: 'PUT'
-            }).then(function() {
-                loadAdminData();
-                showMessage('User approved successfully!', 'success');
-            }).catch(function(error) {
-                showMessage('Failed to approve user', 'error');
-            });
-        }
-
-        function deleteUser(userId) {
-            if (!confirm('Are you sure you want to delete this user?')) return;
-
-            apiCall('/api/admin/users/' + userId, {
-                method: 'DELETE'
-            }).then(function() {
-                loadAdminData();
-                showMessage('User deleted successfully!', 'success');
-            }).catch(function(error) {
-                showMessage('Failed to delete user', 'error');
-            });
-        }
-
-        function resetUserPassword(userId) {
-            var newPassword = prompt('Enter new password for this user (minimum 8 characters):');
-            if (!newPassword) return;
-            
-            if (newPassword.length < 8) {
-                showMessage('Password must be at least 8 characters long', 'error');
-                return;
-            }
-            
-            if (!confirm('Reset password for this user? They will need to use the new password to login.')) return;
-
-            apiCall('/api/admin/users/' + userId + '/reset-password', {
-                method: 'PUT',
-                body: JSON.stringify({ newPassword: newPassword })
-            }).then(function(response) {
-                if (response.success) {
-                    showMessage('Password reset successfully! New password: ' + newPassword, 'success');
-                } else {
-                    showMessage('Failed to reset password: ' + response.error, 'error');
-                }
-            }).catch(function(error) {
-                showMessage('Failed to reset password', 'error');
-            });
-        }
-
-        function showBulkPatientUploadModal() {
-            document.getElementById('bulkPatientUploadModal').style.display = 'block';
-        }
-
-        function dragOverHandler(ev) {
-            ev.preventDefault();
-            document.getElementById('csvUploadZone').classList.add('dragover');
-        }
-
-        function dragLeaveHandler(ev) {
-            document.getElementById('csvUploadZone').classList.remove('dragover');
-        }
-
-        function dropHandler(ev) {
-            ev.preventDefault();
-            document.getElementById('csvUploadZone').classList.remove('dragover');
-            
-            var files = ev.dataTransfer.files;
-            if (files.length > 0) {
-                handleFile(files[0]);
-            }
-        }
-
-        function handleFileSelect(event) {
-            var file = event.target.files[0];
-            if (file) {
-                handleFile(file);
-            }
-        }
-
-        function handleFile(file) {
-            if (file.type !== 'text/csv' && !file.name.endsWith('.csv')) {
-                showMessage('Please select a CSV file', 'error');
-                return;
-            }
-
-            document.getElementById('uploadProgress').style.display = 'block';
-            document.getElementById('uploadResults').innerHTML = 'Processing file...';
-
-            var reader = new FileReader();
-            reader.onload = function(e) {
-                var csv = e.target.result;
-                processCsvData(csv);
-            };
-            reader.readAsText(file);
-        }
-
-        function processCsvData(csv) {
-            var lines = csv.split('\n');
-            var headers = lines[0].split(',').map(function(h) { return h.trim().toLowerCase(); });
-            
-            var requiredHeaders = ['name', 'month', 'facility'];
-            var missingHeaders = requiredHeaders.filter(function(h) { return !headers.includes(h); });
-            
-            if (missingHeaders.length > 0) {
-                document.getElementById('uploadResults').innerHTML = '<p style="color: red;">Missing required columns: ' + missingHeaders.join(', ') + '</p><p>Required columns: Name, Month, Facility (MRN is optional)</p>';
-                return;
-            }
-
-            var patients = [];
-            for (var i = 1; i < lines.length; i++) {
-                var line = lines[i].trim();
-                if (!line) continue;
-                
-                var values = line.split(',').map(function(v) { return v.trim().replace(/^"|"$/g, ''); });
-                
-                if (values.length >= 3) {
-                    var patient = {};
-                    headers.forEach(function(header, index) {
-                        if (values[index]) {
-                            patient[header] = values[index];
-                        }
-                    });
-                    patients.push(patient);
-                }
-            }
-
-            if (patients.length === 0) {
-                document.getElementById('uploadResults').innerHTML = '<p style="color: red;">No valid patient data found</p>';
-                return;
-            }
-
-            var formattedPatients = patients.map(function(p) {
-                return {
-                    name: p.name,
-                    mrn: p.mrn || '',
-                    month: p.month,
-                    facilityName: p.facility
-                };
-            });
-
-            apiCall('/api/patients/bulk', {
-                method: 'POST',
-                body: JSON.stringify({ patients: formattedPatients })
-            }).then(function(response) {
-                var html = '<h4>Upload Complete</h4>';
-                html += '<p><strong>Successful:</strong> ' + response.successful + '</p>';
-                html += '<p><strong>Failed:</strong> ' + response.failed.length + '</p>';
-                
-                if (response.failed.length > 0) {
-                    html += '<h5>Failed Records:</h5><ul>';
-                    response.failed.forEach(function(failure) {
-                        html += '<li>' + escapeHtml(failure.name) + ': ' + escapeHtml(failure.error) + '</li>';
-                    });
-                    html += '</ul>';
-                }
-                
-                document.getElementById('uploadResults').innerHTML = html;
-                
-                if (response.successful > 0) {
-                    loadPatients();
-                }
-            }).catch(function(error) {
-                document.getElementById('uploadResults').innerHTML = '<p style="color: red;">Upload failed: ' + error.message + '</p>';
-            });
-        }
-
-        function setupFormHandlers() {
-            var forms = [
-                { id: 'addPatientForm', handler: handleAddPatient },
-                { id: 'editPatientForm', handler: handleEditPatient },
-                { id: 'addSupplyForm', handler: handleAddSupply },
-                { id: 'editSupplyForm', handler: handleEditSupply },
-                { id: 'addUserForm', handler: handleAddUser },
-                { id: 'editUserForm', handler: handleEditUser },
-                { id: 'addFacilityForm', handler: handleAddFacility }
-            ];
-
-            forms.forEach(function(form) {
-                var formElement = document.getElementById(form.id);
-                if (formElement) {
-                    formElement.addEventListener('submit', form.handler);
-                }
-            });
-        }
-
-        function handleAddPatient(e) {
-            e.preventDefault();
-            
-            var data = {
-                name: document.getElementById('patientName').value,
-                mrn: document.getElementById('patientMRN').value,
-                month: document.getElementById('patientMonth').value,
-                facility_id: document.getElementById('patientFacility').value
-            };
-
-            apiCall('/api/patients', {
-                method: 'POST',
-                body: JSON.stringify(data)
-            }).then(function(response) {
-                if (response.success) {
-                    closeModal('addPatientModal');
-                    document.getElementById('addPatientForm').reset();
-                    loadPatients();
-                    showMessage('Patient added successfully!', 'success');
-                } else {
-                    showMessage('Failed to add patient: ' + response.error, 'error');
-                }
-            }).catch(function(error) {
-                showMessage('Failed to add patient', 'error');
-            });
-        }
-
-        function handleEditPatient(e) {
-            e.preventDefault();
-            
-            var patientId = document.getElementById('editPatientId').value;
-            var data = {
-                name: document.getElementById('editPatientName').value,
-                mrn: document.getElementById('editPatientMRN').value,
-                month: document.getElementById('editPatientMonth').value,
-                facility_id: document.getElementById('editPatientFacility').value
-            };
-
-            apiCall('/api/patients/' + patientId, {
-                method: 'PUT',
-                body: JSON.stringify(data)
-            }).then(function(response) {
-                if (response.success) {
-                    closeModal('editPatientModal');
-                    loadPatients();
-                    showMessage('Patient updated successfully!', 'success');
-                } else {
-                    showMessage('Failed to update patient: ' + response.error, 'error');
-                }
-            }).catch(function(error) {
-                showMessage('Failed to update patient', 'error');
-            });
-        }
-
-        function handleAddSupply(e) {
-            e.preventDefault();
-            
-            var data = {
-                code: document.getElementById('supplyCode').value,
-                description: document.getElementById('supplyDescription').value,
-                hcpcs: document.getElementById('supplyHCPCS').value,
-                cost: document.getElementById('supplyCost').value
-            };
-
-            apiCall('/api/supplies', {
-                method: 'POST',
-                body: JSON.stringify(data)
-            }).then(function(response) {
-                if (response.success) {
-                    closeModal('addSupplyModal');
-                    document.getElementById('addSupplyForm').reset();
-                    loadSupplies();
-                    showMessage('Supply added successfully!', 'success');
-                } else {
-                    showMessage('Failed to add supply: ' + response.error, 'error');
-                }
-            }).catch(function(error) {
-                showMessage('Failed to add supply', 'error');
-            });
-        }
-
-        function handleEditSupply(e) {
-            e.preventDefault();
-            
-            var supplyId = document.getElementById('editSupplyId').value;
-            var data = {
-                code: document.getElementById('editSupplyCode').value,
-                description: document.getElementById('editSupplyDescription').value,
-                hcpcs: document.getElementById('editSupplyHCPCS').value,
-                cost: document.getElementById('editSupplyCost').value
-            };
-
-            apiCall('/api/supplies/' + supplyId, {
-                method: 'PUT',
-                body: JSON.stringify(data)
-            }).then(function(response) {
-                if (response.success) {
-                    closeModal('editSupplyModal');
-                    loadSupplies();
-                    showMessage('Supply updated successfully!', 'success');
-                } else {
-                    showMessage('Failed to update supply: ' + response.error, 'error');
-                }
-            }).catch(function(error) {
-                showMessage('Failed to update supply', 'error');
-            });
-        }
-
-        function handleAddUser(e) {
-            e.preventDefault();
-            
-            var data = {
-                name: document.getElementById('userName').value,
-                email: document.getElementById('userEmail').value,
-                password: document.getElementById('userPassword').value,
-                role: document.getElementById('userRole').value,
-                facility_id: document.getElementById('userFacility').value || null
-            };
-
-            apiCall('/api/admin/users', {
-                method: 'POST',
-                body: JSON.stringify(data)
-            }).then(function(response) {
-                if (response.success) {
-                    closeModal('addUserModal');
-                    document.getElementById('addUserForm').reset();
-                    loadAdminData();
-                    showMessage('User added successfully!', 'success');
-                } else {
-                    showMessage('Failed to add user: ' + response.error, 'error');
-                }
-            }).catch(function(error) {
-                showMessage('Failed to add user', 'error');
-            });
-        }
-
-        function handleEditUser(e) {
-            e.preventDefault();
-            
-            var userId = document.getElementById('editUserId').value;
-            var data = {
-                name: document.getElementById('editUserName').value,
-                email: document.getElementById('editUserEmail').value,
-                role: document.getElementById('editUserRole').value,
-                facility_id: document.getElementById('editUserFacility').value || null
-            };
-
-            apiCall('/api/admin/users/' + userId, {
-                method: 'PUT',
-                body: JSON.stringify(data)
-            }).then(function(response) {
-                if (response.success) {
-                    closeModal('editUserModal');
-                    loadAdminData();
-                    showMessage('User updated successfully!', 'success');
-                } else {
-                    showMessage('Failed to update user: ' + response.error, 'error');
-                }
-            }).catch(function(error) {
-                showMessage('Failed to update user', 'error');
-            });
-        }
-
-        function handleAddFacility(e) {
-            e.preventDefault();
-            
-            var data = {
-                name: document.getElementById('facilityName').value
-            };
-
-            apiCall('/api/facilities', {
-                method: 'POST',
-                body: JSON.stringify(data)
-            }).then(function(response) {
-                if (response.success) {
-                    closeModal('addFacilityModal');
-                    document.getElementById('addFacilityForm').reset();
-                    loadFacilities();
-                    loadAdminData();
-                    showMessage('Facility added successfully!', 'success');
-                } else {
-                    showMessage('Failed to add facility: ' + response.error, 'error');
-                }
-            }).catch(function(error) {
-                showMessage('Failed to add facility', 'error');
-            });
-        }
-
-        window.addEventListener('load', function() {
-            setupLoginForm();
-            setupFormHandlers();
-        });
-    </script>
-</body>
-</html> + totalCost.toFixed(2) + '</div>';
+                    html += '<div class="supply-total" id="total-cost-' + supply.id + '">Total: $' + totalCost.toFixed(2) + '</div>';
                 }
                 html += '</div>';
-                
                 html += '</div>';
                 html += '</td>';
                 
-                // Days Container
                 html += '<td style="padding: 8px; vertical-align: top;">';
                 html += '<div class="days-container-new">';
-                
-                // Day numbers header
                 html += '<div class="days-grid-new" style="margin-bottom: 4px;">';
+                
                 for (var day = 1; day <= 31; day++) {
                     html += '<div class="day-number">' + day + '</div>';
                 }
                 html += '</div>';
                 
-                // Day inputs
                 html += '<div class="days-grid-new">';
                 for (var day = 1; day <= 31; day++) {
                     var key = supply.id + '_' + day;
@@ -3285,14 +1887,12 @@
                     html += '<input type="number" class="day-input-new" title="Day ' + day + '" value="' + (quantity || '') + '" min="0" max="99" placeholder="0" data-supply-id="' + supply.id + '" data-day="' + day + '" onchange="updateTrackingValue(' + supply.id + ', ' + day + ', this.value)">';
                 }
                 html += '</div>';
-                
                 html += '</div>';
                 html += '</td>';
                 html += '</tr>';
             });
             
             html += '</tbody></table></div>';
-            
             document.getElementById('trackingContent').innerHTML = html;
         }
 
@@ -3367,7 +1967,7 @@
             var totalUnits = getTotalUnitsForSupply(supplyId);
             var totalElement = document.getElementById('total-units-' + supplyId);
             if (totalElement) {
-                totalElement.textContent = totalUnits;
+                totalElement.textContent = 'Units: ' + totalUnits;
             }
             
             if (currentUser.role === 'admin') {
@@ -3377,7 +1977,7 @@
                     var totalCost = totalUnits * unitCost;
                     var costElement = document.getElementById('total-cost-' + supplyId);
                     if (costElement) {
-                        costElement.textContent = '$' + totalCost.toFixed(2);
+                        costElement.textContent = 'Total: $' + totalCost.toFixed(2);
                     }
                 }
             }
@@ -3477,7 +2077,6 @@
                 return;
             }
 
-            // Convert month from YYYY-MM to MM-YYYY format
             var monthParts = patient.month.split('-');
             var formattedMonth = monthParts.length === 2 ? monthParts[1] + '-' + monthParts[0] : patient.month;
 
@@ -3564,9 +2163,7 @@
             var html = '';
             users.forEach(function(user) {
                 var statusBadge = user.is_approved ? '<span style="background: #d1fae5; color: #065f46; padding: 2px 8px; border-radius: 4px; font-size: 12px;">Approved</span>' : '<span style="background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 4px; font-size: 12px;">Pending</span>';
-                
                 var approveBtn = user.is_approved ? '' : '<button class="btn btn-success btn-small" onclick="approveUser(' + user.id + ')">Approve</button> ';
-                
                 html += '<tr><td>' + escapeHtml(user.name) + '</td><td>' + escapeHtml(user.email) + '</td><td>' + escapeHtml(user.role) + '</td><td>' + escapeHtml(user.facility_name || 'N/A') + '</td><td>' + statusBadge + '</td><td>' + approveBtn + '<button class="btn btn-warning btn-small" onclick="editUser(' + user.id + ')">Edit</button> <button class="btn btn-primary btn-small" onclick="resetUserPassword(' + user.id + ')">Reset Password</button> <button class="btn btn-danger btn-small" onclick="deleteUser(' + user.id + ')">Delete</button></td></tr>';
             });
             tbody.innerHTML = html;
@@ -3704,7 +2301,6 @@
         function processCsvData(csv) {
             var lines = csv.split('\n');
             var headers = lines[0].split(',').map(function(h) { return h.trim().toLowerCase(); });
-            
             var requiredHeaders = ['name', 'month', 'facility'];
             var missingHeaders = requiredHeaders.filter(function(h) { return !headers.includes(h); });
             
@@ -3792,7 +2388,6 @@
 
         function handleAddPatient(e) {
             e.preventDefault();
-            
             var data = {
                 name: document.getElementById('patientName').value,
                 mrn: document.getElementById('patientMRN').value,
@@ -3819,7 +2414,6 @@
 
         function handleEditPatient(e) {
             e.preventDefault();
-            
             var patientId = document.getElementById('editPatientId').value;
             var data = {
                 name: document.getElementById('editPatientName').value,
@@ -3846,7 +2440,6 @@
 
         function handleAddSupply(e) {
             e.preventDefault();
-            
             var data = {
                 code: document.getElementById('supplyCode').value,
                 description: document.getElementById('supplyDescription').value,
@@ -3873,7 +2466,6 @@
 
         function handleEditSupply(e) {
             e.preventDefault();
-            
             var supplyId = document.getElementById('editSupplyId').value;
             var data = {
                 code: document.getElementById('editSupplyCode').value,
@@ -3900,7 +2492,6 @@
 
         function handleAddUser(e) {
             e.preventDefault();
-            
             var data = {
                 name: document.getElementById('userName').value,
                 email: document.getElementById('userEmail').value,
@@ -3928,7 +2519,6 @@
 
         function handleEditUser(e) {
             e.preventDefault();
-            
             var userId = document.getElementById('editUserId').value;
             var data = {
                 name: document.getElementById('editUserName').value,
@@ -3955,7 +2545,6 @@
 
         function handleAddFacility(e) {
             e.preventDefault();
-            
             var data = {
                 name: document.getElementById('facilityName').value
             };
