@@ -297,16 +297,25 @@ app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
             `, req.user.role !== 'admin' && req.user.facilityId ? [req.user.facilityId] : [])
         ]);
 
-        let totalCostResult;
+        // Calculate total cost for admin, total units for non-admin
+        let totalValue;
         if (req.user.role === 'admin') {
-            totalCostResult = await safeQuery(`
+            const totalCostResult = await safeQuery(`
                 SELECT COALESCE(SUM(t.quantity * s.cost), 0) as total_cost
                 FROM tracking t
                 JOIN supplies s ON t.supply_id = s.id
                 WHERE t.quantity > 0
             `);
+            totalValue = parseFloat(totalCostResult.rows[0].total_cost) || 0;
         } else {
-            totalCostResult = { rows: [{ total_cost: 0 }] };
+            // For non-admin users, calculate total units used
+            const totalUnitsResult = await safeQuery(`
+                SELECT COALESCE(SUM(t.quantity), 0) as total_units
+                FROM tracking t
+                JOIN patients p ON t.patient_id = p.id
+                ${req.user.facilityId ? 'WHERE p.facility_id = $1' : ''}
+            `, req.user.facilityId ? [req.user.facilityId] : []);
+            totalValue = parseInt(totalUnitsResult.rows[0].total_units) || 0;
         }
 
         res.json({
@@ -315,13 +324,22 @@ app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
                 totalPatients: parseInt(patientsResult.rows[0].count) || 0,
                 totalSupplies: parseInt(suppliesResult.rows[0].count) || 0,
                 monthlyTracking: parseInt(trackingResult.rows[0].count) || 0,
-                totalCost: parseFloat(totalCostResult.rows[0].total_cost) || 0
+                totalCost: totalValue
             }
         });
 
     } catch (error) {
         console.error('Dashboard stats error:', error);
-        res.status(500).json({ success: false, error: 'Failed to load dashboard statistics' });
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to load dashboard statistics',
+            stats: {
+                totalPatients: 0,
+                totalSupplies: 0,
+                monthlyTracking: 0,
+                totalCost: 0
+            }
+        });
     }
 });
 
@@ -419,6 +437,51 @@ app.post('/api/facilities', authenticateToken, requireAdmin, async (req, res) =>
     }
 });
 
+app.put('/api/facilities/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const facilityId = req.params.id;
+        const { name } = req.body;
+        
+        if (!name) {
+            return res.status(400).json({ success: false, error: 'Facility name is required' });
+        }
+
+        const result = await safeQuery(
+            'UPDATE facilities SET name = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
+            [name, facilityId]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ success: false, error: 'Facility not found' });
+        }
+
+        res.json({ success: true, facility: result.rows[0] });
+
+    } catch (error) {
+        if (error.code === '23505') {
+            return res.status(400).json({ success: false, error: 'Facility name already exists' });
+        }
+        res.status(500).json({ success: false, error: 'Failed to update facility' });
+    }
+});
+
+app.delete('/api/facilities/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const facilityId = req.params.id;
+        
+        const result = await safeQuery('DELETE FROM facilities WHERE id = $1', [facilityId]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ success: false, error: 'Facility not found' });
+        }
+
+        res.json({ success: true, message: 'Facility deleted successfully' });
+
+    } catch (error) {
+        res.status(500).json({ success: false, error: 'Failed to delete facility' });
+    }
+});
+
 // SUPPLIES
 app.get('/api/supplies', authenticateToken, async (req, res) => {
     try {
@@ -449,6 +512,122 @@ app.post('/api/supplies', authenticateToken, requireAdmin, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Supply code already exists' });
         }
         res.status(500).json({ success: false, error: 'Failed to create supply' });
+    }
+});
+
+app.put('/api/supplies/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const supplyId = req.params.id;
+        const { code, description, hcpcs, cost } = req.body;
+        
+        if (!code || !description) {
+            return res.status(400).json({ success: false, error: 'Code and description are required' });
+        }
+
+        const result = await safeQuery(
+            'UPDATE supplies SET code = $1, description = $2, hcpcs = $3, cost = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5 RETURNING *',
+            [code, description, hcpcs || null, parseFloat(cost) || 0, supplyId]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ success: false, error: 'Supply not found' });
+        }
+
+        res.json({ success: true, supply: result.rows[0] });
+
+    } catch (error) {
+        if (error.code === '23505') {
+            return res.status(400).json({ success: false, error: 'Supply code already exists' });
+        }
+        res.status(500).json({ success: false, error: 'Failed to update supply' });
+    }
+});
+
+app.delete('/api/supplies/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const supplyId = req.params.id;
+        
+        // Only allow deletion of custom supplies
+        const supply = await safeQuery('SELECT is_custom FROM supplies WHERE id = $1', [supplyId]);
+        if (supply.rows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Supply not found' });
+        }
+        
+        if (!supply.rows[0].is_custom) {
+            return res.status(400).json({ success: false, error: 'Cannot delete AR standard supplies' });
+        }
+        
+        const result = await safeQuery('DELETE FROM supplies WHERE id = $1', [supplyId]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ success: false, error: 'Supply not found' });
+        }
+
+        res.json({ success: true, message: 'Supply deleted successfully' });
+
+    } catch (error) {
+        res.status(500).json({ success: false, error: 'Failed to delete supply' });
+    }
+});
+
+// SUPPLY IMPORT
+app.post('/api/supplies/import', authenticateToken, requireAdmin, upload.single('file'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, error: 'No Excel file uploaded' });
+        }
+
+        let data;
+        try {
+            const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+            const sheetName = workbook.SheetNames[0];
+            const sheet = workbook.Sheets[sheetName];
+            data = XLSX.utils.sheet_to_json(sheet);
+        } catch (parseError) {
+            return res.status(400).json({ success: false, error: 'Invalid Excel file format' });
+        }
+
+        if (data.length === 0) {
+            return res.status(400).json({ success: false, error: 'No data found in Excel file' });
+        }
+
+        let imported = 0;
+        let errors = [];
+
+        for (const row of data) {
+            try {
+                const code = parseInt(row.Code || row.code);
+                const description = (row.Description || row.description || '').toString().trim();
+                const hcpcs = (row.HCPCS || row.hcpcs || '').toString().trim();
+                const cost = parseFloat(row.Cost || row.cost || 0);
+
+                if (!code || !description) {
+                    errors.push({ row: row, error: 'Missing code or description' });
+                    continue;
+                }
+
+                await safeQuery(
+                    'INSERT INTO supplies (code, description, hcpcs, cost, is_custom) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description, hcpcs = EXCLUDED.hcpcs, cost = EXCLUDED.cost',
+                    [code, description, hcpcs || null, cost, true]
+                );
+
+                imported++;
+
+            } catch (error) {
+                errors.push({ row: row, error: error.message });
+            }
+        }
+
+        res.json({
+            success: true,
+            message: `Successfully imported ${imported} supplies. ${errors.length} errors.`,
+            imported: imported,
+            errors: errors.slice(0, 10) // Limit error details
+        });
+
+    } catch (error) {
+        console.error('Supply import error:', error);
+        res.status(500).json({ success: false, error: 'Server error during import' });
     }
 });
 
@@ -545,25 +724,79 @@ app.post('/api/patients', authenticateToken, async (req, res) => {
     }
 });
 
-// BULK PATIENT UPLOAD - EXCEL ONLY
-app.post('/api/patients/bulk', authenticateToken, upload.single('file'), async (req, res) => {
+app.put('/api/patients/:id', authenticateToken, async (req, res) => {
     try {
-        if (!req.file) {
-            return res.status(400).json({ success: false, error: 'No Excel file uploaded' });
+        const patientId = req.params.id;
+        const { name, month, mrn, facility_id } = req.body;
+        
+        if (!name || !month || !facility_id) {
+            return res.status(400).json({ success: false, error: 'Name, month, and facility are required' });
         }
 
-        let data;
-        try {
-            const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
-            const sheetName = workbook.SheetNames[0];
-            const sheet = workbook.Sheets[sheetName];
-            data = XLSX.utils.sheet_to_json(sheet);
-        } catch (parseError) {
-            return res.status(400).json({ success: false, error: 'Invalid Excel file format' });
+        // Check permission for non-admin users
+        if (req.user.role !== 'admin' && req.user.facilityId && req.user.facilityId != facility_id) {
+            return res.status(403).json({ success: false, error: 'Cannot modify patients from this facility' });
         }
 
-        if (data.length === 0) {
-            return res.status(400).json({ success: false, error: 'No data found in Excel file' });
+        // Month restriction for non-admin users
+        if (req.user.role !== 'admin' && month < '2025-09') {
+            return res.status(400).json({ success: false, error: 'Can only modify patients for September 2025 onwards' });
+        }
+
+        const result = await safeQuery(
+            'UPDATE patients SET name = $1, month = $2, mrn = $3, facility_id = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5 RETURNING *',
+            [name, month, mrn ? mrn.trim() : null, facility_id, patientId]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ success: false, error: 'Patient not found' });
+        }
+
+        res.json({ success: true, patient: result.rows[0] });
+
+    } catch (error) {
+        if (error.code === '23505') {
+            return res.status(400).json({ success: false, error: 'Patient already exists for this month and facility' });
+        }
+        res.status(500).json({ success: false, error: 'Failed to update patient' });
+    }
+});
+
+app.delete('/api/patients/:id', authenticateToken, async (req, res) => {
+    try {
+        const patientId = req.params.id;
+        
+        // Check if user has permission
+        if (req.user.role !== 'admin') {
+            const patient = await safeQuery('SELECT facility_id FROM patients WHERE id = $1', [patientId]);
+            if (patient.rows.length === 0) {
+                return res.status(404).json({ success: false, error: 'Patient not found' });
+            }
+            if (req.user.facilityId !== patient.rows[0].facility_id) {
+                return res.status(403).json({ success: false, error: 'Cannot delete patients from other facilities' });
+            }
+        }
+        
+        const result = await safeQuery('DELETE FROM patients WHERE id = $1', [patientId]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ success: false, error: 'Patient not found' });
+        }
+
+        res.json({ success: true, message: 'Patient deleted successfully' });
+
+    } catch (error) {
+        res.status(500).json({ success: false, error: 'Failed to delete patient' });
+    }
+});
+
+// BULK PATIENT UPLOAD - FIXED TO HANDLE JSON DATA
+app.post('/api/patients/bulk', authenticateToken, async (req, res) => {
+    try {
+        const { patients } = req.body;
+        
+        if (!patients || !Array.isArray(patients) || patients.length === 0) {
+            return res.status(400).json({ success: false, error: 'No patient data provided' });
         }
 
         // Load facilities for mapping
@@ -575,12 +808,12 @@ app.post('/api/patients/bulk', authenticateToken, upload.single('file'), async (
 
         const results = { successful: 0, failed: [] };
 
-        for (const row of data) {
+        for (const patient of patients) {
             try {
-                const name = (row.Name || row.name || '').toString().trim();
-                const mrn = (row.MRN || row.mrn || '').toString().trim();
-                const month = (row.Month || row.month || '').toString().trim();
-                const facilityName = (row.Facility || row.facility || '').toString().trim();
+                const name = (patient.name || '').toString().trim();
+                const mrn = (patient.mrn || '').toString().trim();
+                const month = (patient.month || '').toString().trim();
+                const facilityName = (patient.facilityName || '').toString().trim();
 
                 if (!name || !month || !facilityName) {
                     results.failed.push({ 
@@ -633,7 +866,7 @@ app.post('/api/patients/bulk', authenticateToken, upload.single('file'), async (
 
             } catch (error) {
                 results.failed.push({ 
-                    name: row.Name || row.name || 'Unknown', 
+                    name: patient.name || 'Unknown', 
                     error: error.message 
                 });
             }
@@ -706,7 +939,7 @@ app.post('/api/tracking', authenticateToken, async (req, res) => {
             `INSERT INTO tracking (patient_id, supply_id, day_of_month, quantity, wound_dx) 
              VALUES ($1, $2, $3, $4, $5)
              ON CONFLICT (patient_id, supply_id, day_of_month) 
-             DO UPDATE SET quantity = EXCLUDED.quantity, wound_dx = EXCLUDED.wound_dx`,
+             DO UPDATE SET quantity = EXCLUDED.quantity, wound_dx = EXCLUDED.wound_dx, updated_at = CURRENT_TIMESTAMP`,
             [patientId, supplyId, dayOfMonth, quantity || 0, woundDx || null]
         );
 
@@ -774,7 +1007,7 @@ app.put('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res
         }
 
         const result = await safeQuery(
-            'UPDATE users SET name = $1, email = $2, role = $3, facility_id = $4 WHERE id = $5',
+            'UPDATE users SET name = $1, email = $2, role = $3, facility_id = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5',
             [name, email, role, facility_id || null, userId]
         );
 
@@ -786,6 +1019,26 @@ app.put('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res
 
     } catch (error) {
         res.status(500).json({ success: false, error: 'Failed to update user' });
+    }
+});
+
+app.put('/api/admin/users/:id/approve', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const userId = req.params.id;
+        
+        const result = await safeQuery(
+            'UPDATE users SET is_approved = true, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+            [userId]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+
+        res.json({ success: true, message: 'User approved successfully' });
+
+    } catch (error) {
+        res.status(500).json({ success: false, error: 'Failed to approve user' });
     }
 });
 
@@ -806,7 +1059,7 @@ app.put('/api/admin/users/:id/reset-password', authenticateToken, requireAdmin, 
         const hashedPassword = await bcrypt.hash(newPassword, 12);
         
         const result = await safeQuery(
-            'UPDATE users SET password = $1 WHERE id = $2',
+            'UPDATE users SET password = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
             [hashedPassword, userId]
         );
         
