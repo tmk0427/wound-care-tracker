@@ -789,6 +789,44 @@ app.put('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res
     }
 });
 
+app.put('/api/admin/users/:id/reset-password', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const { newPassword } = req.body;
+        
+        if (!newPassword || newPassword.length < 8) {
+            return res.status(400).json({ success: false, error: 'Password must be at least 8 characters long' });
+        }
+        
+        const userCheck = await safeQuery('SELECT id, email, name FROM users WHERE id = $1', [userId]);
+        if (userCheck.rows.length === 0) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+        
+        const hashedPassword = await bcrypt.hash(newPassword, 12);
+        
+        const result = await safeQuery(
+            'UPDATE users SET password = $1 WHERE id = $2',
+            [hashedPassword, userId]
+        );
+        
+        if (result.rowCount === 0) {
+            return res.status(404).json({ success: false, error: 'Failed to update password' });
+        }
+        
+        const user = userCheck.rows[0];
+        res.json({ 
+            success: true, 
+            message: 'Password reset successfully for ' + user.name,
+            userEmail: user.email
+        });
+
+    } catch (error) {
+        console.error('Error resetting password:', error);
+        res.status(500).json({ success: false, error: 'Failed to reset password' });
+    }
+});
+
 app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
