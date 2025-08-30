@@ -969,6 +969,31 @@
         </div>
     </div>
 
+    <div id="resetPasswordModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Reset Password</h3>
+                <span class="close" onclick="closeModal('resetPasswordModal')">&times;</span>
+            </div>
+            <form id="resetPasswordForm">
+                <input type="hidden" id="resetPasswordUserId">
+                <div class="form-group">
+                    <label>User:</label>
+                    <p id="resetPasswordUserName" style="font-weight: bold; color: #4f46e5;"></p>
+                </div>
+                <div class="form-group">
+                    <label for="newPassword">New Password</label>
+                    <input type="password" id="newPassword" class="form-control" required minlength="8" placeholder="Enter new password (minimum 8 characters)">
+                </div>
+                <div class="form-group">
+                    <label for="confirmPassword">Confirm Password</label>
+                    <input type="password" id="confirmPassword" class="form-control" required placeholder="Confirm new password">
+                </div>
+                <button type="submit" class="btn btn-primary">Reset Password</button>
+            </form>
+        </div>
+    </div>
+
     <div id="bulkPatientUploadModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -2168,6 +2193,7 @@
             users.forEach(function(user) {
                 var status = user.is_approved ? 'Approved' : 'Pending';
                 var actions = '<button class="btn btn-warning btn-small" onclick="editUser(' + user.id + ')">Edit</button>';
+                actions += ' <button class="btn btn-primary btn-small" onclick="showResetPasswordModal(' + user.id + ', \'' + escapeHtml(user.name) + '\')">Reset Password</button>';
                 if (!user.is_approved) {
                     actions += ' <button class="btn btn-success btn-small" onclick="approveUser(' + user.id + ')">Approve</button>';
                 }
@@ -2283,6 +2309,21 @@
             }).catch(function(error) {
                 console.error('Test API error:', error);
                 showMessage('Test API call failed: ' + error.message, 'error');
+            });
+        }
+
+        function showResetPasswordModal(userId, userName) {
+            document.getElementById('resetPasswordUserId').value = userId;
+            document.getElementById('resetPasswordUserName').textContent = userName;
+            document.getElementById('newPassword').value = '';
+            document.getElementById('confirmPassword').value = '';
+            document.getElementById('resetPasswordModal').style.display = 'block';
+        }
+
+        function resetUserPassword(userId, newPassword) {
+            return apiCall('/api/admin/users/' + userId + '/reset-password', {
+                method: 'PUT',
+                body: JSON.stringify({ newPassword: newPassword })
             });
         }
 
@@ -2530,12 +2571,24 @@
                     submitBtn.disabled = true;
                     submitBtn.textContent = 'Adding User...';
                     
+                    var nameField = document.getElementById('userName');
+                    var emailField = document.getElementById('userEmail');
+                    var passwordField = document.getElementById('userPassword');
+                    var roleField = document.getElementById('userRole');
+                    var facilityField = document.getElementById('userFacility');
+
+                    if (!nameField || !emailField || !passwordField || !roleField || !facilityField) {
+                        console.error('Form fields not found');
+                        showMessage('Form error - please try again', 'error');
+                        return;
+                    }
+
                     var formData = {
-                        name: document.getElementById('userName').value.trim(),
-                        email: document.getElementById('userEmail').value.trim(),
-                        password: document.getElementById('userPassword').value,
-                        role: document.getElementById('userRole').value,
-                        facility_id: document.getElementById('userFacility').value || null
+                        name: nameField.value ? nameField.value.trim() : '',
+                        email: emailField.value ? emailField.value.trim() : '',
+                        password: passwordField.value || '',
+                        role: roleField.value || 'user',
+                        facility_id: facilityField.value || null
                     };
 
                     console.log('Submitting user data:', { ...formData, password: '[HIDDEN]' });
@@ -2653,6 +2706,47 @@
                     }).catch(function(error) {
                         console.error('Edit facility error:', error);
                         showMessage('Failed to update facility: ' + error.message, 'error');
+                    });
+                });
+            }
+
+            var resetPasswordForm = document.getElementById('resetPasswordForm');
+            if (resetPasswordForm) {
+                resetPasswordForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    
+                    var userId = document.getElementById('resetPasswordUserId').value;
+                    var newPassword = document.getElementById('newPassword').value;
+                    var confirmPassword = document.getElementById('confirmPassword').value;
+                    
+                    if (!newPassword || newPassword.length < 8) {
+                        showMessage('Password must be at least 8 characters long', 'error');
+                        return;
+                    }
+                    
+                    if (newPassword !== confirmPassword) {
+                        showMessage('Passwords do not match', 'error');
+                        return;
+                    }
+                    
+                    var submitBtn = resetPasswordForm.querySelector('button[type="submit"]');
+                    var originalText = submitBtn.textContent;
+                    submitBtn.disabled = true;
+                    submitBtn.textContent = 'Resetting...';
+                    
+                    resetUserPassword(userId, newPassword).then(function(response) {
+                        if (response.success) {
+                            closeModal('resetPasswordModal');
+                            showMessage('Password reset successfully!', 'success');
+                            resetPasswordForm.reset();
+                        } else {
+                            showMessage('Failed to reset password: ' + response.error, 'error');
+                        }
+                    }).catch(function(error) {
+                        showMessage('Failed to reset password: ' + error.message, 'error');
+                    }).finally(function() {
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = originalText;
                     });
                 });
             }
