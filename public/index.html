@@ -700,6 +700,8 @@
                 <div class="flex gap-20 mb-20">
                     <button class="btn btn-primary" onclick="showAddUserModal()">+ Add User</button>
                     <button class="btn btn-primary" onclick="showAddFacilityModal()">+ Add Facility</button>
+                    <!-- Temporary debug button - remove after testing -->
+                    <button class="btn btn-warning" onclick="testAddUser()">🔧 Test Add User API</button>
                 </div>
 
                 <h3>User Management</h3>
@@ -1047,6 +1049,33 @@
         function showMessage(message, type, containerId) {
             containerId = containerId || 'loginMessage';
             var container = document.getElementById(containerId);
+            
+            // If no specific container provided, try to show in admin panel or create temporary alert
+            if (!container && containerId === 'loginMessage') {
+                // Create a temporary alert div in the current panel
+                var activePanel = document.querySelector('.panel.active');
+                if (activePanel) {
+                    var alertDiv = document.createElement('div');
+                    alertDiv.className = 'alert alert-' + type;
+                    alertDiv.innerHTML = escapeHtml(message);
+                    alertDiv.style.position = 'fixed';
+                    alertDiv.style.top = '200px';
+                    alertDiv.style.left = '50%';
+                    alertDiv.style.transform = 'translateX(-50%)';
+                    alertDiv.style.zIndex = '1500';
+                    alertDiv.style.minWidth = '300px';
+                    
+                    document.body.appendChild(alertDiv);
+                    
+                    setTimeout(function() {
+                        if (alertDiv && alertDiv.parentNode) {
+                            alertDiv.parentNode.removeChild(alertDiv);
+                        }
+                    }, type === 'success' ? 3000 : 5000);
+                }
+                return;
+            }
+            
             if (container) {
                 var alertClass = 'alert-' + type;
                 container.innerHTML = '<div class="alert ' + alertClass + '">' + escapeHtml(message) + '</div>';
@@ -1056,6 +1085,9 @@
                     }, 3000);
                 }
             }
+            
+            // Always log to console for debugging
+            console.log('Message [' + type + ']:', message);
         }
 
         function closeModal(modalId) {
@@ -2223,6 +2255,37 @@
             document.getElementById('addFacilityModal').style.display = 'block';
         }
 
+        // Temporary debug function - remove after testing
+        function testAddUser() {
+            console.log('Testing Add User API directly...');
+            
+            var testUserData = {
+                name: 'Test User ' + Math.floor(Math.random() * 1000),
+                email: 'testuser' + Math.floor(Math.random() * 1000) + '@test.com',
+                password: 'testpassword123',
+                role: 'user',
+                facility_id: null
+            };
+            
+            console.log('Test data:', { ...testUserData, password: '[HIDDEN]' });
+            
+            apiCall('/api/admin/users', {
+                method: 'POST',
+                body: JSON.stringify(testUserData)
+            }).then(function(response) {
+                console.log('Test API response:', response);
+                if (response.success) {
+                    showMessage('Test user created successfully: ' + testUserData.name, 'success');
+                    loadAdminData();
+                } else {
+                    showMessage('Test failed: ' + (response.error || 'Unknown error'), 'error');
+                }
+            }).catch(function(error) {
+                console.error('Test API error:', error);
+                showMessage('Test API call failed: ' + error.message, 'error');
+            });
+        }
+
         function showBulkPatientUploadModal() {
             document.getElementById('bulkPatientUploadModal').style.display = 'block';
         }
@@ -2460,6 +2523,7 @@
             if (addUserForm) {
                 addUserForm.addEventListener('submit', function(e) {
                     e.preventDefault();
+                    console.log('Add user form submitted');
                     
                     var submitBtn = addUserForm.querySelector('button[type="submit"]');
                     var originalText = submitBtn.textContent;
@@ -2467,24 +2531,35 @@
                     submitBtn.textContent = 'Adding User...';
                     
                     var formData = {
-                        name: document.getElementById('userName').value,
-                        email: document.getElementById('userEmail').value,
+                        name: document.getElementById('userName').value.trim(),
+                        email: document.getElementById('userEmail').value.trim(),
                         password: document.getElementById('userPassword').value,
                         role: document.getElementById('userRole').value,
                         facility_id: document.getElementById('userFacility').value || null
                     };
 
+                    console.log('Submitting user data:', { ...formData, password: '[HIDDEN]' });
+
+                    if (!formData.name || !formData.email || !formData.password) {
+                        showMessage('Please fill in all required fields', 'error');
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = originalText;
+                        return;
+                    }
+
                     apiCall('/api/admin/users', {
                         method: 'POST',
                         body: JSON.stringify(formData)
                     }).then(function(response) {
+                        console.log('Add user response:', response);
                         if (response.success) {
                             closeModal('addUserModal');
                             showMessage('User added successfully!', 'success');
-                            loadAdminUsers();
                             addUserForm.reset();
+                            // Reload the entire admin data to refresh everything
+                            loadAdminData();
                         } else {
-                            showMessage('Failed to add user: ' + response.error, 'error');
+                            showMessage('Failed to add user: ' + (response.error || 'Unknown error'), 'error');
                         }
                     }).catch(function(error) {
                         console.error('Add user error:', error);
