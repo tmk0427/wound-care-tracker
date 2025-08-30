@@ -343,7 +343,7 @@ const generateVerificationToken = () => {
 
 // ===== BASIC ROUTES =====
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 app.get('/health', async (req, res) => {
@@ -441,6 +441,7 @@ app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
     try {
         const { email, password } = req.body;
+        console.log('Login attempt for:', email);
 
         if (!email || !password) {
             return res.status(400).json({ success: false, message: 'Email and password required' });
@@ -455,16 +456,20 @@ app.post('/api/auth/login', async (req, res) => {
         );
 
         if (result.rows.length === 0) {
+            console.log('User not found:', email);
             return res.status(401).json({ success: false, message: 'Invalid credentials' });
         }
 
         const user = result.rows[0];
+        console.log('User found:', user.email, 'Role:', user.role);
 
         if (!(await bcrypt.compare(password, user.password))) {
+            console.log('Password mismatch for:', email);
             return res.status(401).json({ success: false, message: 'Invalid credentials' });
         }
 
         if (!user.is_approved) {
+            console.log('User not approved:', email);
             return res.status(403).json({ success: false, message: 'Account pending approval' });
         }
 
@@ -479,6 +484,7 @@ app.post('/api/auth/login', async (req, res) => {
             { expiresIn: '24h' }
         );
 
+        console.log('Login successful for:', email);
         res.json({
             success: true,
             token,
@@ -494,7 +500,7 @@ app.post('/api/auth/login', async (req, res) => {
 
     } catch (error) {
         console.error('Login error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
+        res.status(500).json({ success: false, message: 'Server error during login: ' + error.message });
     }
 });
 
