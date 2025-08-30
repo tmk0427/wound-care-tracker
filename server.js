@@ -278,23 +278,30 @@ app.post('/api/debug/clear-patients', authenticateToken, requireAdmin, async (re
 // DASHBOARD
 app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
     try {
+        // Build consistent queries that match the patient filtering logic
+        let patientQuery, patientParams = [];
+        let trackingQuery, trackingParams = [];
+
+        if (req.user.role === 'admin') {
+            // Admin sees all patients
+            patientQuery = 'SELECT COUNT(*) as count FROM patients p';
+            trackingQuery = 'SELECT COUNT(*) as count FROM tracking t JOIN patients p ON t.patient_id = p.id';
+        } else if (req.user.facilityId) {
+            // Non-admin with facility sees only their facility's patients from Sept 2025+
+            patientQuery = `SELECT COUNT(*) as count FROM patients p WHERE p.facility_id = $1 AND p.month >= '2025-09'`;
+            patientParams = [req.user.facilityId];
+            trackingQuery = `SELECT COUNT(*) as count FROM tracking t JOIN patients p ON t.patient_id = p.id WHERE p.facility_id = $1 AND p.month >= '2025-09'`;
+            trackingParams = [req.user.facilityId];
+        } else {
+            // Non-admin without facility sees nothing
+            patientQuery = 'SELECT 0 as count';
+            trackingQuery = 'SELECT 0 as count';
+        }
+
         const [patientsResult, suppliesResult, trackingResult] = await Promise.all([
-            safeQuery(`
-                SELECT COUNT(*) as count 
-                FROM patients p
-                ${req.user.role !== 'admin' && req.user.facilityId ? 
-                  'WHERE p.facility_id = $1' : ''}
-            `, req.user.role !== 'admin' && req.user.facilityId ? [req.user.facilityId] : []),
-            
+            safeQuery(patientQuery, patientParams),
             safeQuery('SELECT COUNT(*) as count FROM supplies'),
-            
-            safeQuery(`
-                SELECT COUNT(*) as count 
-                FROM tracking t
-                JOIN patients p ON t.patient_id = p.id
-                ${req.user.role !== 'admin' && req.user.facilityId ? 
-                  'WHERE p.facility_id = $1' : ''}
-            `, req.user.role !== 'admin' && req.user.facilityId ? [req.user.facilityId] : [])
+            safeQuery(trackingQuery, trackingParams)
         ]);
 
         // Calculate total cost for admin, total units for non-admin
