@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
@@ -222,11 +223,6 @@ async function initializeDatabase() {
         }
 
         await initializeDefaultData();
-        
-        // Clear any existing tracking data for fresh start
-        console.log('Clearing existing tracking data for fresh start...');
-        await safeQuery('DELETE FROM tracking');
-        console.log('All tracking data cleared');
         
         console.log('Database initialization completed successfully');
         
@@ -504,149 +500,6 @@ app.post('/api/auth/login', async (req, res) => {
     }
 });
 
-app.post('/api/auth/register', async (req, res) => {
-    try {
-        const { name, email, password, facility_id } = req.body;
-
-        if (!name || !email || !password) {
-            return res.status(400).json({ success: false, message: 'Name, email, and password are required' });
-        }
-
-        if (password.length < 8) {
-            return res.status(400).json({ success: false, message: 'Password must be at least 8 characters long' });
-        }
-
-        // Check if email already exists
-        const existingUser = await safeQuery('SELECT id FROM users WHERE email = $1', [email]);
-        if (existingUser.rows.length > 0) {
-            return res.status(400).json({ success: false, message: 'Email address already registered' });
-        }
-
-        // Hash password
-        const hashedPassword = await bcrypt.hash(password, 12);
-
-        // Insert user with email verification bypassed
-        const result = await safeQuery(
-            `INSERT INTO users (name, email, password, facility_id, email_verified) 
-             VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-            [name, email, hashedPassword, facility_id || null, true]
-        );
-
-        res.json({
-            success: true,
-            message: 'Registration successful! Your account is pending administrator approval.',
-            requiresEmailVerification: false
-        });
-
-    } catch (error) {
-        console.error('Registration error:', error);
-        res.status(500).json({ success: false, message: 'Server error during registration' });
-    }
-});
-
-app.post('/api/auth/resend-verification', async (req, res) => {
-    try {
-        const { email } = req.body;
-
-        if (!email) {
-            return res.status(400).json({ success: false, message: 'Email address is required' });
-        }
-
-        const user = await safeQuery('SELECT id, email_verified FROM users WHERE email = $1', [email]);
-        
-        if (user.rows.length === 0) {
-            return res.status(404).json({ success: false, message: 'Email address not found' });
-        }
-
-        if (user.rows[0].email_verified) {
-            return res.status(400).json({ success: false, message: 'Email address is already verified' });
-        }
-
-        // Generate new verification token
-        const verificationToken = generateVerificationToken();
-        const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
-
-        await safeQuery(
-            'UPDATE users SET email_verification_token = $1, email_verification_expires = $2 WHERE email = $3',
-            [verificationToken, verificationExpires, email]
-        );
-
-        // In a real application, you would send an email here
-        console.log(`New verification token for ${email}: ${verificationToken}`);
-
-        res.json({
-            success: true,
-            message: 'Verification email resent successfully!'
-        });
-
-    } catch (error) {
-        console.error('Resend verification error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
-
-app.get('/api/auth/verify-email/:token', async (req, res) => {
-    try {
-        const { token } = req.params;
-
-        const result = await safeQuery(
-            'SELECT id, email FROM users WHERE email_verification_token = $1 AND email_verification_expires > NOW()',
-            [token]
-        );
-
-        if (result.rows.length === 0) {
-            return res.status(400).json({ success: false, message: 'Invalid or expired verification token' });
-        }
-
-        const user = result.rows[0];
-
-        await safeQuery(
-            'UPDATE users SET email_verified = true, email_verification_token = NULL, email_verification_expires = NULL WHERE id = $1',
-            [user.id]
-        );
-
-        res.json({
-            success: true,
-            message: 'Email verified successfully! Your account is now pending administrator approval.'
-        });
-
-    } catch (error) {
-        console.error('Email verification error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
-
-app.get('/api/auth/verify', authenticateToken, async (req, res) => {
-    try {
-        const result = await safeQuery(
-            `SELECT u.*, f.name as facility_name 
-             FROM users u 
-             LEFT JOIN facilities f ON u.facility_id = f.id 
-             WHERE u.id = $1`,
-            [req.user.id]
-        );
-
-        if (result.rows.length === 0) {
-            return res.status(401).json({ error: 'Invalid token' });
-        }
-
-        const user = result.rows[0];
-        const userResponse = {
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            role: user.role,
-            facility_id: user.facility_id,
-            facility_name: user.facility_name
-        };
-
-        res.json({ user: userResponse });
-    } catch (error) {
-        console.error('Auth verify error:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
 // ===== FACILITIES ROUTES =====
 app.get('/api/facilities', async (req, res) => {
     try {
@@ -679,6 +532,66 @@ app.post('/api/facilities', authenticateToken, requireAdmin, async (req, res) =>
             return res.status(400).json({ success: false, error: 'Facility name already exists' });
         }
         res.status(500).json({ success: false, error: 'Failed to create facility' });
+    }
+});
+
+app.put('/api/facilities/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { name } = req.body;
+        const facilityId = req.params.id;
+
+        if (!name) {
+            return res.status(400).json({ success: false, error: 'Facility name is required' });
+        }
+
+        const result = await safeQuery(
+            'UPDATE facilities SET name = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+            [name, facilityId]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ success: false, error: 'Facility not found' });
+        }
+
+        res.json({ success: true, message: 'Facility updated successfully' });
+    } catch (error) {
+        console.error('Error updating facility:', error);
+        if (error.code === '23505') {
+            return res.status(400).json({ success: false, error: 'Facility name already exists' });
+        }
+        res.status(500).json({ success: false, error: 'Failed to update facility' });
+    }
+});
+
+app.delete('/api/facilities/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const facilityId = req.params.id;
+
+        // Check if facility has associated users or patients
+        const usageCheck = await safeQuery(`
+            SELECT 
+                (SELECT COUNT(*) FROM users WHERE facility_id = $1) as user_count,
+                (SELECT COUNT(*) FROM patients WHERE facility_id = $1) as patient_count
+        `, [facilityId]);
+
+        const usage = usageCheck.rows[0];
+        if (parseInt(usage.user_count) > 0 || parseInt(usage.patient_count) > 0) {
+            return res.status(400).json({ 
+                success: false, 
+                error: `Cannot delete facility. It has ${usage.user_count} users and ${usage.patient_count} patients associated with it.` 
+            });
+        }
+
+        const result = await safeQuery('DELETE FROM facilities WHERE id = $1', [facilityId]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ success: false, error: 'Facility not found' });
+        }
+
+        res.json({ success: true, message: 'Facility deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting facility:', error);
+        res.status(500).json({ success: false, error: 'Failed to delete facility' });
     }
 });
 
@@ -871,13 +784,23 @@ app.get('/api/patients', authenticateToken, async (req, res) => {
         let params = [];
         let conditions = [];
 
-        // Apply facility filter if user is not admin
-        if (req.user.role !== 'admin' && req.user.facilityId) {
-            conditions.push('p.facility_id = $' + (params.length + 1));
-            params.push(req.user.facilityId);
+        // Apply facility filter if user is not admin - STRICT FILTERING
+        if (req.user.role !== 'admin') {
+            if (req.user.facilityId) {
+                conditions.push('p.facility_id = $' + (params.length + 1));
+                params.push(req.user.facilityId);
+            } else {
+                // If user has no facility assigned, return empty result
+                return res.json({ success: true, patients: [] });
+            }
         } else if (facility_id) {
             conditions.push('p.facility_id = $' + (params.length + 1));
             params.push(facility_id);
+        }
+
+        // Additional month filtering for non-admin users (September 2025 onwards only)
+        if (req.user.role !== 'admin') {
+            conditions.push("p.month >= '2025-09'");
         }
 
         if (month) {
@@ -911,6 +834,11 @@ app.post('/api/patients', authenticateToken, async (req, res) => {
         // Check permission for non-admin users
         if (req.user.role !== 'admin' && req.user.facilityId && req.user.facilityId != facility_id) {
             return res.status(403).json({ success: false, error: 'Cannot add patients to this facility' });
+        }
+
+        // Additional validation for non-admin users - must be September 2025 or later
+        if (req.user.role !== 'admin' && month < '2025-09') {
+            return res.status(400).json({ success: false, error: 'Can only add patients for September 2025 onwards' });
         }
 
         // Check for duplicate MRN if MRN is provided
@@ -964,6 +892,11 @@ app.put('/api/patients/:id', authenticateToken, async (req, res) => {
             if (req.user.facilityId != currentPatient.facility_id || req.user.facilityId != facility_id) {
                 return res.status(403).json({ success: false, error: 'Access denied' });
             }
+        }
+
+        // Additional validation for non-admin users - must be September 2025 or later
+        if (req.user.role !== 'admin' && month < '2025-09') {
+            return res.status(400).json({ success: false, error: 'Can only edit patients for September 2025 onwards' });
         }
 
         // Check for duplicate MRN if MRN is provided and different from current
@@ -1147,6 +1080,15 @@ app.post('/api/patients/bulk', authenticateToken, async (req, res) => {
 
                 // Convert MM-YYYY to YYYY-MM for database storage
                 const dbMonth = `${year}-${monthParts[0]}`;
+
+                // Additional validation for non-admin users - must be September 2025 or later
+                if (req.user.role !== 'admin' && dbMonth < '2025-09') {
+                    results.failed.push({ 
+                        name: name, 
+                        error: 'Can only add patients for September 2025 onwards' 
+                    });
+                    continue;
+                }
 
                 if (!facilityName || facilityName.trim().length < 2) {
                     results.failed.push({ 
@@ -1452,54 +1394,6 @@ app.put('/api/admin/users/:id/approve', authenticateToken, requireAdmin, async (
     } catch (error) {
         console.error('Error approving user:', error);
         res.status(500).json({ success: false, error: 'Failed to approve user' });
-    }
-});
-
-app.put('/api/admin/users/:id/reset-password', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { newPassword } = req.body;
-        
-        console.log('Password reset request for user ID:', id);
-        
-        if (!newPassword || newPassword.length < 8) {
-            return res.status(400).json({ success: false, error: 'Password must be at least 8 characters long' });
-        }
-        
-        // Check if user exists first
-        const userCheck = await safeQuery('SELECT id, email, name FROM users WHERE id = $1', [id]);
-        if (userCheck.rows.length === 0) {
-            console.log('User not found for ID:', id);
-            return res.status(404).json({ success: false, error: 'User not found' });
-        }
-        
-        const user = userCheck.rows[0];
-        console.log('Resetting password for user:', user.email);
-        
-        const hashedPassword = await bcrypt.hash(newPassword, 12);
-        console.log('Password hashed successfully');
-        
-        // Reset password and ensure user is approved and verified
-        const result = await safeQuery(
-            'UPDATE users SET password = $1, is_approved = true, email_verified = true, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-            [hashedPassword, id]
-        );
-        
-        if (result.rowCount === 0) {
-            console.log('Password update failed - no rows affected');
-            return res.status(404).json({ success: false, error: 'Failed to update password' });
-        }
-        
-        console.log('Password reset successful for user:', user.email);
-        res.json({ 
-            success: true, 
-            message: 'Password reset successfully',
-            userEmail: user.email
-        });
-
-    } catch (error) {
-        console.error('Error resetting password:', error);
-        res.status(500).json({ success: false, error: 'Failed to reset password: ' + error.message });
     }
 });
 
