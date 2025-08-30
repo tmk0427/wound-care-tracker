@@ -1,1136 +1,2762 @@
-require('dotenv').config();
-const express = require('express');
-const { Pool } = require('pg');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const cors = require('cors');
-const path = require('path');
-const multer = require('multer');
-const XLSX = require('xlsx');
-
-const app = express();
-const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this-in-production';
-
-// MIDDLEWARE
-app.use(cors());
-app.use(express.json({ limit: '10mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
-
-// Multer configuration
-const upload = multer({
-    limits: { fileSize: 5 * 1024 * 1024 },
-    fileFilter: (req, file, cb) => {
-        if (file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-            file.mimetype === 'application/vnd.ms-excel') {
-            cb(null, true);
-        } else {
-            cb(new Error('Only Excel files are allowed'));
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wound Care RT Supply Tracker</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-    }
-});
 
-// DATABASE CONFIGURATION
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-    max: 10,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 2000,
-});
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
 
-// Database helper function
-async function safeQuery(query, params = []) {
-    try {
-        console.log('Executing query:', query.substring(0, 100) + '...');
-        const result = await pool.query(query, params);
-        console.log('Query successful, returned', result.rows.length, 'rows');
-        return result;
-    } catch (error) {
-        console.error('Database query failed:', error.message);
-        throw error;
-    }
-}
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            padding-top: 180px;
+        }
 
-// Database initialization
-async function initializeDatabase() {
-    try {
-        console.log('Initializing database...');
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+            margin-bottom: 20px;
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            z-index: 1000;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            max-width: 1400px;
+            margin-left: auto;
+            margin-right: auto;
+        }
 
-        // Create facilities table
-        await safeQuery(`
-            CREATE TABLE IF NOT EXISTS facilities (
-                id SERIAL PRIMARY KEY,
-                name VARCHAR(255) NOT NULL UNIQUE,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
 
-        // Create supplies table
-        await safeQuery(`
-            CREATE TABLE IF NOT EXISTS supplies (
-                id SERIAL PRIMARY KEY,
-                code INTEGER NOT NULL UNIQUE,
-                description TEXT NOT NULL,
-                hcpcs VARCHAR(10),
-                cost DECIMAL(10,2) DEFAULT 0.00,
-                is_custom BOOLEAN DEFAULT false,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
 
-        // Create users table
-        await safeQuery(`
-            CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY,
-                name VARCHAR(255) NOT NULL,
-                email VARCHAR(255) NOT NULL UNIQUE,
-                password VARCHAR(255) NOT NULL,
-                role VARCHAR(20) DEFAULT 'user' CHECK (role IN ('admin', 'user')),
-                facility_id INTEGER REFERENCES facilities(id) ON DELETE SET NULL,
-                is_approved BOOLEAN DEFAULT false,
-                email_verified BOOLEAN DEFAULT true,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
+        .logo h1 {
+            color: #4f46e5;
+            font-size: 2rem;
+            font-weight: 700;
+        }
 
-        // Create patients table
-        await safeQuery(`
-            CREATE TABLE IF NOT EXISTS patients (
-                id SERIAL PRIMARY KEY,
-                name VARCHAR(255) NOT NULL,
-                month VARCHAR(7) NOT NULL,
-                mrn VARCHAR(50),
-                facility_id INTEGER NOT NULL REFERENCES facilities(id) ON DELETE CASCADE,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(name, month, facility_id)
-            )
-        `);
+        .logo-icon {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
 
-        // Create tracking table
-        await safeQuery(`
-            CREATE TABLE IF NOT EXISTS tracking (
-                id SERIAL PRIMARY KEY,
-                patient_id INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-                supply_id INTEGER NOT NULL REFERENCES supplies(id) ON DELETE CASCADE,
-                day_of_month INTEGER NOT NULL CHECK (day_of_month >= 1 AND day_of_month <= 31),
-                quantity INTEGER NOT NULL DEFAULT 0 CHECK (quantity >= 0),
-                wound_dx TEXT,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(patient_id, supply_id, day_of_month)
-            )
-        `);
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
 
-        await initializeDefaultData();
-        console.log('Database initialization completed successfully');
+        .user-details {
+            text-align: right;
+        }
+
+        .user-name {
+            font-weight: 600;
+            color: #4f46e5;
+        }
+
+        .user-role {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .nav-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            position: fixed;
+            top: 100px;
+            left: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 15px;
+            border-radius: 25px;
+            z-index: 999;
+            justify-content: center;
+            max-width: 1400px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .tab-btn {
+            padding: 12px 24px;
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            border-radius: 25px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            backdrop-filter: blur(10px);
+        }
+
+        .tab-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .tab-btn.active {
+            background: white;
+            color: #4f46e5;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .panel {
+            display: none;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+
+        .panel.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(79, 70, 229, 0.4);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+        }
+
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white;
+        }
+
+        .btn-warning:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
+        }
+
+        .btn-small {
+            padding: 8px 16px;
+            font-size: 0.9rem;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #374151;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+
+        .table-container {
+            overflow-x: auto;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-top: 20px;
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+
+        .table th,
+        .table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .table th {
+            background: #f9fafb;
+            font-weight: 600;
+            color: #374151;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .table tr:hover {
+            background-color: #f9fafb;
+        }
+
+        .search-container {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .search-box {
+            flex: 1;
+            min-width: 250px;
+        }
+
+        .filter-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .sticky-search {
+            position: sticky;
+            top: 160px;
+            z-index: 998;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(5px);
+        }
+
+        .modal-content {
+            background: white;
+            margin: 5% auto;
+            padding: 30px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .close {
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            line-height: 1;
+        }
+
+        .close:hover {
+            color: #000;
+        }
+
+        .bulk-upload-template {
+            background: #f8fafc;
+            border: 2px dashed #cbd5e1;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .upload-zone {
+            border: 2px dashed #cbd5e1;
+            border-radius: 8px;
+            padding: 30px;
+            text-align: center;
+            margin: 20px 0;
+            transition: all 0.3s ease;
+        }
+
+        .upload-zone.dragover {
+            border-color: #4f46e5;
+            background: #f0f9ff;
+        }
+
+        .login-container {
+            max-width: 450px;
+            margin: 100px auto;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .login-header h2 {
+            color: #4f46e5;
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        .login-header p {
+            color: #666;
+        }
+
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .alert-success {
+            background-color: #d1fae5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+        }
+
+        .alert-error {
+            background-color: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fca5a5;
+        }
+
+        .alert-info {
+            background-color: #dbeafe;
+            color: #1e40af;
+            border: 1px solid #93c5fd;
+        }
+
+        .stats-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .stat-label {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .text-center { text-align: center; }
+        .mt-20 { margin-top: 20px; }
+        .mb-20 { margin-bottom: 20px; }
+        .hidden { display: none !important; }
+        .flex { display: flex; }
+        .flex-wrap { flex-wrap: wrap; }
+        .gap-10 { gap: 10px; }
+        .gap-20 { gap: 20px; }
+    </style>
+</head>
+<body>
+    <div id="loginScreen" class="login-container">
+        <div class="login-header">
+            <div class="logo-icon">🏥</div>
+            <h2>Wound Care RT Supply Tracker</h2>
+            <p>Professional Healthcare Supply Management</p>
+        </div>
         
-    } catch (error) {
-        console.error('Database initialization failed:', error);
-        throw error;
-    }
-}
-
-async function initializeDefaultData() {
-    try {
-        // Check if admin exists
-        const adminCheck = await safeQuery('SELECT COUNT(*) FROM users WHERE role = $1', ['admin']);
-        
-        if (parseInt(adminCheck.rows[0].count) === 0) {
-            console.log('Creating default data...');
+        <form id="loginForm" style="display: block;">
+            <div class="form-group">
+                <label for="email">Email Address</label>
+                <input type="email" id="email" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" class="form-control" required>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width: 100%;">Sign In</button>
             
-            // Create default facilities
-            const facilitiesCheck = await safeQuery('SELECT COUNT(*) FROM facilities');
-            if (parseInt(facilitiesCheck.rows[0].count) === 0) {
-                await safeQuery(`
-                    INSERT INTO facilities (name) VALUES 
-                    ('General Hospital'),
-                    ('Memorial Medical Center'), 
-                    ('St. Mary''s Hospital'),
-                    ('University Medical Center')
-                `);
-                console.log('Default facilities created');
+            <div style="text-align: center; margin: 20px 0; padding: 15px; background: #f0f9ff; border-radius: 8px;">
+                <p style="margin: 0; font-size: 14px; color: #0369a1;">
+                    <strong>Need access?</strong> Contact your system administrator for login credentials.
+                </p>
+            </div>
+        </form>
+
+        <div id="loginMessage" style="margin-top: 20px;"></div>
+    </div>
+
+    <div id="mainApp" style="display: none;">
+        <div class="container">
+            <div class="header">
+                <div class="header-content">
+                    <div class="logo">
+                        <div class="logo-icon">🏥</div>
+                        <h1>Wound Care RT Supply Tracker</h1>
+                    </div>
+                    <div class="user-info">
+                        <div class="user-details">
+                            <div class="user-name" id="userName">Loading...</div>
+                            <div class="user-role" id="userRole">Loading...</div>
+                        </div>
+                        <button class="btn btn-danger" onclick="logout()">Logout</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="nav-tabs">
+                <button class="tab-btn active" onclick="showPanel('dashboard')">📊 Dashboard</button>
+                <button class="tab-btn" onclick="showPanel('patients')">👤 Patients</button>
+                <button class="tab-btn admin-only" onclick="showPanel('supplies')" style="display: none;">📦 Supply Management</button>
+                <button class="tab-btn" onclick="showPanel('tracking')">📈 Supply Tracking</button>
+                <button class="tab-btn admin-only" onclick="showPanel('admin')" style="display: none;">⚙️ Admin</button>
+            </div>
+
+            <div id="dashboardPanel" class="panel active">
+                <h2>📊 Dashboard Overview</h2>
+                
+                <div class="stats-container">
+                    <div class="stat-card">
+                        <div class="stat-number" id="totalPatients">0</div>
+                        <div class="stat-label">Total Patients</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="totalSupplies">0</div>
+                        <div class="stat-label">Supply Items</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="monthlyTracking">0</div>
+                        <div class="stat-label">Monthly Tracking Records</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="totalCost">0</div>
+                        <div class="stat-label admin-only">Total Supply Usage Cost</div>
+                        <div class="stat-label non-admin-only" style="display: none;">Total Units Used</div>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <h3>Recent Activity</h3>
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>User</th>
+                                <th>Action</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recentActivity">
+                            <tr>
+                                <td colspan="4" class="text-center">Loading recent activity...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="patientsPanel" class="panel">
+                <div class="flex" style="justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2>👤 Patient Management</h2>
+                    <div class="flex gap-10">
+                        <button class="btn btn-success admin-only" onclick="showBulkPatientUploadModal()" style="display: none;">📊 Bulk Upload</button>
+                        <button class="btn btn-primary" onclick="showAddPatientModal()">+ Add Patient</button>
+                    </div>
+                </div>
+
+                <div class="search-container">
+                    <div class="search-box">
+                        <input type="text" id="patientSearch" class="form-control" placeholder="🔍 Search patients..." oninput="filterPatients()">
+                    </div>
+                    <div class="filter-group">
+                        <select id="patientFacilityFilter" class="form-control admin-only" onchange="filterPatients()" style="display: none;">
+                            <option value="">All Facilities</option>
+                        </select>
+                        <select id="patientMonthFilter" class="form-control" onchange="filterPatients()">
+                            <option value="">All Months</option>
+                        </select>
+                        <select id="patientSortBy" class="form-control" onchange="filterPatients()">
+                            <option value="name">Sort: A-Z Name</option>
+                            <option value="name_desc">Sort: Z-A Name</option>
+                            <option value="month">Sort: Month</option>
+                            <option value="facility">Sort: Facility</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>MRN</th>
+                                <th>Month</th>
+                                <th>Facility</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="patientsTable">
+                            <tr>
+                                <td colspan="5" class="text-center">Loading patients...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="suppliesPanel" class="panel">
+                <div class="flex" style="justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2>📦 Supply Management</h2>
+                    <div class="flex gap-10">
+                        <button class="btn btn-success" onclick="importExcel()">📊 Import Excel</button>
+                        <button class="btn btn-primary" onclick="showAddSupplyModal()">+ Add Supply</button>
+                    </div>
+                </div>
+
+                <div class="search-container">
+                    <div class="search-box">
+                        <input type="text" id="supplySearch" class="form-control" placeholder="🔍 Search supplies..." oninput="filterSupplies()">
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Code</th>
+                                <th>Description</th>
+                                <th>HCPCS</th>
+                                <th>Cost</th>
+                                <th>Type</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="suppliesTable">
+                            <tr>
+                                <td colspan="6" class="text-center">Loading supplies...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="trackingPanel" class="panel">
+                <div class="flex" style="justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2>📈 Supply Tracking</h2>
+                    <div class="flex gap-10">
+                        <button class="btn btn-success admin-only" onclick="exportTrackingReport()" id="exportBtn" style="display: none;">📄 Export Report</button>
+                        <button class="btn btn-primary" onclick="saveAllTrackingData()" id="saveAllBtn">💾 Save All</button>
+                    </div>
+                </div>
+
+                <div class="sticky-search">
+                    <div class="search-container">
+                        <div class="search-box">
+                            <select id="trackingPatient" class="form-control" onchange="loadPatientTracking()">
+                                <option value="">Select Patient...</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <select id="trackingFacilityFilter" class="form-control admin-only" onchange="filterTrackingPatients()" style="display: none;">
+                                <option value="">All Facilities</option>
+                            </select>
+                            <select id="trackingMonthFilter" class="form-control" onchange="filterTrackingPatients()">
+                                <option value="">All Months</option>
+                            </select>
+                        </div>
+                        <div class="search-box" id="supplySearchContainer" style="display: none;">
+                            <input type="text" id="trackingSupplySearch" class="form-control" placeholder="🔍 Search by AR Code or Description..." oninput="filterTrackingTable()">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="trackingInterface" style="display: none;">
+                    <div id="patientInfo" style="background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px;"></div>
+                    <div id="trackingContent"></div>
+                </div>
+            </div>
+
+            <div id="adminPanel" class="panel">
+                <h2>⚙️ Admin Panel</h2>
+                
+                <div class="stats-container">
+                    <div class="stat-card">
+                        <div class="stat-number" id="totalUsers">0</div>
+                        <div class="stat-label">Total Users</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="pendingApprovals">0</div>
+                        <div class="stat-label">Pending Approvals</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="totalFacilities">0</div>
+                        <div class="stat-label">Facilities</div>
+                    </div>
+                </div>
+
+                <div class="flex gap-20 mb-20">
+                    <button class="btn btn-primary" onclick="showAddUserModal()">+ Add User</button>
+                    <button class="btn btn-primary" onclick="showAddFacilityModal()">+ Add Facility</button>
+                    <!-- Temporary debug button - remove after testing -->
+                    <button class="btn btn-warning" onclick="testAddUser()">🔧 Test Add User API</button>
+                </div>
+
+                <h3>User Management</h3>
+                <div class="table-container">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Role</th>
+                                <th>Facility</th>
+                                <th>Account Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTable">
+                            <tr>
+                                <td colspan="6" class="text-center">Loading users...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h3 style="margin-top: 40px;">Facility Management</h3>
+                <div class="table-container">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Facility Name</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="facilitiesTable">
+                            <tr>
+                                <td colspan="3" class="text-center">Loading facilities...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="addPatientModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add New Patient</h3>
+                <span class="close" onclick="closeModal('addPatientModal')">&times;</span>
+            </div>
+            <form id="addPatientForm">
+                <div class="form-group">
+                    <label for="patientName">Patient Name</label>
+                    <input type="text" id="patientName" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="patientMRN">MRN</label>
+                    <input type="text" id="patientMRN" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label for="patientMonth">Month</label>
+                    <select id="patientMonth" class="form-control" required></select>
+                </div>
+                <div class="form-group">
+                    <label for="patientFacility">Facility</label>
+                    <select id="patientFacility" class="form-control" required>
+                        <option value="">Select Facility</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary">Add Patient</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="editPatientModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Patient</h3>
+                <span class="close" onclick="closeModal('editPatientModal')">&times;</span>
+            </div>
+            <form id="editPatientForm">
+                <input type="hidden" id="editPatientId">
+                <div class="form-group">
+                    <label for="editPatientName">Patient Name</label>
+                    <input type="text" id="editPatientName" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="editPatientMRN">MRN</label>
+                    <input type="text" id="editPatientMRN" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label for="editPatientMonth">Month</label>
+                    <select id="editPatientMonth" class="form-control" required></select>
+                </div>
+                <div class="form-group">
+                    <label for="editPatientFacility">Facility</label>
+                    <select id="editPatientFacility" class="form-control" required>
+                        <option value="">Select Facility</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary">Update Patient</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="addSupplyModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add New Supply</h3>
+                <span class="close" onclick="closeModal('addSupplyModal')">&times;</span>
+            </div>
+            <form id="addSupplyForm">
+                <div class="form-group">
+                    <label for="supplyCode">Supply Code</label>
+                    <input type="number" id="supplyCode" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="supplyDescription">Description</label>
+                    <input type="text" id="supplyDescription" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="supplyHCPCS">HCPCS Code</label>
+                    <input type="text" id="supplyHCPCS" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label for="supplyCost">Cost ($)</label>
+                    <input type="number" id="supplyCost" class="form-control" step="0.01" min="0">
+                </div>
+                <button type="submit" class="btn btn-primary">Add Supply</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="editSupplyModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Supply</h3>
+                <span class="close" onclick="closeModal('editSupplyModal')">&times;</span>
+            </div>
+            <form id="editSupplyForm">
+                <input type="hidden" id="editSupplyId">
+                <div class="form-group">
+                    <label for="editSupplyCode">Supply Code</label>
+                    <input type="number" id="editSupplyCode" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="editSupplyDescription">Description</label>
+                    <input type="text" id="editSupplyDescription" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="editSupplyHCPCS">HCPCS Code</label>
+                    <input type="text" id="editSupplyHCPCS" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label for="editSupplyCost">Cost ($)</label>
+                    <input type="number" id="editSupplyCost" class="form-control" step="0.01" min="0">
+                </div>
+                <button type="submit" class="btn btn-primary">Update Supply</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="addUserModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add New User</h3>
+                <span class="close" onclick="closeModal('addUserModal')">&times;</span>
+            </div>
+            <form id="addUserForm">
+                <div class="form-group">
+                    <label for="addUserName">Full Name</label>
+                    <input type="text" id="addUserName" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="addUserEmail">Email Address</label>
+                    <input type="email" id="addUserEmail" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="addUserPassword">Password</label>
+                    <input type="password" id="addUserPassword" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="addUserRole">Role</label>
+                    <select id="addUserRole" class="form-control" required>
+                        <option value="user">User</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="addUserFacility">Facility</label>
+                    <select id="addUserFacility" class="form-control">
+                        <option value="">No Specific Facility</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary">Add User</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="editUserModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit User</h3>
+                <span class="close" onclick="closeModal('editUserModal')">&times;</span>
+            </div>
+            <form id="editUserForm">
+                <input type="hidden" id="editUserId">
+                <div class="form-group">
+                    <label for="editUserName">Full Name</label>
+                    <input type="text" id="editUserName" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="editUserEmail">Email Address</label>
+                    <input type="email" id="editUserEmail" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="editUserRole">Role</label>
+                    <select id="editUserRole" class="form-control" required>
+                        <option value="user">User</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="editUserFacility">Facility</label>
+                    <select id="editUserFacility" class="form-control">
+                        <option value="">No Specific Facility</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary">Update User</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="addFacilityModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add New Facility</h3>
+                <span class="close" onclick="closeModal('addFacilityModal')">&times;</span>
+            </div>
+            <form id="addFacilityForm">
+                <div class="form-group">
+                    <label for="facilityName">Facility Name</label>
+                    <input type="text" id="facilityName" class="form-control" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Add Facility</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="editFacilityModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Facility</h3>
+                <span class="close" onclick="closeModal('editFacilityModal')">&times;</span>
+            </div>
+            <form id="editFacilityForm">
+                <input type="hidden" id="editFacilityId">
+                <div class="form-group">
+                    <label for="editFacilityName">Facility Name</label>
+                    <input type="text" id="editFacilityName" class="form-control" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Update Facility</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="resetPasswordModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Reset Password</h3>
+                <span class="close" onclick="closeModal('resetPasswordModal')">&times;</span>
+            </div>
+            <form id="resetPasswordForm">
+                <input type="hidden" id="resetPasswordUserId">
+                <div class="form-group">
+                    <label>User:</label>
+                    <p id="resetPasswordUserName" style="font-weight: bold; color: #4f46e5;"></p>
+                </div>
+                <div class="form-group">
+                    <label for="newPassword">New Password</label>
+                    <input type="password" id="newPassword" class="form-control" required minlength="8" placeholder="Enter new password (minimum 8 characters)">
+                </div>
+                <div class="form-group">
+                    <label for="confirmPassword">Confirm Password</label>
+                    <input type="password" id="confirmPassword" class="form-control" required placeholder="Confirm new password">
+                </div>
+                <button type="submit" class="btn btn-primary">Reset Password</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="bulkPatientUploadModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Bulk Patient Upload</h3>
+                <span class="close" onclick="closeModal('bulkPatientUploadModal')">&times;</span>
+            </div>
+            
+            <div class="bulk-upload-template">
+                <h4>Excel Template Format</h4>
+                <p>Please use this exact column format:</p>
+                <code>Name | MRN | Month | Facility</code>
+                <br><br>
+                <strong>Example:</strong><br>
+                <table style="border-collapse: collapse; margin: 10px 0;">
+                    <tr style="background: #f0f0f0;">
+                        <td style="border: 1px solid #ccc; padding: 5px;">Name</td>
+                        <td style="border: 1px solid #ccc; padding: 5px;">MRN</td>
+                        <td style="border: 1px solid #ccc; padding: 5px;">Month</td>
+                        <td style="border: 1px solid #ccc; padding: 5px;">Facility</td>
+                    </tr>
+                    <tr>
+                        <td style="border: 1px solid #ccc; padding: 5px;">Smith, John</td>
+                        <td style="border: 1px solid #ccc; padding: 5px;">12345</td>
+                        <td style="border: 1px solid #ccc; padding: 5px;">09-2025</td>
+                        <td style="border: 1px solid #ccc; padding: 5px;">Main Hospital</td>
+                    </tr>
+                    <tr>
+                        <td style="border: 1px solid #ccc; padding: 5px;">Johnson, Mary</td>
+                        <td style="border: 1px solid #ccc; padding: 5px;">67890</td>
+                        <td style="border: 1px solid #ccc; padding: 5px;">09-2025</td>
+                        <td style="border: 1px solid #ccc; padding: 5px;">Clinic North</td>
+                    </tr>
+                </table>
+                <small>
+                    <strong>Notes:</strong><br>
+                    • Name format: "Last, First"<br>
+                    • Month format: MM-YYYY (e.g., 09-2025)<br>
+                    • MRN is optional but recommended<br>
+                    • Facility must match existing facility names exactly
+                </small>
+            </div>
+
+            <div class="upload-zone" id="excelUploadZone" ondrop="dropHandler(event);" ondragover="dragOverHandler(event);" ondragleave="dragLeaveHandler(event);">
+                <p>📁 Drop your Excel file here or click to browse</p>
+                <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display: none;" onchange="handleFileSelect(event)">
+                <button type="button" class="btn btn-primary" onclick="document.getElementById('excelFileInput').click()">Choose Excel File</button>
+            </div>
+
+            <div id="uploadProgress" style="display: none;">
+                <div style="background: #f3f4f6; border-radius: 8px; padding: 20px; margin: 20px 0;">
+                    <h4>Upload Progress</h4>
+                    <div id="uploadResults"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        var currentUser = null;
+        var authToken = null;
+        var patients = [];
+        var supplies = [];
+        var facilities = [];
+        var allPatients = [];
+        var currentTrackingPatient = null;
+        var trackingData = {};
+
+        function escapeHtml(unsafe) {
+            if (!unsafe) return '';
+            return String(unsafe)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function showMessage(message, type, containerId) {
+            containerId = containerId || 'loginMessage';
+            var container = document.getElementById(containerId);
+            
+            // If no specific container provided, try to show in admin panel or create temporary alert
+            if (!container && containerId === 'loginMessage') {
+                // Create a temporary alert div in the current panel
+                var activePanel = document.querySelector('.panel.active');
+                if (activePanel) {
+                    var alertDiv = document.createElement('div');
+                    alertDiv.className = 'alert alert-' + type;
+                    alertDiv.innerHTML = escapeHtml(message);
+                    alertDiv.style.position = 'fixed';
+                    alertDiv.style.top = '200px';
+                    alertDiv.style.left = '50%';
+                    alertDiv.style.transform = 'translateX(-50%)';
+                    alertDiv.style.zIndex = '1500';
+                    alertDiv.style.minWidth = '300px';
+                    
+                    document.body.appendChild(alertDiv);
+                    
+                    setTimeout(function() {
+                        if (alertDiv && alertDiv.parentNode) {
+                            alertDiv.parentNode.removeChild(alertDiv);
+                        }
+                    }, type === 'success' ? 3000 : 5000);
+                }
+                return;
             }
             
-            // Create admin user
-            const hashedPassword = await bcrypt.hash('admin123', 12);
-            await safeQuery(
-                'INSERT INTO users (name, email, password, role, is_approved, email_verified) VALUES ($1, $2, $3, $4, $5, $6)',
-                ['System Administrator', 'admin@system.com', hashedPassword, 'admin', true, true]
-            );
-            console.log('Admin user created: admin@system.com / admin123');
-        }
-
-        // Add default supplies
-        const suppliesCheck = await safeQuery('SELECT COUNT(*) FROM supplies');
-        if (parseInt(suppliesCheck.rows[0].count) === 0) {
-            console.log('Adding AR supplies...');
-            const supplies = [
-                { code: 272, description: 'Med/Surgical Supplies', hcpcs: 'B4149', cost: 0.00 },
-                { code: 400, description: 'HME filter holder for trach or vent', hcpcs: 'A7507', cost: 3.49 },
-                { code: 600, description: 'Sterile Gauze sponge 2x2 up to 4x4', hcpcs: 'A6251', cost: 2.78 },
-                { code: 634, description: 'Foam non bordered dressing medium 6x6', hcpcs: 'A6210', cost: 27.84 },
-                { code: 640, description: 'Hydrocolloid dressing pad 16 sq inches', hcpcs: 'A6234', cost: 9.15 }
-            ];
-
-            for (const supply of supplies) {
-                await safeQuery(
-                    'INSERT INTO supplies (code, description, hcpcs, cost, is_custom) VALUES ($1, $2, $3, $4, $5)',
-                    [supply.code, supply.description, supply.hcpcs, supply.cost, false]
-                );
+            if (container) {
+                var alertClass = 'alert-' + type;
+                container.innerHTML = '<div class="alert ' + alertClass + '">' + escapeHtml(message) + '</div>';
+                if (type === 'success') {
+                    setTimeout(function() {
+                        container.innerHTML = '';
+                    }, 3000);
+                }
             }
-            console.log('Default supplies added');
-        }
-        
-    } catch (error) {
-        console.error('Failed to initialize default data:', error);
-        throw error;
-    }
-}
-
-// AUTHENTICATION MIDDLEWARE
-const authenticateToken = (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-
-    if (!token) {
-        return res.status(401).json({ error: 'Access token required' });
-    }
-
-    jwt.verify(token, JWT_SECRET, (err, user) => {
-        if (err) {
-            return res.status(403).json({ error: 'Invalid token' });
-        }
-        req.user = user;
-        next();
-    });
-};
-
-const requireAdmin = (req, res, next) => {
-    if (req.user.role !== 'admin') {
-        return res.status(403).json({ error: 'Admin access required' });
-    }
-    next();
-};
-
-// BASIC ROUTES
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-app.get('/health', async (req, res) => {
-    try {
-        await safeQuery('SELECT 1');
-        res.json({ status: 'healthy', timestamp: new Date().toISOString() });
-    } catch (error) {
-        res.status(500).json({ status: 'unhealthy', error: error.message });
-    }
-});
-
-// DEBUG ROUTES
-app.get('/api/debug/patients', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const allPatients = await safeQuery(`
-            SELECT p.*, f.name as facility_name 
-            FROM patients p 
-            LEFT JOIN facilities f ON p.facility_id = f.id
-            ORDER BY p.month DESC, p.name
-        `);
-
-        const userInfo = await safeQuery(`
-            SELECT id, name, email, role, facility_id, f.name as facility_name
-            FROM users u
-            LEFT JOIN facilities f ON u.facility_id = f.id
-            WHERE u.role != 'admin'
-        `);
-
-        res.json({ 
-            success: true, 
-            allPatients: allPatients.rows,
-            nonAdminUsers: userInfo.rows,
-            patientCount: allPatients.rows.length
-        });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-app.post('/api/debug/clear-patients', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const trackingResult = await safeQuery('DELETE FROM tracking');
-        const patientsResult = await safeQuery('DELETE FROM patients');
-        
-        res.json({ 
-            success: true, 
-            message: `Cleared ${trackingResult.rowCount} tracking records and ${patientsResult.rowCount} patients`,
-            trackingDeleted: trackingResult.rowCount,
-            patientsDeleted: patientsResult.rowCount
-        });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// DASHBOARD
-app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
-    try {
-        const [patientsResult, suppliesResult, trackingResult] = await Promise.all([
-            safeQuery(`
-                SELECT COUNT(*) as count 
-                FROM patients p
-                ${req.user.role !== 'admin' && req.user.facilityId ? 
-                  'WHERE p.facility_id = $1' : ''}
-            `, req.user.role !== 'admin' && req.user.facilityId ? [req.user.facilityId] : []),
             
-            safeQuery('SELECT COUNT(*) as count FROM supplies'),
-            
-            safeQuery(`
-                SELECT COUNT(*) as count 
-                FROM tracking t
-                JOIN patients p ON t.patient_id = p.id
-                ${req.user.role !== 'admin' && req.user.facilityId ? 
-                  'WHERE p.facility_id = $1' : ''}
-            `, req.user.role !== 'admin' && req.user.facilityId ? [req.user.facilityId] : [])
-        ]);
-
-        // Calculate total cost for admin, total units for non-admin
-        let totalValue;
-        if (req.user.role === 'admin') {
-            const totalCostResult = await safeQuery(`
-                SELECT COALESCE(SUM(t.quantity * s.cost), 0) as total_cost
-                FROM tracking t
-                JOIN supplies s ON t.supply_id = s.id
-                WHERE t.quantity > 0
-            `);
-            totalValue = parseFloat(totalCostResult.rows[0].total_cost) || 0;
-        } else {
-            // For non-admin users, calculate total units used
-            const totalUnitsResult = await safeQuery(`
-                SELECT COALESCE(SUM(t.quantity), 0) as total_units
-                FROM tracking t
-                JOIN patients p ON t.patient_id = p.id
-                ${req.user.facilityId ? 'WHERE p.facility_id = $1' : ''}
-            `, req.user.facilityId ? [req.user.facilityId] : []);
-            totalValue = parseInt(totalUnitsResult.rows[0].total_units) || 0;
+            // Always log to console for debugging
+            console.log('Message [' + type + ']:', message);
         }
 
-        res.json({
-            success: true,
-            stats: {
-                totalPatients: parseInt(patientsResult.rows[0].count) || 0,
-                totalSupplies: parseInt(suppliesResult.rows[0].count) || 0,
-                monthlyTracking: parseInt(trackingResult.rows[0].count) || 0,
-                totalCost: totalValue
+        function closeModal(modalId) {
+            var modal = document.getElementById(modalId);
+            if (modal) modal.style.display = 'none';
+        }
+
+        function apiCall(endpoint, options) {
+            options = options || {};
+            var headers = {
+                'Content-Type': 'application/json'
+            };
+
+            if (authToken) {
+                headers.Authorization = 'Bearer ' + authToken;
             }
-        });
 
-    } catch (error) {
-        console.error('Dashboard stats error:', error);
-        res.status(500).json({ 
-            success: false, 
-            error: 'Failed to load dashboard statistics',
-            stats: {
-                totalPatients: 0,
-                totalSupplies: 0,
-                monthlyTracking: 0,
-                totalCost: 0
+            if (options.headers) {
+                Object.assign(headers, options.headers);
             }
-        });
-    }
-});
 
-// AUTHENTICATION
-app.post('/api/auth/login', async (req, res) => {
-    try {
-        const { email, password } = req.body;
-
-        if (!email || !password) {
-            return res.status(400).json({ success: false, message: 'Email and password required' });
-        }
-
-        const result = await safeQuery(
-            `SELECT u.*, f.name as facility_name 
-             FROM users u 
-             LEFT JOIN facilities f ON u.facility_id = f.id 
-             WHERE u.email = $1`,
-            [email]
-        );
-
-        if (result.rows.length === 0) {
-            return res.status(401).json({ success: false, message: 'Invalid credentials' });
-        }
-
-        const user = result.rows[0];
-
-        if (!(await bcrypt.compare(password, user.password))) {
-            return res.status(401).json({ success: false, message: 'Invalid credentials' });
-        }
-
-        if (!user.is_approved) {
-            return res.status(403).json({ success: false, message: 'Account pending approval' });
-        }
-
-        const token = jwt.sign(
-            { 
-                id: user.id, 
-                email: user.email, 
-                role: user.role, 
-                facilityId: user.facility_id 
-            },
-            JWT_SECRET,
-            { expiresIn: '24h' }
-        );
-
-        res.json({
-            success: true,
-            token,
-            user: {
-                id: user.id,
-                name: user.name,
-                email: user.email,
-                role: user.role,
-                facility_id: user.facility_id,
-                facility_name: user.facility_name
-            }
-        });
-
-    } catch (error) {
-        console.error('Login error:', error);
-        res.status(500).json({ success: false, message: 'Server error during login' });
-    }
-});
-
-// FACILITIES
-app.get('/api/facilities', async (req, res) => {
-    try {
-        const result = await safeQuery('SELECT * FROM facilities ORDER BY name ASC');
-        res.json({ success: true, facilities: result.rows });
-    } catch (error) {
-        res.status(500).json({ success: false, error: 'Failed to fetch facilities' });
-    }
-});
-
-app.post('/api/facilities', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const { name } = req.body;
-        
-        if (!name) {
-            return res.status(400).json({ success: false, error: 'Facility name is required' });
-        }
-
-        const result = await safeQuery(
-            'INSERT INTO facilities (name) VALUES ($1) RETURNING *',
-            [name]
-        );
-
-        res.json({ success: true, facility: result.rows[0] });
-
-    } catch (error) {
-        if (error.code === '23505') {
-            return res.status(400).json({ success: false, error: 'Facility name already exists' });
-        }
-        res.status(500).json({ success: false, error: 'Failed to create facility' });
-    }
-});
-
-app.put('/api/facilities/:id', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const facilityId = req.params.id;
-        const { name } = req.body;
-        
-        if (!name) {
-            return res.status(400).json({ success: false, error: 'Facility name is required' });
-        }
-
-        const result = await safeQuery(
-            'UPDATE facilities SET name = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
-            [name, facilityId]
-        );
-
-        if (result.rowCount === 0) {
-            return res.status(404).json({ success: false, error: 'Facility not found' });
-        }
-
-        res.json({ success: true, facility: result.rows[0] });
-
-    } catch (error) {
-        if (error.code === '23505') {
-            return res.status(400).json({ success: false, error: 'Facility name already exists' });
-        }
-        res.status(500).json({ success: false, error: 'Failed to update facility' });
-    }
-});
-
-app.delete('/api/facilities/:id', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const facilityId = req.params.id;
-        
-        const result = await safeQuery('DELETE FROM facilities WHERE id = $1', [facilityId]);
-
-        if (result.rowCount === 0) {
-            return res.status(404).json({ success: false, error: 'Facility not found' });
-        }
-
-        res.json({ success: true, message: 'Facility deleted successfully' });
-
-    } catch (error) {
-        res.status(500).json({ success: false, error: 'Failed to delete facility' });
-    }
-});
-
-// SUPPLIES
-app.get('/api/supplies', authenticateToken, async (req, res) => {
-    try {
-        const result = await safeQuery('SELECT * FROM supplies ORDER BY code ASC');
-        res.json({ success: true, supplies: result.rows });
-    } catch (error) {
-        res.status(500).json({ success: false, error: 'Failed to fetch supplies' });
-    }
-});
-
-app.post('/api/supplies', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const { code, description, hcpcs, cost } = req.body;
-        
-        if (!code || !description) {
-            return res.status(400).json({ success: false, error: 'Code and description are required' });
-        }
-
-        const result = await safeQuery(
-            'INSERT INTO supplies (code, description, hcpcs, cost, is_custom) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-            [code, description, hcpcs || null, parseFloat(cost) || 0, true]
-        );
-
-        res.json({ success: true, supply: result.rows[0] });
-
-    } catch (error) {
-        if (error.code === '23505') {
-            return res.status(400).json({ success: false, error: 'Supply code already exists' });
-        }
-        res.status(500).json({ success: false, error: 'Failed to create supply' });
-    }
-});
-
-app.put('/api/supplies/:id', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const supplyId = req.params.id;
-        const { code, description, hcpcs, cost } = req.body;
-        
-        if (!code || !description) {
-            return res.status(400).json({ success: false, error: 'Code and description are required' });
-        }
-
-        const result = await safeQuery(
-            'UPDATE supplies SET code = $1, description = $2, hcpcs = $3, cost = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5 RETURNING *',
-            [code, description, hcpcs || null, parseFloat(cost) || 0, supplyId]
-        );
-
-        if (result.rowCount === 0) {
-            return res.status(404).json({ success: false, error: 'Supply not found' });
-        }
-
-        res.json({ success: true, supply: result.rows[0] });
-
-    } catch (error) {
-        if (error.code === '23505') {
-            return res.status(400).json({ success: false, error: 'Supply code already exists' });
-        }
-        res.status(500).json({ success: false, error: 'Failed to update supply' });
-    }
-});
-
-app.delete('/api/supplies/:id', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const supplyId = req.params.id;
-        
-        // Only allow deletion of custom supplies
-        const supply = await safeQuery('SELECT is_custom FROM supplies WHERE id = $1', [supplyId]);
-        if (supply.rows.length === 0) {
-            return res.status(404).json({ success: false, error: 'Supply not found' });
-        }
-        
-        if (!supply.rows[0].is_custom) {
-            return res.status(400).json({ success: false, error: 'Cannot delete AR standard supplies' });
-        }
-        
-        const result = await safeQuery('DELETE FROM supplies WHERE id = $1', [supplyId]);
-
-        if (result.rowCount === 0) {
-            return res.status(404).json({ success: false, error: 'Supply not found' });
-        }
-
-        res.json({ success: true, message: 'Supply deleted successfully' });
-
-    } catch (error) {
-        res.status(500).json({ success: false, error: 'Failed to delete supply' });
-    }
-});
-
-// SUPPLY IMPORT
-app.post('/api/supplies/import', authenticateToken, requireAdmin, upload.single('file'), async (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({ success: false, error: 'No Excel file uploaded' });
-        }
-
-        let data;
-        try {
-            const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
-            const sheetName = workbook.SheetNames[0];
-            const sheet = workbook.Sheets[sheetName];
-            data = XLSX.utils.sheet_to_json(sheet);
-        } catch (parseError) {
-            return res.status(400).json({ success: false, error: 'Invalid Excel file format' });
-        }
-
-        if (data.length === 0) {
-            return res.status(400).json({ success: false, error: 'No data found in Excel file' });
-        }
-
-        let imported = 0;
-        let errors = [];
-
-        for (const row of data) {
-            try {
-                const code = parseInt(row.Code || row.code);
-                const description = (row.Description || row.description || '').toString().trim();
-                const hcpcs = (row.HCPCS || row.hcpcs || '').toString().trim();
-                const cost = parseFloat(row.Cost || row.cost || 0);
-
-                if (!code || !description) {
-                    errors.push({ row: row, error: 'Missing code or description' });
-                    continue;
+            return fetch(endpoint, {
+                method: options.method || 'GET',
+                headers: headers,
+                body: options.body
+            }).then(function(response) {
+                if (!response.ok) {
+                    throw new Error('HTTP error! status: ' + response.status + ' - ' + response.statusText);
                 }
-
-                await safeQuery(
-                    'INSERT INTO supplies (code, description, hcpcs, cost, is_custom) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description, hcpcs = EXCLUDED.hcpcs, cost = EXCLUDED.cost',
-                    [code, description, hcpcs || null, cost, true]
-                );
-
-                imported++;
-
-            } catch (error) {
-                errors.push({ row: row, error: error.message });
-            }
+                return response.json();
+            });
         }
 
-        res.json({
-            success: true,
-            message: `Successfully imported ${imported} supplies. ${errors.length} errors.`,
-            imported: imported,
-            errors: errors.slice(0, 10) // Limit error details
-        });
+        function setupLoginForm() {
+            var loginForm = document.getElementById('loginForm');
+            if (loginForm) {
+                loginForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    
+                    var email = document.getElementById('email').value.trim();
+                    var password = document.getElementById('password').value;
 
-    } catch (error) {
-        console.error('Supply import error:', error);
-        res.status(500).json({ success: false, error: 'Server error during import' });
-    }
-});
+                    if (!email || !password) {
+                        showMessage('Please enter both email and password', 'error');
+                        return;
+                    }
 
-// PATIENTS - FIXED WITH STRICT FILTERING
-app.get('/api/patients', authenticateToken, async (req, res) => {
-    try {
-        const { facility_id, month } = req.query;
-        
-        console.log('=== PATIENT QUERY DEBUG ===');
-        console.log('User Role:', req.user.role);
-        console.log('User Facility ID:', req.user.facilityId);
-        
-        let query = `
-            SELECT p.*, f.name as facility_name 
-            FROM patients p 
-            LEFT JOIN facilities f ON p.facility_id = f.id
-        `;
-        let params = [];
-        let conditions = [];
+                    var submitBtn = loginForm.querySelector('button[type="submit"]');
+                    var originalText = submitBtn.textContent;
+                    submitBtn.disabled = true;
+                    submitBtn.textContent = 'Signing In...';
 
-        // STRICT FILTERING FOR NON-ADMIN USERS
-        if (req.user.role !== 'admin') {
-            if (req.user.facilityId) {
-                conditions.push('p.facility_id = $' + (params.length + 1));
-                params.push(req.user.facilityId);
-                conditions.push("p.month >= '2025-09'"); // September 2025 onwards only
-                console.log('Non-admin filters applied: facility =', req.user.facilityId, ', month >= 2025-09');
-            } else {
-                console.log('User has no facility - returning empty');
-                return res.json({ success: true, patients: [] });
-            }
-        } else if (facility_id) {
-            conditions.push('p.facility_id = $' + (params.length + 1));
-            params.push(facility_id);
-        }
-
-        if (month) {
-            conditions.push('p.month = $' + (params.length + 1));
-            params.push(month);
-        }
-
-        if (conditions.length > 0) {
-            query += ' WHERE ' + conditions.join(' AND ');
-        }
-
-        query += ' ORDER BY p.name ASC';
-
-        console.log('Final query:', query);
-        console.log('Query params:', params);
-
-        const result = await safeQuery(query, params);
-        
-        console.log('Query result count:', result.rows.length);
-        console.log('=== END DEBUG ===');
-
-        res.json({ success: true, patients: result.rows });
-
-    } catch (error) {
-        console.error('Error fetching patients:', error);
-        res.status(500).json({ success: false, error: 'Failed to fetch patients' });
-    }
-});
-
-app.post('/api/patients', authenticateToken, async (req, res) => {
-    try {
-        const { name, month, mrn, facility_id } = req.body;
-        
-        if (!name || !month || !facility_id) {
-            return res.status(400).json({ success: false, error: 'Name, month, and facility are required' });
-        }
-
-        // Check permission for non-admin users
-        if (req.user.role !== 'admin' && req.user.facilityId && req.user.facilityId != facility_id) {
-            return res.status(403).json({ success: false, error: 'Cannot add patients to this facility' });
-        }
-
-        // Month restriction for non-admin users
-        if (req.user.role !== 'admin' && month < '2025-09') {
-            return res.status(400).json({ success: false, error: 'Can only add patients for September 2025 onwards' });
-        }
-
-        const result = await safeQuery(
-            'INSERT INTO patients (name, month, mrn, facility_id) VALUES ($1, $2, $3, $4) RETURNING *',
-            [name, month, mrn ? mrn.trim() : null, facility_id]
-        );
-
-        res.json({ success: true, patient: result.rows[0] });
-
-    } catch (error) {
-        if (error.code === '23505') {
-            return res.status(400).json({ success: false, error: 'Patient already exists for this month and facility' });
-        }
-        res.status(500).json({ success: false, error: 'Failed to create patient' });
-    }
-});
-
-app.put('/api/patients/:id', authenticateToken, async (req, res) => {
-    try {
-        const patientId = req.params.id;
-        const { name, month, mrn, facility_id } = req.body;
-        
-        if (!name || !month || !facility_id) {
-            return res.status(400).json({ success: false, error: 'Name, month, and facility are required' });
-        }
-
-        // Check permission for non-admin users
-        if (req.user.role !== 'admin' && req.user.facilityId && req.user.facilityId != facility_id) {
-            return res.status(403).json({ success: false, error: 'Cannot modify patients from this facility' });
-        }
-
-        // Month restriction for non-admin users
-        if (req.user.role !== 'admin' && month < '2025-09') {
-            return res.status(400).json({ success: false, error: 'Can only modify patients for September 2025 onwards' });
-        }
-
-        const result = await safeQuery(
-            'UPDATE patients SET name = $1, month = $2, mrn = $3, facility_id = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5 RETURNING *',
-            [name, month, mrn ? mrn.trim() : null, facility_id, patientId]
-        );
-
-        if (result.rowCount === 0) {
-            return res.status(404).json({ success: false, error: 'Patient not found' });
-        }
-
-        res.json({ success: true, patient: result.rows[0] });
-
-    } catch (error) {
-        if (error.code === '23505') {
-            return res.status(400).json({ success: false, error: 'Patient already exists for this month and facility' });
-        }
-        res.status(500).json({ success: false, error: 'Failed to update patient' });
-    }
-});
-
-app.delete('/api/patients/:id', authenticateToken, async (req, res) => {
-    try {
-        const patientId = req.params.id;
-        
-        // Check if user has permission
-        if (req.user.role !== 'admin') {
-            const patient = await safeQuery('SELECT facility_id FROM patients WHERE id = $1', [patientId]);
-            if (patient.rows.length === 0) {
-                return res.status(404).json({ success: false, error: 'Patient not found' });
-            }
-            if (req.user.facilityId !== patient.rows[0].facility_id) {
-                return res.status(403).json({ success: false, error: 'Cannot delete patients from other facilities' });
-            }
-        }
-        
-        const result = await safeQuery('DELETE FROM patients WHERE id = $1', [patientId]);
-
-        if (result.rowCount === 0) {
-            return res.status(404).json({ success: false, error: 'Patient not found' });
-        }
-
-        res.json({ success: true, message: 'Patient deleted successfully' });
-
-    } catch (error) {
-        res.status(500).json({ success: false, error: 'Failed to delete patient' });
-    }
-});
-
-// BULK PATIENT UPLOAD - FIXED TO HANDLE JSON DATA
-app.post('/api/patients/bulk', authenticateToken, async (req, res) => {
-    try {
-        const { patients } = req.body;
-        
-        if (!patients || !Array.isArray(patients) || patients.length === 0) {
-            return res.status(400).json({ success: false, error: 'No patient data provided' });
-        }
-
-        // Load facilities for mapping
-        const facilitiesResult = await safeQuery('SELECT id, name FROM facilities');
-        const facilityMap = {};
-        facilitiesResult.rows.forEach(facility => {
-            facilityMap[facility.name.toLowerCase()] = facility.id;
-        });
-
-        const results = { successful: 0, failed: [] };
-
-        for (const patient of patients) {
-            try {
-                const name = (patient.name || '').toString().trim();
-                const mrn = (patient.mrn || '').toString().trim();
-                const month = (patient.month || '').toString().trim();
-                const facilityName = (patient.facilityName || '').toString().trim();
-
-                if (!name || !month || !facilityName) {
-                    results.failed.push({ 
-                        name: name || 'Unknown', 
-                        error: 'Missing required fields (Name, Month, Facility)' 
+                    apiCall('/api/auth/login', {
+                        method: 'POST',
+                        body: JSON.stringify({ email: email, password: password })
+                    }).then(function(data) {
+                        console.log('Login response:', data);
+                        if (data.success) {
+                            authToken = data.token;
+                            currentUser = data.user;
+                            showMainApp();
+                        } else {
+                            showMessage(data.message || 'Login failed', 'error');
+                        }
+                    }).catch(function(error) {
+                        console.error('Login error:', error);
+                        showMessage('Login failed. Please check your connection and try again. Error: ' + error.message, 'error');
+                    }).finally(function() {
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = originalText;
                     });
-                    continue;
-                }
-
-                // Convert MM-YYYY to YYYY-MM
-                let dbMonth = month;
-                if (month.match(/^\d{2}-\d{4}$/)) {
-                    const parts = month.split('-');
-                    dbMonth = `${parts[1]}-${parts[0]}`;
-                }
-
-                // Month restriction for non-admin users
-                if (req.user.role !== 'admin' && dbMonth < '2025-09') {
-                    results.failed.push({ 
-                        name: name, 
-                        error: 'Can only add patients for September 2025 onwards' 
-                    });
-                    continue;
-                }
-
-                const facilityId = facilityMap[facilityName.toLowerCase()];
-                if (!facilityId) {
-                    results.failed.push({ 
-                        name: name, 
-                        error: `Facility "${facilityName}" not found` 
-                    });
-                    continue;
-                }
-
-                // Permission check for non-admin users
-                if (req.user.role !== 'admin' && req.user.facilityId && req.user.facilityId != facilityId) {
-                    results.failed.push({ 
-                        name: name, 
-                        error: 'No permission to add patients to this facility' 
-                    });
-                    continue;
-                }
-
-                await safeQuery(
-                    'INSERT INTO patients (name, mrn, month, facility_id) VALUES ($1, $2, $3, $4)',
-                    [name, mrn || null, dbMonth, facilityId]
-                );
-
-                results.successful++;
-
-            } catch (error) {
-                results.failed.push({ 
-                    name: patient.name || 'Unknown', 
-                    error: error.message 
                 });
             }
         }
 
-        res.json({
-            success: true,
-            message: `Upload completed. ${results.successful} successful, ${results.failed.length} failed.`,
-            successful: results.successful,
-            failed: results.failed
+        function showMainApp() {
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('mainApp').style.display = 'block';
+            
+            document.getElementById('userName').textContent = currentUser.name;
+            document.getElementById('userRole').textContent = currentUser.role.toUpperCase();
+            
+            var adminElements = document.querySelectorAll('.admin-only');
+            adminElements.forEach(function(el) {
+                el.style.display = currentUser.role === 'admin' ? 'block' : 'none';
+            });
+            
+            var nonAdminElements = document.querySelectorAll('.non-admin-only');
+            nonAdminElements.forEach(function(el) {
+                el.style.display = currentUser.role !== 'admin' ? 'block' : 'none';
+            });
+
+            initializeMonthDropdowns();
+            Promise.all([
+                loadDashboardData(),
+                loadPatients(),
+                loadSupplies(),
+                loadFacilities()
+            ]).catch(function(error) {
+                console.error('Error loading initial data:', error);
+            });
+        }
+
+        function logout() {
+            authToken = null;
+            currentUser = null;
+            document.getElementById('loginScreen').style.display = 'block';
+            document.getElementById('mainApp').style.display = 'none';
+            
+            document.getElementById('email').value = '';
+            document.getElementById('password').value = '';
+            document.getElementById('loginMessage').innerHTML = '';
+        }
+
+        function showPanel(panelName) {
+            document.querySelectorAll('.panel').forEach(function(panel) {
+                panel.classList.remove('active');
+            });
+            
+            document.querySelectorAll('.tab-btn').forEach(function(tab) {
+                tab.classList.remove('active');
+            });
+            
+            var targetPanel = document.getElementById(panelName + 'Panel');
+            if (targetPanel) {
+                targetPanel.classList.add('active');
+            }
+            
+            if (event && event.target) {
+                event.target.classList.add('active');
+            }
+
+            switch(panelName) {
+                case 'dashboard':
+                    loadDashboardData();
+                    break;
+                case 'patients':
+                    loadPatients();
+                    break;
+                case 'supplies':
+                    loadSupplies();
+                    break;
+                case 'tracking':
+                    loadTrackingPatients();
+                    break;
+                case 'admin':
+                    if (currentUser && currentUser.role === 'admin') {
+                        loadAdminData();
+                    }
+                    break;
+            }
+        }
+
+        // FIXED: Properly structured loadDashboardData function
+        function loadDashboardData() {
+            return apiCall('/api/dashboard/stats').then(function(data) {
+                if (data.success && data.stats) {
+                    var stats = data.stats;
+                    document.getElementById('totalPatients').textContent = stats.totalPatients || 0;
+                    document.getElementById('totalSupplies').textContent = stats.totalSupplies || 0;
+                    document.getElementById('monthlyTracking').textContent = stats.monthlyTracking || 0;
+                    
+                    // Backend now returns total units for non-admin users in the totalCost field
+                    if (currentUser.role === 'admin') {
+                        document.getElementById('totalCost').textContent = '$' + (stats.totalCost || 0).toFixed(2);
+                    } else {
+                        document.getElementById('totalCost').textContent = stats.totalCost || 0;
+                    }
+                }
+                loadRecentActivity();
+            }).catch(function(error) {
+                console.error('Failed to load dashboard stats:', error);
+                loadRecentActivity();
+            });
+        }
+
+        function loadRecentActivity() {
+            var tbody = document.getElementById('recentActivity');
+            if (tbody) {
+                var today = new Date().toLocaleDateString();
+                var currentTime = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                var rows = [];
+                rows.push('<tr><td>' + today + ' ' + currentTime + '</td><td>' + escapeHtml(currentUser.name) + '</td><td>Login</td><td>User session active</td></tr>');
+                rows.push('<tr><td>' + today + '</td><td>System</td><td>Dashboard</td><td>Dashboard statistics loaded</td></tr>');
+                tbody.innerHTML = rows.join('');
+            }
+        }
+
+        function initializeMonthDropdowns() {
+            var months = generateMonthOptions();
+            var dropdowns = ['patientMonthFilter', 'trackingMonthFilter', 'patientMonth', 'editPatientMonth'];
+            
+            dropdowns.forEach(function(id) {
+                var dropdown = document.getElementById(id);
+                if (dropdown) {
+                    var currentValue = dropdown.value;
+                    dropdown.innerHTML = (id === 'patientMonth' || id === 'editPatientMonth') ? '<option value="">Select Month</option>' : '<option value="">All Months</option>';
+                    
+                    months.forEach(function(month) {
+                        var option = document.createElement('option');
+                        option.value = month.value;
+                        option.textContent = month.label;
+                        dropdown.appendChild(option);
+                    });
+                    
+                    if (currentValue) dropdown.value = currentValue;
+                }
+            });
+        }
+
+        function generateMonthOptions() {
+            var months = [];
+            var monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+            if (currentUser && currentUser.role !== 'admin') {
+                // For non-admin users, limit to September 2025 onwards
+                for (var year = 2025; year <= 2027; year++) {
+                    var start = (year === 2025) ? 9 : 1; // Start from September 2025
+                    var end = 12;
+                    
+                    for (var month = start; month <= end; month++) {
+                        var value = year + '-' + (month < 10 ? '0' + month : month);
+                        var label = monthNames[month - 1] + ' ' + year;
+                        months.push({ value: value, label: label });
+                    }
+                }
+            } else {
+                for (var year = 2024; year <= 2027; year++) {
+                    var start = (year === 2024) ? 7 : 1;
+                    var end = 12;
+                    
+                    for (var month = start; month <= end; month++) {
+                        var value = year + '-' + (month < 10 ? '0' + month : month);
+                        var label = monthNames[month - 1] + ' ' + year;
+                        months.push({ value: value, label: label });
+                    }
+                }
+            }
+            
+            return months;
+        }
+
+        function loadPatients() {
+            var queryParams = '';
+            if (currentUser.role !== 'admin' && currentUser.facility_id) {
+                queryParams = '?facility_id=' + currentUser.facility_id;
+            }
+            
+            return apiCall('/api/patients' + queryParams).then(function(data) {
+                allPatients = data.patients || [];
+                patients = allPatients.slice();
+                renderPatientsTable();
+            }).catch(function(error) {
+                console.error('Failed to load patients:', error);
+            });
+        }
+
+        function filterPatients() {
+            var searchTerm = document.getElementById('patientSearch').value.toLowerCase();
+            var facilityFilter = document.getElementById('patientFacilityFilter') ? document.getElementById('patientFacilityFilter').value : '';
+            var monthFilter = document.getElementById('patientMonthFilter').value;
+            var sortBy = document.getElementById('patientSortBy').value;
+            
+            var filtered = allPatients.filter(function(patient) {
+                var matchesSearch = patient.name.toLowerCase().includes(searchTerm) || (patient.mrn && patient.mrn.toLowerCase().includes(searchTerm));
+                var matchesFacility = !facilityFilter || patient.facility_id.toString() === facilityFilter;
+                var matchesMonth = !monthFilter || patient.month === monthFilter;
+                return matchesSearch && matchesFacility && matchesMonth;
+            });
+
+            filtered.sort(function(a, b) {
+                switch(sortBy) {
+                    case 'name':
+                        return a.name.localeCompare(b.name);
+                    case 'name_desc':
+                        return b.name.localeCompare(a.name);
+                    case 'month':
+                        return a.month.localeCompare(b.month);
+                    case 'facility':
+                        return (a.facility_name || '').localeCompare(b.facility_name || '');
+                    default:
+                        return a.name.localeCompare(b.name);
+                }
+            });
+
+            patients = filtered;
+            renderPatientsTable();
+        }
+
+        function renderPatientsTable() {
+            var tbody = document.getElementById('patientsTable');
+            if (!tbody) return;
+            
+            if (patients.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center">No patients found</td></tr>';
+                return;
+            }
+
+            var rows = [];
+            patients.forEach(function(patient) {
+                var actions = '';
+                if (currentUser.role === 'admin' || currentUser.facility_id == patient.facility_id) {
+                    actions = '<button class="btn btn-warning btn-small" onclick="editPatient(' + patient.id + ')">Edit</button>';
+                    if (currentUser.role === 'admin') {
+                        actions += ' <button class="btn btn-danger btn-small" onclick="deletePatient(' + patient.id + ')">Delete</button>';
+                    }
+                } else {
+                    actions = '<span style="color: #666;">No Access</span>';
+                }
+                
+                rows.push('<tr>');
+                rows.push('<td>' + escapeHtml(patient.name) + '</td>');
+                rows.push('<td>' + escapeHtml(patient.mrn || 'N/A') + '</td>');
+                rows.push('<td>' + escapeHtml(patient.month) + '</td>');
+                rows.push('<td>' + escapeHtml(patient.facility_name || 'N/A') + '</td>');
+                rows.push('<td>' + actions + '</td>');
+                rows.push('</tr>');
+            });
+            tbody.innerHTML = rows.join('');
+        }
+
+        function showAddPatientModal() {
+            document.getElementById('addPatientModal').style.display = 'block';
+            loadFacilityOptions('patientFacility');
+        }
+
+        function editPatient(patientId) {
+            var patient = allPatients.find(function(p) { return p.id === patientId; });
+            if (!patient) {
+                showMessage('Patient not found', 'error');
+                return;
+            }
+
+            document.getElementById('editPatientId').value = patient.id;
+            document.getElementById('editPatientName').value = patient.name;
+            document.getElementById('editPatientMRN').value = patient.mrn || '';
+            document.getElementById('editPatientMonth').value = patient.month;
+            
+            loadFacilityOptions('editPatientFacility');
+            setTimeout(function() {
+                document.getElementById('editPatientFacility').value = patient.facility_id;
+            }, 100);
+            
+            document.getElementById('editPatientModal').style.display = 'block';
+        }
+
+        function deletePatient(patientId) {
+            if (!confirm('Are you sure you want to delete this patient? This will also delete all associated tracking data.')) {
+                return;
+            }
+
+            apiCall('/api/patients/' + patientId, {
+                method: 'DELETE'
+            }).then(function(response) {
+                if (response.success) {
+                    showMessage('Patient deleted successfully!', 'success');
+                    loadPatients();
+                    loadDashboardData();
+                } else {
+                    showMessage('Failed to delete patient: ' + response.error, 'error');
+                }
+            }).catch(function(error) {
+                showMessage('Failed to delete patient', 'error');
+            });
+        }
+
+        function loadSupplies() {
+            return apiCall('/api/supplies').then(function(data) {
+                supplies = data.supplies || [];
+                renderSuppliesTable();
+            }).catch(function(error) {
+                console.error('Failed to load supplies:', error);
+            });
+        }
+
+        function filterSupplies() {
+            var searchTerm = document.getElementById('supplySearch').value.toLowerCase();
+            var filtered = supplies.filter(function(supply) {
+                return supply.description.toLowerCase().includes(searchTerm) || 
+                       supply.code.toString().includes(searchTerm) || 
+                       (supply.hcpcs && supply.hcpcs.toLowerCase().includes(searchTerm));
+            });
+            renderSuppliesTable(filtered);
+        }
+
+        function renderSuppliesTable(filteredSupplies) {
+            filteredSupplies = filteredSupplies || supplies;
+            var tbody = document.getElementById('suppliesTable');
+            if (!tbody) return;
+            
+            if (filteredSupplies.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center">No supplies found</td></tr>';
+                return;
+            }
+
+            var rows = [];
+            filteredSupplies.forEach(function(supply) {
+                var actions = currentUser.role === 'admin' ? 
+                    '<button class="btn btn-warning btn-small" onclick="editSupply(' + supply.id + ')">Edit</button>' + 
+                    (supply.is_custom ? ' <button class="btn btn-danger btn-small" onclick="deleteSupply(' + supply.id + ')">Delete</button>' : '') : 
+                    '<span>View Only</span>';
+                
+                rows.push('<tr>');
+                rows.push('<td>' + escapeHtml(supply.code) + '</td>');
+                rows.push('<td>' + escapeHtml(supply.description) + '</td>');
+                rows.push('<td>' + escapeHtml(supply.hcpcs || 'N/A') + '</td>');
+                rows.push('<td>$' + parseFloat(supply.cost || 0).toFixed(2) + '</td>');
+                rows.push('<td>' + (supply.is_custom ? 'Custom' : 'AR Standard') + '</td>');
+                rows.push('<td>' + actions + '</td>');
+                rows.push('</tr>');
+            });
+            tbody.innerHTML = rows.join('');
+        }
+
+        function showAddSupplyModal() {
+            document.getElementById('addSupplyModal').style.display = 'block';
+        }
+
+        function editSupply(supplyId) {
+            var supply = supplies.find(function(s) { return s.id === supplyId; });
+            if (!supply) {
+                showMessage('Supply not found', 'error');
+                return;
+            }
+
+            document.getElementById('editSupplyId').value = supply.id;
+            document.getElementById('editSupplyCode').value = supply.code;
+            document.getElementById('editSupplyDescription').value = supply.description;
+            document.getElementById('editSupplyHCPCS').value = supply.hcpcs || '';
+            document.getElementById('editSupplyCost').value = supply.cost || 0;
+            
+            document.getElementById('editSupplyModal').style.display = 'block';
+        }
+
+        function deleteSupply(supplyId) {
+            if (!confirm('Are you sure you want to delete this supply?')) return;
+            
+            apiCall('/api/supplies/' + supplyId, {
+                method: 'DELETE'
+            }).then(function(response) {
+                if (response.success) {
+                    showMessage('Supply deleted successfully!', 'success');
+                    loadSupplies();
+                } else {
+                    showMessage('Failed to delete supply: ' + response.error, 'error');
+                }
+            }).catch(function(error) {
+                showMessage('Failed to delete supply', 'error');
+            });
+        }
+
+        function importExcel() {
+            var input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.xlsx,.xls';
+            input.onchange = function(e) {
+                var file = e.target.files[0];
+                if (!file) return;
+
+                var formData = new FormData();
+                formData.append('file', file);
+
+                fetch('/api/supplies/import', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + authToken
+                    },
+                    body: formData
+                }).then(function(response) {
+                    return response.json();
+                }).then(function(data) {
+                    if (data.success) {
+                        showMessage(data.message, 'success');
+                        loadSupplies();
+                    } else {
+                        showMessage('Import failed: ' + data.error, 'error');
+                    }
+                }).catch(function(error) {
+                    showMessage('Import failed: ' + error.message, 'error');
+                });
+            };
+            input.click();
+        }
+
+        function loadFacilities() {
+            return apiCall('/api/facilities').then(function(data) {
+                facilities = data.facilities || [];
+                updateFacilityFilters();
+                renderFacilitiesTable();
+            }).catch(function(error) {
+                console.error('Failed to load facilities:', error);
+            });
+        }
+
+        function renderFacilitiesTable() {
+            var tbody = document.getElementById('facilitiesTable');
+            if (!tbody) return;
+            
+            if (facilities.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" class="text-center">No facilities found</td></tr>';
+                return;
+            }
+
+            var rows = [];
+            facilities.forEach(function(facility) {
+                var actions = '<button class="btn btn-warning btn-small" onclick="editFacility(' + facility.id + ')">Edit</button>';
+                actions += ' <button class="btn btn-danger btn-small" onclick="deleteFacility(' + facility.id + ')">Delete</button>';
+                
+                rows.push('<tr>');
+                rows.push('<td>' + escapeHtml(facility.name) + '</td>');
+                rows.push('<td>' + new Date(facility.created_at).toLocaleDateString() + '</td>');
+                rows.push('<td>' + actions + '</td>');
+                rows.push('</tr>');
+            });
+            tbody.innerHTML = rows.join('');
+        }
+
+        function editFacility(facilityId) {
+            var facility = facilities.find(function(f) { return f.id === facilityId; });
+            if (!facility) {
+                showMessage('Facility not found', 'error');
+                return;
+            }
+
+            document.getElementById('editFacilityId').value = facility.id;
+            document.getElementById('editFacilityName').value = facility.name;
+            document.getElementById('editFacilityModal').style.display = 'block';
+        }
+
+        function deleteFacility(facilityId) {
+            if (!confirm('Are you sure you want to delete this facility? This will affect all associated users and patients.')) {
+                return;
+            }
+
+            apiCall('/api/facilities/' + facilityId, {
+                method: 'DELETE'
+            }).then(function(response) {
+                if (response.success) {
+                    showMessage('Facility deleted successfully!', 'success');
+                    loadFacilities();
+                    loadAdminData();
+                } else {
+                    showMessage('Failed to delete facility: ' + response.error, 'error');
+                }
+            }).catch(function(error) {
+                showMessage('Failed to delete facility', 'error');
+            });
+        }
+
+        function updateFacilityFilters() {
+            var filters = ['patientFacilityFilter', 'trackingFacilityFilter'];
+            
+            filters.forEach(function(filterId) {
+                var filter = document.getElementById(filterId);
+                if (filter) {
+                    filter.innerHTML = '<option value="">All Facilities</option>';
+                    
+                    if (currentUser.role !== 'admin' && currentUser.facility_id) {
+                        var userFacility = facilities.find(function(f) { return f.id == currentUser.facility_id; });
+                        if (userFacility) {
+                            var option = document.createElement('option');
+                            option.value = userFacility.id;
+                            option.textContent = userFacility.name;
+                            filter.appendChild(option);
+                            filter.value = userFacility.id;
+                        }
+                    } else {
+                        facilities.forEach(function(facility) {
+                            var option = document.createElement('option');
+                            option.value = facility.id;
+                            option.textContent = facility.name;
+                            filter.appendChild(option);
+                        });
+                    }
+                }
+            });
+        }
+
+        // FIXED: Corrected function name reference
+        function loadFacilityOptions(selectId) {
+            var select = document.getElementById(selectId);
+            if (!select) return;
+            
+            select.innerHTML = '<option value="">Select Facility</option>';
+            
+            if (currentUser.role !== 'admin' && currentUser.facility_id) {
+                var userFacility = facilities.find(function(f) { return f.id == currentUser.facility_id; });
+                if (userFacility) {
+                    var option = document.createElement('option');
+                    option.value = userFacility.id;
+                    option.textContent = userFacility.name;
+                    select.appendChild(option);
+                    select.value = userFacility.id;
+                }
+            } else {
+                facilities.forEach(function(facility) {
+                    var option = document.createElement('option');
+                    option.value = facility.id;
+                    option.textContent = facility.name;
+                    select.appendChild(option);
+                });
+            }
+        }
+
+        function loadTrackingPatients() {
+            var queryParams = '';
+            if (currentUser.role !== 'admin' && currentUser.facility_id) {
+                queryParams = '?facility_id=' + currentUser.facility_id;
+            }
+            
+            return apiCall('/api/patients' + queryParams).then(function(data) {
+                window.trackingPatients = data.patients || [];
+                filterTrackingPatients();
+            }).catch(function(error) {
+                console.error('Failed to load tracking patients:', error);
+            });
+        }
+
+        function filterTrackingPatients() {
+            var facilityFilter = document.getElementById('trackingFacilityFilter') ? document.getElementById('trackingFacilityFilter').value : '';
+            var monthFilter = document.getElementById('trackingMonthFilter').value;
+            var select = document.getElementById('trackingPatient');
+            
+            if (!select) return;
+            
+            select.innerHTML = '<option value="">Select Patient...</option>';
+            
+            var filteredPatients = (window.trackingPatients || []).filter(function(patient) {
+                var matchesFacility = !facilityFilter || patient.facility_id.toString() === facilityFilter;
+                var matchesMonth = !monthFilter || patient.month === monthFilter;
+                return matchesFacility && matchesMonth;
+            });
+
+            filteredPatients.sort(function(a, b) { return a.name.localeCompare(b.name); });
+
+            filteredPatients.forEach(function(patient) {
+                var option = document.createElement('option');
+                option.value = patient.id;
+                option.textContent = patient.name + ' (' + patient.month + ') - ' + (patient.facility_name || 'No Facility');
+                select.appendChild(option);
+            });
+        }
+
+        function loadPatientTracking() {
+            var patientSelect = document.getElementById('trackingPatient');
+            var patientId = patientSelect.value;
+            
+            if (!patientId) {
+                document.getElementById('trackingInterface').style.display = 'none';
+                document.getElementById('supplySearchContainer').style.display = 'none';
+                return;
+            }
+
+            currentTrackingPatient = patientId;
+            document.getElementById('trackingInterface').style.display = 'block';
+            document.getElementById('supplySearchContainer').style.display = 'block';
+            
+            var patient = (window.trackingPatients || []).find(function(p) { return p.id == patientId; });
+            if (patient) {
+                var infoText = '<strong>Patient:</strong> ' + escapeHtml(patient.name) + 
+                              ' | <strong>MRN:</strong> ' + escapeHtml(patient.mrn || 'N/A') + 
+                              ' | <strong>Month:</strong> ' + escapeHtml(patient.month) + 
+                              ' | <strong>Facility:</strong> ' + escapeHtml(patient.facility_name || 'N/A');
+                document.getElementById('patientInfo').innerHTML = infoText;
+            }
+            
+            Promise.all([
+                apiCall('/api/tracking/' + patientId),
+                Promise.resolve(supplies)
+            ]).then(function(results) {
+                var trackingResponse = results[0];
+                var suppliesData = results[1];
+                var trackingRecords = trackingResponse.tracking || [];
+                
+                trackingData = {};
+                trackingRecords.forEach(function(record) {
+                    var key = record.supply_id + '_' + record.day_of_month;
+                    trackingData[key] = record;
+                });
+                
+                renderTrackingTable();
+                loadDashboardData();
+            }).catch(function(error) {
+                console.error('Failed to load tracking data:', error);
+                showMessage('Failed to load tracking data', 'error');
+            });
+        }
+
+        function renderTrackingTable() {
+            var isAdmin = currentUser.role === 'admin';
+            var filteredSupplies = getFilteredSupplies();
+            var rows = [];
+            
+            filteredSupplies.forEach(function(supply) {
+                var totalUnits = getTotalUnitsForSupply(supply.id);
+                
+                if (isAdmin) {
+                    rows.push(createAdminSupplyRow(supply, totalUnits));
+                } else {
+                    rows.push(createUserSupplyRow(supply, totalUnits));
+                }
+            });
+            
+            document.getElementById('trackingContent').innerHTML = rows.join('');
+        }
+
+        function createAdminSupplyRow(supply, totalUnits) {
+            var unitCost = parseFloat(supply.cost || 0);
+            var totalCost = totalUnits * unitCost;
+            var rows = [];
+            
+            rows.push('<div style="display: flex; flex-direction: column; width: 100%; border-bottom: 2px solid #e5e7eb; background: white; margin-bottom: 2px;">');
+            rows.push('<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 8px; border-bottom: 1px solid #f3f4f6;">');
+            rows.push('<div style="display: grid; grid-template-columns: 80px 1fr 80px 100px; gap: 8px; align-items: center; font-size: 13px; padding: 8px; background: #f8fafc; border-radius: 6px; min-height: 60px;">');
+            rows.push('<div style="font-weight: bold; color: #4f46e5; font-size: 16px;">' + escapeHtml(supply.code) + '</div>');
+            rows.push('<div style="font-weight: 600; color: #374151; word-wrap: break-word;">' + escapeHtml(supply.description) + '</div>');
+            rows.push('<div><input type="text" placeholder="Wound DX" value="' + escapeHtml(getWoundDxForSupply(supply.id)) + '" onchange="updateWoundDx(' + supply.id + ', this.value)" style="width: 70px; font-size: 11px; padding: 4px; border: 1px solid #d1d5db; border-radius: 3px;"></div>');
+            rows.push('<div style="font-size: 11px; color: #666;">HCPCS: ' + escapeHtml(supply.hcpcs || 'N/A') + '</div>');
+            rows.push('</div>');
+            
+            rows.push('<div style="display: flex; flex-direction: column; gap: 4px;">');
+            rows.push('<div style="font-size: 11px; font-weight: 600; color: #4f46e5; margin-bottom: 2px;">Days 1-15</div>');
+            rows.push('<div style="display: grid; grid-template-columns: repeat(15, 1fr); gap: 3px;">');
+            for (var day = 1; day <= 15; day++) {
+                rows.push('<div style="font-size: 10px; color: #666; text-align: center; margin-bottom: 2px; font-weight: 500;">' + day + '</div>');
+            }
+            rows.push('</div>');
+            rows.push('<div style="display: grid; grid-template-columns: repeat(15, 1fr); gap: 3px;">');
+            for (var day = 1; day <= 15; day++) {
+                var key = supply.id + '_' + day;
+                var currentData = trackingData[key];
+                var quantity = currentData ? currentData.quantity : 0;
+                var inputHtml = '<input type="number" title="Day ' + day + '" value="' + (quantity || '') + 
+                               '" min="0" max="99" placeholder="0" data-supply-id="' + supply.id + 
+                               '" data-day="' + day + '" onchange="updateTrackingValue(' + supply.id + 
+                               ', ' + day + ', this.value)" style="width: 45px; height: 35px; padding: 2px; border: 1px solid #d1d5db; border-radius: 4px; text-align: center; font-size: 13px; font-weight: 600; background: white;">';
+                rows.push(inputHtml);
+            }
+            rows.push('</div>');
+            rows.push('</div>');
+            rows.push('</div>');
+            
+            rows.push('<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 8px;">');
+            rows.push('<div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; align-items: center; font-size: 13px; padding: 8px; background: #f8fafc; border-radius: 6px; min-height: 60px;">');
+            rows.push('<div style="font-weight: 600; color: #059669;">Unit: $' + unitCost.toFixed(2) + '</div>');
+            rows.push('<div id="total-units-' + supply.id + '" style="font-weight: bold; color: #374151; background: #e5e7eb; padding: 4px 6px; border-radius: 4px; text-align: center;">Units: ' + totalUnits + '</div>');
+            rows.push('<div id="total-cost-' + supply.id + '" style="font-weight: bold; color: #1e40af; background: #dbeafe; padding: 4px 6px; border-radius: 4px; text-align: center;">Total: $' + totalCost.toFixed(2) + '</div>');
+            rows.push('</div>');
+            
+            rows.push('<div style="display: flex; flex-direction: column; gap: 4px;">');
+            rows.push('<div style="font-size: 11px; font-weight: 600; color: #4f46e5; margin-bottom: 2px;">Days 16-31</div>');
+            rows.push('<div style="display: grid; grid-template-columns: repeat(15, 1fr); gap: 3px;">');
+            for (var day = 16; day <= 31; day++) {
+                rows.push('<div style="font-size: 10px; color: #666; text-align: center; margin-bottom: 2px; font-weight: 500;">' + day + '</div>');
+            }
+            rows.push('</div>');
+            rows.push('<div style="display: grid; grid-template-columns: repeat(15, 1fr); gap: 3px;">');
+            for (var day = 16; day <= 31; day++) {
+                var key = supply.id + '_' + day;
+                var currentData = trackingData[key];
+                var quantity = currentData ? currentData.quantity : 0;
+                var inputHtml = '<input type="number" title="Day ' + day + '" value="' + (quantity || '') + 
+                               '" min="0" max="99" placeholder="0" data-supply-id="' + supply.id + 
+                               '" data-day="' + day + '" onchange="updateTrackingValue(' + supply.id + 
+                               ', ' + day + ', this.value)" style="width: 45px; height: 35px; padding: 2px; border: 1px solid #d1d5db; border-radius: 4px; text-align: center; font-size: 13px; font-weight: 600; background: white;">';
+                rows.push(inputHtml);
+            }
+            rows.push('</div>');
+            rows.push('</div>');
+            rows.push('</div>');
+            rows.push('</div>');
+            
+            return rows.join('');
+        }
+
+        function createUserSupplyRow(supply, totalUnits) {
+            var rows = [];
+            
+            rows.push('<div style="background: white; border-bottom: 2px solid #e5e7eb; margin-bottom: 8px; padding: 15px; border-radius: 8px;">');
+            rows.push('<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">');
+            rows.push('<div style="flex: 1; min-width: 200px;">');
+            rows.push('<div style="font-weight: bold; font-size: 16px; color: #4f46e5; margin-bottom: 5px;">Code: ' + escapeHtml(supply.code) + ' - ' + escapeHtml(supply.description) + '</div>');
+            rows.push('<div style="display: flex; align-items: center; gap: 10px;">');
+            rows.push('<span style="font-size: 12px; color: #666;">Wound DX:</span>');
+            rows.push('<input type="text" placeholder="Enter wound DX" value="' + escapeHtml(getWoundDxForSupply(supply.id)) + '" onchange="updateWoundDx(' + supply.id + ', this.value)" style="padding: 4px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px;">');
+            rows.push('</div>');
+            rows.push('</div>');
+            rows.push('<div style="text-align: center; min-width: 80px;">');
+            rows.push('<div style="font-weight: bold; color: #374151; font-size: 14px;">Total Units</div>');
+            rows.push('<div id="total-units-' + supply.id + '" style="font-size: 18px; font-weight: bold; color: #059669;">' + totalUnits + '</div>');
+            rows.push('</div>');
+            rows.push('</div>');
+            
+            rows.push('<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(40px, 1fr)); gap: 4px; max-width: 100%;">');
+            for (var day = 1; day <= 31; day++) {
+                var key = supply.id + '_' + day;
+                var currentData = trackingData[key];
+                var quantity = currentData ? currentData.quantity : 0;
+                rows.push('<div style="text-align: center;">');
+                rows.push('<div style="font-size: 10px; color: #666; margin-bottom: 2px;">' + day + '</div>');
+                var inputHtml = '<input type="number" title="Day ' + day + '" value="' + (quantity || '') + 
+                               '" min="0" max="99" placeholder="0" data-supply-id="' + supply.id + 
+                               '" data-day="' + day + '" onchange="updateTrackingValue(' + supply.id + 
+                               ', ' + day + ', this.value)" style="width: 40px; height: 32px; padding: 2px; border: 1px solid #d1d5db; border-radius: 4px; text-align: center; font-size: 11px;">';
+                rows.push(inputHtml);
+                rows.push('</div>');
+            }
+            rows.push('</div>');
+            rows.push('</div>');
+            
+            return rows.join('');
+        }
+
+        function getFilteredSupplies() {
+            var searchTerm = document.getElementById('trackingSupplySearch') ? document.getElementById('trackingSupplySearch').value.toLowerCase() : '';
+            
+            if (!searchTerm) {
+                var suppliesWithData = [];
+                var suppliesWithoutData = [];
+                
+                supplies.forEach(function(supply) {
+                    var totalUnits = getTotalUnitsForSupply(supply.id);
+                    if (totalUnits > 0) {
+                        suppliesWithData.push(supply);
+                    } else {
+                        suppliesWithoutData.push(supply);
+                    }
+                });
+                
+                return suppliesWithData.concat(suppliesWithoutData);
+            }
+            
+            return supplies.filter(function(supply) {
+                return supply.description.toLowerCase().includes(searchTerm) || 
+                       supply.code.toString().includes(searchTerm) || 
+                       (supply.hcpcs && supply.hcpcs.toLowerCase().includes(searchTerm));
+            });
+        }
+
+        function filterTrackingTable() {
+            if (currentTrackingPatient) {
+                renderTrackingTable();
+            }
+        }
+
+        function getTotalUnitsForSupply(supplyId) {
+            var total = 0;
+            for (var day = 1; day <= 31; day++) {
+                var key = supplyId + '_' + day;
+                var data = trackingData[key];
+                if (data && data.quantity) {
+                    total += parseInt(data.quantity) || 0;
+                }
+            }
+            return total;
+        }
+
+        function getWoundDxForSupply(supplyId) {
+            for (var day = 1; day <= 31; day++) {
+                var key = supplyId + '_' + day;
+                var data = trackingData[key];
+                if (data && data.wound_dx) {
+                    return data.wound_dx;
+                }
+            }
+            return '';
+        }
+
+        function updateWoundDx(supplyId, woundDx) {
+            if (!currentTrackingPatient) return;
+            
+            for (var day = 1; day <= 31; day++) {
+                var key = supplyId + '_' + day;
+                var data = trackingData[key];
+                if (data && data.quantity > 0) {
+                    updateTrackingValue(supplyId, day, data.quantity, woundDx);
+                    break;
+                }
+            }
+        }
+
+        function updateTrackingValue(supplyId, day, quantity, woundDx) {
+            if (!currentTrackingPatient) return;
+            
+            quantity = parseInt(quantity) || 0;
+            
+            var key = supplyId + '_' + day;
+            if (!trackingData[key]) {
+                trackingData[key] = {
+                    patient_id: parseInt(currentTrackingPatient),
+                    supply_id: supplyId,
+                    day_of_month: day,
+                    quantity: quantity,
+                    wound_dx: woundDx || null
+                };
+            } else {
+                trackingData[key].quantity = quantity;
+                if (woundDx !== undefined) {
+                    trackingData[key].wound_dx = woundDx;
+                }
+            }
+            
+            apiCall('/api/tracking', {
+                method: 'POST',
+                body: JSON.stringify({
+                    patientId: parseInt(currentTrackingPatient),
+                    supplyId: supplyId,
+                    dayOfMonth: day,
+                    quantity: quantity,
+                    woundDx: woundDx
+                })
+            }).then(function(response) {
+                if (response.success) {
+                    updateSupplyTotals(supplyId);
+                    loadDashboardData();
+                } else {
+                    console.error('Failed to save tracking data:', response.error);
+                }
+            }).catch(function(error) {
+                console.error('Failed to save tracking data:', error);
+            });
+        }
+
+        function updateSupplyTotals(supplyId) {
+            var totalUnits = getTotalUnitsForSupply(supplyId);
+            var unitsElement = document.getElementById('total-units-' + supplyId);
+            if (unitsElement) {
+                if (currentUser.role === 'admin') {
+                    unitsElement.innerHTML = 'Units: ' + totalUnits;
+                } else {
+                    unitsElement.textContent = totalUnits;
+                }
+            }
+            
+            if (currentUser.role === 'admin') {
+                var supply = supplies.find(function(s) { return s.id == supplyId; });
+                if (supply) {
+                    var unitCost = parseFloat(supply.cost || 0);
+                    var totalCost = totalUnits * unitCost;
+                    var costElement = document.getElementById('total-cost-' + supplyId);
+                    if (costElement) {
+                        costElement.innerHTML = 'Total: $' + totalCost.toFixed(2);
+                    }
+                }
+            }
+        }
+
+        function saveAllTrackingData() {
+            if (!currentTrackingPatient) {
+                showMessage('Please select a patient first', 'info');
+                return;
+            }
+            
+            showMessage('All tracking data is automatically saved as you enter it!', 'success');
+        }
+
+        function exportTrackingReport() {
+            if (!currentTrackingPatient) {
+                showMessage('Please select a patient first', 'info');
+                return;
+            }
+            
+            var patient = (window.trackingPatients || []).find(function(p) { return p.id == currentTrackingPatient; });
+            if (!patient) {
+                showMessage('Patient not found', 'error');
+                return;
+            }
+
+            var csvContent = 'Patient Name,MRN,Month,Facility,Supply Code,Supply Description,HCPCS,Unit Cost,Total Units,Total Cost,Wound DX\n';
+            
+            var escapeCsv = function(val) {
+                if (!val) return '';
+                val = String(val);
+                if (val.indexOf(',') !== -1 || val.indexOf('"') !== -1 || val.indexOf('\n') !== -1) {
+                    val = '"' + val.replace(/"/g, '""') + '"';
+                }
+                return val;
+            };
+            
+            supplies.forEach(function(supply) {
+                var totalUnits = getTotalUnitsForSupply(supply.id);
+                if (totalUnits > 0) {
+                    var unitCost = parseFloat(supply.cost || 0);
+                    var totalCost = totalUnits * unitCost;
+                    var woundDx = getWoundDxForSupply(supply.id);
+                    
+                    var row = [
+                        escapeCsv(patient.name),
+                        escapeCsv(patient.mrn || 'N/A'),
+                        escapeCsv(patient.month),
+                        escapeCsv(patient.facility_name || 'N/A'),
+                        escapeCsv(supply.code),
+                        escapeCsv(supply.description),
+                        escapeCsv(supply.hcpcs || 'N/A'),
+                        unitCost.toFixed(2),
+                        totalUnits,
+                        totalCost.toFixed(2),
+                        escapeCsv(woundDx || '')
+                    ].join(',');
+                    
+                    csvContent += row + '\n';
+                }
+            });
+            
+            var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            var link = document.createElement('a');
+            if (link.download !== undefined) {
+                var url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', 'tracking_report_' + patient.name.replace(/[^a-zA-Z0-9]/g, '_') + '_' + patient.month + '.csv');
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                showMessage('Report exported successfully!', 'success');
+            } else {
+                showMessage('Export not supported in this browser', 'error');
+            }
+        }
+
+        function loadAdminData() {
+            Promise.all([
+                loadAdminUsers(),
+                loadAdminStats()
+            ]).catch(function(error) {
+                console.error('Error loading admin data:', error);
+            });
+        }
+
+        function loadAdminUsers() {
+            return apiCall('/api/admin/users').then(function(data) {
+                renderUsersTable(data.users || []);
+            }).catch(function(error) {
+                console.error('Failed to load users:', error);
+            });
+        }
+
+        function loadAdminStats() {
+            return apiCall('/api/admin/users').then(function(data) {
+                var users = data.users || [];
+                document.getElementById('totalUsers').textContent = users.length;
+                document.getElementById('pendingApprovals').textContent = users.filter(function(u) { return !u.is_approved; }).length;
+                document.getElementById('totalFacilities').textContent = facilities.length;
+            }).catch(function(error) {
+                console.error('Failed to load admin stats:', error);
+            });
+        }
+
+        function renderUsersTable(users) {
+            var tbody = document.getElementById('usersTable');
+            if (!tbody) return;
+            
+            if (users.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center">No users found</td></tr>';
+                return;
+            }
+
+            var rows = [];
+            users.forEach(function(user) {
+                var status = user.is_approved ? 'Approved' : 'Pending';
+                var actions = '<button class="btn btn-warning btn-small" onclick="editUser(' + user.id + ')">Edit</button>';
+                actions += ' <button class="btn btn-primary btn-small" onclick="showResetPasswordModal(' + user.id + ', \'' + escapeHtml(user.name) + '\')">Reset Password</button>';
+                if (!user.is_approved) {
+                    actions += ' <button class="btn btn-success btn-small" onclick="approveUser(' + user.id + ')">Approve</button>';
+                }
+                if (user.id !== currentUser.id) {
+                    actions += ' <button class="btn btn-danger btn-small" onclick="deleteUser(' + user.id + ')">Delete</button>';
+                }
+                
+                rows.push('<tr>');
+                rows.push('<td>' + escapeHtml(user.name) + '</td>');
+                rows.push('<td>' + escapeHtml(user.email) + '</td>');
+                rows.push('<td>' + escapeHtml(user.role.toUpperCase()) + '</td>');
+                rows.push('<td>' + escapeHtml(user.facility_name || 'All Facilities') + '</td>');
+                rows.push('<td>' + escapeHtml(status) + '</td>');
+                rows.push('<td>' + actions + '</td>');
+                rows.push('</tr>');
+            });
+            tbody.innerHTML = rows.join('');
+        }
+
+        function showAddUserModal() {
+            document.getElementById('addUserModal').style.display = 'block';
+            loadFacilityOptions('addUserFacility');
+        }
+
+        function editUser(userId) {
+            apiCall('/api/admin/users').then(function(data) {
+                var users = data.users || [];
+                var user = users.find(function(u) { return u.id === userId; });
+                if (!user) {
+                    showMessage('User not found', 'error');
+                    return;
+                }
+
+                document.getElementById('editUserId').value = user.id;
+                document.getElementById('editUserName').value = user.name;
+                document.getElementById('editUserEmail').value = user.email;
+                document.getElementById('editUserRole').value = user.role;
+                
+                loadFacilityOptions('editUserFacility');
+                setTimeout(function() {
+                    document.getElementById('editUserFacility').value = user.facility_id || '';
+                }, 100);
+                
+                document.getElementById('editUserModal').style.display = 'block';
+            }).catch(function(error) {
+                showMessage('Failed to load user details', 'error');
+            });
+        }
+
+        function approveUser(userId) {
+            if (!confirm('Approve this user?')) return;
+            
+            apiCall('/api/admin/users/' + userId + '/approve', {
+                method: 'PUT'
+            }).then(function(response) {
+                if (response.success) {
+                    showMessage('User approved successfully!', 'success');
+                    loadAdminData();
+                } else {
+                    showMessage('Failed to approve user: ' + response.error, 'error');
+                }
+            }).catch(function(error) {
+                showMessage('Failed to approve user', 'error');
+            });
+        }
+
+        function deleteUser(userId) {
+            if (!confirm('Are you sure you want to delete this user?')) return;
+            
+            apiCall('/api/admin/users/' + userId, {
+                method: 'DELETE'
+            }).then(function(response) {
+                if (response.success) {
+                    showMessage('User deleted successfully!', 'success');
+                    loadAdminData();
+                } else {
+                    showMessage('Failed to delete user: ' + response.error, 'error');
+                }
+            }).catch(function(error) {
+                showMessage('Failed to delete user', 'error');
+            });
+        }
+
+        function showAddFacilityModal() {
+            document.getElementById('addFacilityModal').style.display = 'block';
+        }
+
+        // Temporary debug function - remove after testing
+        function testAddUser() {
+            console.log('Testing Add User API directly...');
+            
+            var testUserData = {
+                name: 'Test User ' + Math.floor(Math.random() * 1000),
+                email: 'testuser' + Math.floor(Math.random() * 1000) + '@test.com',
+                password: 'testpassword123',
+                role: 'user',
+                facility_id: null
+            };
+            
+            console.log('Test data:', { ...testUserData, password: '[HIDDEN]' });
+            
+            apiCall('/api/admin/users', {
+                method: 'POST',
+                body: JSON.stringify(testUserData)
+            }).then(function(response) {
+                console.log('Test API response:', response);
+                if (response.success) {
+                    showMessage('Test user created successfully: ' + testUserData.name, 'success');
+                    loadAdminData();
+                } else {
+                    showMessage('Test failed: ' + (response.error || 'Unknown error'), 'error');
+                }
+            }).catch(function(error) {
+                console.error('Test API error:', error);
+                showMessage('Test API call failed: ' + error.message, 'error');
+            });
+        }
+
+        function showResetPasswordModal(userId, userName) {
+            document.getElementById('resetPasswordUserId').value = userId;
+            document.getElementById('resetPasswordUserName').textContent = userName;
+            document.getElementById('newPassword').value = '';
+            document.getElementById('confirmPassword').value = '';
+            document.getElementById('resetPasswordModal').style.display = 'block';
+        }
+
+        function resetUserPassword(userId, newPassword) {
+            return apiCall('/api/admin/users/' + userId + '/reset-password', {
+                method: 'PUT',
+                body: JSON.stringify({ newPassword: newPassword })
+            });
+        }
+
+        function showBulkPatientUploadModal() {
+            document.getElementById('bulkPatientUploadModal').style.display = 'block';
+        }
+
+        function dragOverHandler(ev) {
+            ev.preventDefault();
+            document.getElementById('excelUploadZone').classList.add('dragover');
+        }
+
+        function dragLeaveHandler(ev) {
+            ev.preventDefault();
+            document.getElementById('excelUploadZone').classList.remove('dragover');
+        }
+
+        function dropHandler(ev) {
+            ev.preventDefault();
+            document.getElementById('excelUploadZone').classList.remove('dragover');
+            
+            var files = ev.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        }
+
+        function handleFileSelect(event) {
+            var file = event.target.files[0];
+            if (file) {
+                handleFile(file);
+            }
+        }
+
+        function handleFile(file) {
+            if (!file.name.toLowerCase().match(/\.(xlsx|xls)$/)) {
+                showMessage('Please select an Excel file (.xlsx or .xls)', 'error');
+                return;
+            }
+
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    var data = new Uint8Array(e.target.result);
+                    var workbook = XLSX.read(data, { type: 'array' });
+                    var firstSheetName = workbook.SheetNames[0];
+                    var worksheet = workbook.Sheets[firstSheetName];
+                    var jsonData = XLSX.utils.sheet_to_json(worksheet);
+                    
+                    processExcelData(jsonData);
+                } catch (error) {
+                    showMessage('Error reading Excel file: ' + error.message, 'error');
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function processExcelData(data) {
+            if (!data || data.length === 0) {
+                showMessage('Excel file is empty or has no data', 'error');
+                return;
+            }
+
+            var patients = [];
+            for (var i = 0; i < data.length; i++) {
+                var row = data[i];
+                if (row.Name || row.name) {
+                    patients.push({
+                        name: (row.Name || row.name || '').toString().trim(),
+                        mrn: (row.MRN || row.mrn || '').toString().trim(),
+                        month: (row.Month || row.month || '').toString().trim(),
+                        facilityName: (row.Facility || row.facility || '').toString().trim()
+                    });
+                }
+            }
+
+            if (patients.length === 0) {
+                showMessage('No valid patient data found in Excel file', 'error');
+                return;
+            }
+
+            uploadPatientsBulk(patients);
+        }
+
+        function uploadPatientsBulk(patients) {
+            document.getElementById('uploadProgress').style.display = 'block';
+            document.getElementById('uploadResults').innerHTML = '<p>Processing ' + patients.length + ' patients...</p>';
+
+            apiCall('/api/patients/bulk', {
+                method: 'POST',
+                body: JSON.stringify({ patients: patients })
+            }).then(function(response) {
+                if (response.success) {
+                    var html = '<h5>Upload Results:</h5>';
+                    html += '<p><strong>Successful:</strong> ' + response.successful + '</p>';
+                    html += '<p><strong>Failed:</strong> ' + response.failed.length + '</p>';
+                    
+                    if (response.failed.length > 0) {
+                        html += '<h6>Failed Entries:</h6><ul>';
+                        response.failed.forEach(function(failure) {
+                            html += '<li>' + escapeHtml(failure.name) + ': ' + escapeHtml(failure.error) + '</li>';
+                        });
+                        html += '</ul>';
+                    }
+                    
+                    document.getElementById('uploadResults').innerHTML = html;
+                    
+                    if (response.successful > 0) {
+                        loadPatients();
+                        showMessage(response.message, 'success');
+                    }
+                } else {
+                    showMessage('Upload failed: ' + response.error, 'error');
+                }
+            }).catch(function(error) {
+                showMessage('Upload failed: ' + error.message, 'error');
+            });
+        }
+
+        function setupFormHandlers() {
+            var addPatientForm = document.getElementById('addPatientForm');
+            if (addPatientForm) {
+                addPatientForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    var formData = {
+                        name: document.getElementById('patientName').value,
+                        mrn: document.getElementById('patientMRN').value,
+                        month: document.getElementById('patientMonth').value,
+                        facility_id: document.getElementById('patientFacility').value
+                    };
+
+                    apiCall('/api/patients', {
+                        method: 'POST',
+                        body: JSON.stringify(formData)
+                    }).then(function(response) {
+                        if (response.success) {
+                            closeModal('addPatientModal');
+                            showMessage('Patient added successfully!', 'success');
+                            loadPatients();
+                            addPatientForm.reset();
+                        } else {
+                            showMessage('Failed to add patient: ' + response.error, 'error');
+                        }
+                    }).catch(function(error) {
+                        showMessage('Failed to add patient: ' + error.message, 'error');
+                    });
+                });
+            }
+
+            var editPatientForm = document.getElementById('editPatientForm');
+            if (editPatientForm) {
+                editPatientForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    var patientId = document.getElementById('editPatientId').value;
+                    var formData = {
+                        name: document.getElementById('editPatientName').value,
+                        mrn: document.getElementById('editPatientMRN').value,
+                        month: document.getElementById('editPatientMonth').value,
+                        facility_id: document.getElementById('editPatientFacility').value
+                    };
+
+                    apiCall('/api/patients/' + patientId, {
+                        method: 'PUT',
+                        body: JSON.stringify(formData)
+                    }).then(function(response) {
+                        if (response.success) {
+                            closeModal('editPatientModal');
+                            showMessage('Patient updated successfully!', 'success');
+                            loadPatients();
+                        } else {
+                            showMessage('Failed to update patient: ' + response.error, 'error');
+                        }
+                    }).catch(function(error) {
+                        showMessage('Failed to update patient: ' + error.message, 'error');
+                    });
+                });
+            }
+
+            var addSupplyForm = document.getElementById('addSupplyForm');
+            if (addSupplyForm) {
+                addSupplyForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    var formData = {
+                        code: document.getElementById('supplyCode').value,
+                        description: document.getElementById('supplyDescription').value,
+                        hcpcs: document.getElementById('supplyHCPCS').value,
+                        cost: document.getElementById('supplyCost').value
+                    };
+
+                    apiCall('/api/supplies', {
+                        method: 'POST',
+                        body: JSON.stringify(formData)
+                    }).then(function(response) {
+                        if (response.success) {
+                            closeModal('addSupplyModal');
+                            showMessage('Supply added successfully!', 'success');
+                            loadSupplies();
+                            addSupplyForm.reset();
+                        } else {
+                            showMessage('Failed to add supply: ' + response.error, 'error');
+                        }
+                    }).catch(function(error) {
+                        showMessage('Failed to add supply: ' + error.message, 'error');
+                    });
+                });
+            }
+
+            var editSupplyForm = document.getElementById('editSupplyForm');
+            if (editSupplyForm) {
+                editSupplyForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    var supplyId = document.getElementById('editSupplyId').value;
+                    var formData = {
+                        code: document.getElementById('editSupplyCode').value,
+                        description: document.getElementById('editSupplyDescription').value,
+                        hcpcs: document.getElementById('editSupplyHCPCS').value,
+                        cost: document.getElementById('editSupplyCost').value
+                    };
+
+                    apiCall('/api/supplies/' + supplyId, {
+                        method: 'PUT',
+                        body: JSON.stringify(formData)
+                    }).then(function(response) {
+                        if (response.success) {
+                            closeModal('editSupplyModal');
+                            showMessage('Supply updated successfully!', 'success');
+                            loadSupplies();
+                        } else {
+                            showMessage('Failed to update supply: ' + response.error, 'error');
+                        }
+                    }).catch(function(error) {
+                        showMessage('Failed to update supply: ' + error.message, 'error');
+                    });
+                });
+            }
+
+            var addUserForm = document.getElementById('addUserForm');
+            if (addUserForm) {
+                addUserForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    console.log('Add user form submitted');
+                    
+                    var submitBtn = addUserForm.querySelector('button[type="submit"]');
+                    var originalText = submitBtn.textContent;
+                    submitBtn.disabled = true;
+                    submitBtn.textContent = 'Adding User...';
+                    
+                    var nameField = document.getElementById('addUserName');
+                    var emailField = document.getElementById('addUserEmail');
+                    var passwordField = document.getElementById('addUserPassword');
+                    var roleField = document.getElementById('addUserRole');
+                    var facilityField = document.getElementById('addUserFacility');
+
+                    if (!nameField || !emailField || !passwordField || !roleField || !facilityField) {
+                        console.error('Form fields not found');
+                        showMessage('Form error - please try again', 'error');
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = originalText;
+                        return;
+                    }
+
+                    var formData = {
+                        name: nameField.value ? nameField.value.trim() : '',
+                        email: emailField.value ? emailField.value.trim() : '',
+                        password: passwordField.value || '',
+                        role: roleField.value || 'user',
+                        facility_id: facilityField.value || null
+                    };
+
+                    console.log('Submitting user data:', { ...formData, password: '[HIDDEN]' });
+
+                    if (!formData.name || !formData.email || !formData.password) {
+                        showMessage('Please fill in all required fields', 'error');
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = originalText;
+                        return;
+                    }
+
+                    apiCall('/api/admin/users', {
+                        method: 'POST',
+                        body: JSON.stringify(formData)
+                    }).then(function(response) {
+                        console.log('Add user response:', response);
+                        if (response.success) {
+                            closeModal('addUserModal');
+                            showMessage('User added successfully!', 'success');
+                            addUserForm.reset();
+                            // Reload the entire admin data to refresh everything
+                            loadAdminData();
+                        } else {
+                            showMessage('Failed to add user: ' + (response.error || 'Unknown error'), 'error');
+                        }
+                    }).catch(function(error) {
+                        console.error('Add user error:', error);
+                        showMessage('Failed to add user: ' + error.message, 'error');
+                    }).finally(function() {
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = originalText;
+                    });
+                });
+            }
+
+            var editUserForm = document.getElementById('editUserForm');
+            if (editUserForm) {
+                editUserForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    var userId = document.getElementById('editUserId').value;
+                    var formData = {
+                        name: document.getElementById('editUserName').value,
+                        email: document.getElementById('editUserEmail').value,
+                        role: document.getElementById('editUserRole').value,
+                        facility_id: document.getElementById('editUserFacility').value || null
+                    };
+
+                    apiCall('/api/admin/users/' + userId, {
+                        method: 'PUT',
+                        body: JSON.stringify(formData)
+                    }).then(function(response) {
+                        if (response.success) {
+                            closeModal('editUserModal');
+                            showMessage('User updated successfully!', 'success');
+                            loadAdminData();
+                        } else {
+                            showMessage('Failed to update user: ' + response.error, 'error');
+                        }
+                    }).catch(function(error) {
+                        console.error('Edit user error:', error);
+                        showMessage('Failed to update user: ' + error.message, 'error');
+                    });
+                });
+            }
+
+            var addFacilityForm = document.getElementById('addFacilityForm');
+            if (addFacilityForm) {
+                addFacilityForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    var formData = {
+                        name: document.getElementById('facilityName').value
+                    };
+
+                    apiCall('/api/facilities', {
+                        method: 'POST',
+                        body: JSON.stringify(formData)
+                    }).then(function(response) {
+                        if (response.success) {
+                            closeModal('addFacilityModal');
+                            showMessage('Facility added successfully!', 'success');
+                            loadFacilities();
+                            loadAdminData();
+                            addFacilityForm.reset();
+                        } else {
+                            showMessage('Failed to add facility: ' + response.error, 'error');
+                        }
+                    }).catch(function(error) {
+                        console.error('Add facility error:', error);
+                        showMessage('Failed to add facility: ' + error.message, 'error');
+                    });
+                });
+            }
+
+            var editFacilityForm = document.getElementById('editFacilityForm');
+            if (editFacilityForm) {
+                editFacilityForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    var facilityId = document.getElementById('editFacilityId').value;
+                    var formData = {
+                        name: document.getElementById('editFacilityName').value
+                    };
+
+                    apiCall('/api/facilities/' + facilityId, {
+                        method: 'PUT',
+                        body: JSON.stringify(formData)
+                    }).then(function(response) {
+                        if (response.success) {
+                            closeModal('editFacilityModal');
+                            showMessage('Facility updated successfully!', 'success');
+                            loadFacilities();
+                            loadAdminData();
+                        } else {
+                            showMessage('Failed to update facility: ' + response.error, 'error');
+                        }
+                    }).catch(function(error) {
+                        console.error('Edit facility error:', error);
+                        showMessage('Failed to update facility: ' + error.message, 'error');
+                    });
+                });
+            }
+
+            var resetPasswordForm = document.getElementById('resetPasswordForm');
+            if (resetPasswordForm) {
+                resetPasswordForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    
+                    var userId = document.getElementById('resetPasswordUserId').value;
+                    var newPassword = document.getElementById('newPassword').value;
+                    var confirmPassword = document.getElementById('confirmPassword').value;
+                    
+                    if (!newPassword || newPassword.length < 8) {
+                        showMessage('Password must be at least 8 characters long', 'error');
+                        return;
+                    }
+                    
+                    if (newPassword !== confirmPassword) {
+                        showMessage('Passwords do not match', 'error');
+                        return;
+                    }
+                    
+                    var submitBtn = resetPasswordForm.querySelector('button[type="submit"]');
+                    var originalText = submitBtn.textContent;
+                    submitBtn.disabled = true;
+                    submitBtn.textContent = 'Resetting...';
+                    
+                    resetUserPassword(userId, newPassword).then(function(response) {
+                        if (response.success) {
+                            closeModal('resetPasswordModal');
+                            showMessage('Password reset successfully!', 'success');
+                            resetPasswordForm.reset();
+                        } else {
+                            showMessage('Failed to reset password: ' + response.error, 'error');
+                        }
+                    }).catch(function(error) {
+                        showMessage('Failed to reset password: ' + error.message, 'error');
+                    }).finally(function() {
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = originalText;
+                    });
+                });
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Application starting...');
+            
+            try {
+                setupLoginForm();
+                setupFormHandlers();
+                
+                window.addEventListener('click', function(event) {
+                    var modals = document.querySelectorAll('.modal');
+                    modals.forEach(function(modal) {
+                        if (event.target === modal) {
+                            modal.style.display = 'none';
+                        }
+                    });
+                });
+                
+                console.log('Application initialized successfully');
+            } catch (error) {
+                console.error('Error initializing application:', error);
+            }
         });
 
-    } catch (error) {
-        console.error('Bulk upload error:', error);
-        res.status(500).json({ success: false, error: 'Server error during bulk upload' });
-    }
-});
-
-// TRACKING
-app.get('/api/tracking/:patientId', authenticateToken, async (req, res) => {
-    try {
-        const patientId = req.params.patientId;
-        
-        // Check permission
-        const patientCheck = await safeQuery('SELECT * FROM patients WHERE id = $1', [patientId]);
-        if (patientCheck.rows.length === 0) {
-            return res.status(404).json({ success: false, error: 'Patient not found' });
-        }
-
-        const patient = patientCheck.rows[0];
-        if (req.user.role !== 'admin' && req.user.facilityId && req.user.facilityId != patient.facility_id) {
-            return res.status(403).json({ success: false, error: 'Access denied' });
-        }
-
-        const result = await safeQuery(
-            `SELECT t.*, s.description as supply_description, s.cost as supply_cost, s.hcpcs, s.code as supply_code
-             FROM tracking t 
-             LEFT JOIN supplies s ON t.supply_id = s.id 
-             WHERE t.patient_id = $1 
-             ORDER BY s.code, t.day_of_month`,
-            [patientId]
-        );
-
-        res.json({ success: true, tracking: result.rows });
-    } catch (error) {
-        res.status(500).json({ success: false, error: 'Failed to fetch tracking data' });
-    }
-});
-
-app.post('/api/tracking', authenticateToken, async (req, res) => {
-    try {
-        const { patientId, supplyId, dayOfMonth, quantity, woundDx } = req.body;
-
-        if (!patientId || !supplyId || !dayOfMonth) {
-            return res.status(400).json({ success: false, error: 'Patient ID, supply ID, and day are required' });
-        }
-
-        // Check permission
-        const patientCheck = await safeQuery('SELECT * FROM patients WHERE id = $1', [patientId]);
-        if (patientCheck.rows.length === 0) {
-            return res.status(404).json({ success: false, error: 'Patient not found' });
-        }
-
-        const patient = patientCheck.rows[0];
-        if (req.user.role !== 'admin' && req.user.facilityId && req.user.facilityId != patient.facility_id) {
-            return res.status(403).json({ success: false, error: 'Access denied' });
-        }
-
-        await safeQuery(
-            `INSERT INTO tracking (patient_id, supply_id, day_of_month, quantity, wound_dx) 
-             VALUES ($1, $2, $3, $4, $5)
-             ON CONFLICT (patient_id, supply_id, day_of_month) 
-             DO UPDATE SET quantity = EXCLUDED.quantity, wound_dx = EXCLUDED.wound_dx, updated_at = CURRENT_TIMESTAMP`,
-            [patientId, supplyId, dayOfMonth, quantity || 0, woundDx || null]
-        );
-
-        res.json({ success: true, message: 'Tracking data saved successfully' });
-    } catch (error) {
-        res.status(500).json({ success: false, error: 'Failed to save tracking data' });
-    }
-});
-
-// ADMIN USERS
-app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const result = await safeQuery(`
-            SELECT u.*, f.name as facility_name 
-            FROM users u 
-            LEFT JOIN facilities f ON u.facility_id = f.id 
-            ORDER BY u.name ASC
-        `);
-        res.json({ success: true, users: result.rows });
-    } catch (error) {
-        res.status(500).json({ success: false, error: 'Failed to fetch users' });
-    }
-});
-
-app.post('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const { name, email, password, role, facility_id } = req.body;
-        
-        if (!name || !email || !password) {
-            return res.status(400).json({ success: false, error: 'Name, email, and password are required' });
-        }
-
-        const existingUser = await safeQuery('SELECT id FROM users WHERE email = $1', [email]);
-        if (existingUser.rows.length > 0) {
-            return res.status(400).json({ success: false, error: 'Email already exists' });
-        }
-
-        const hashedPassword = await bcrypt.hash(password, 12);
-        
-        const result = await safeQuery(
-            'INSERT INTO users (name, email, password, role, facility_id, is_approved, email_verified) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-            [name, email, hashedPassword, role || 'user', facility_id || null, true, true]
-        );
-
-        res.json({ success: true, user: result.rows[0] });
-
-    } catch (error) {
-        console.error('Error creating user:', error);
-        res.status(500).json({ success: false, error: 'Failed to create user' });
-    }
-});
-
-app.put('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const userId = req.params.id;
-        const { name, email, role, facility_id } = req.body;
-        
-        if (!name || !email || !role) {
-            return res.status(400).json({ success: false, error: 'Name, email, and role are required' });
-        }
-
-        const existingUser = await safeQuery('SELECT id FROM users WHERE email = $1 AND id != $2', [email, userId]);
-        if (existingUser.rows.length > 0) {
-            return res.status(400).json({ success: false, error: 'Email already exists' });
-        }
-
-        const result = await safeQuery(
-            'UPDATE users SET name = $1, email = $2, role = $3, facility_id = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5',
-            [name, email, role, facility_id || null, userId]
-        );
-
-        if (result.rowCount === 0) {
-            return res.status(404).json({ success: false, error: 'User not found' });
-        }
-
-        res.json({ success: true, message: 'User updated successfully' });
-
-    } catch (error) {
-        res.status(500).json({ success: false, error: 'Failed to update user' });
-    }
-});
-
-app.put('/api/admin/users/:id/approve', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const userId = req.params.id;
-        
-        const result = await safeQuery(
-            'UPDATE users SET is_approved = true, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
-            [userId]
-        );
-
-        if (result.rowCount === 0) {
-            return res.status(404).json({ success: false, error: 'User not found' });
-        }
-
-        res.json({ success: true, message: 'User approved successfully' });
-
-    } catch (error) {
-        res.status(500).json({ success: false, error: 'Failed to approve user' });
-    }
-});
-
-app.put('/api/admin/users/:id/reset-password', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const userId = req.params.id;
-        const { newPassword } = req.body;
-        
-        if (!newPassword || newPassword.length < 8) {
-            return res.status(400).json({ success: false, error: 'Password must be at least 8 characters long' });
-        }
-        
-        const userCheck = await safeQuery('SELECT id, email, name FROM users WHERE id = $1', [userId]);
-        if (userCheck.rows.length === 0) {
-            return res.status(404).json({ success: false, error: 'User not found' });
-        }
-        
-        const hashedPassword = await bcrypt.hash(newPassword, 12);
-        
-        const result = await safeQuery(
-            'UPDATE users SET password = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-            [hashedPassword, userId]
-        );
-        
-        if (result.rowCount === 0) {
-            return res.status(404).json({ success: false, error: 'Failed to update password' });
-        }
-        
-        const user = userCheck.rows[0];
-        res.json({ 
-            success: true, 
-            message: 'Password reset successfully for ' + user.name,
-            userEmail: user.email
-        });
-
-    } catch (error) {
-        console.error('Error resetting password:', error);
-        res.status(500).json({ success: false, error: 'Failed to reset password' });
-    }
-});
-
-app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const { id } = req.params;
-        
-        if (parseInt(id) === req.user.id) {
-            return res.status(400).json({ success: false, error: 'Cannot delete your own account' });
-        }
-        
-        const result = await safeQuery('DELETE FROM users WHERE id = $1', [id]);
-
-        if (result.rowCount === 0) {
-            return res.status(404).json({ success: false, error: 'User not found' });
-        }
-
-        res.json({ success: true, message: 'User deleted successfully' });
-
-    } catch (error) {
-        res.status(500).json({ success: false, error: 'Failed to delete user' });
-    }
-});
-
-// ERROR HANDLING
-app.use((err, req, res, next) => {
-    console.error('Unhandled error:', err);
-    res.status(500).json({ success: false, error: 'Internal server error' });
-});
-
-// 404 handler
-app.use((req, res) => {
-    res.status(404).json({ error: 'Route not found' });
-});
-
-// SERVER STARTUP
-async function startServer() {
-    try {
-        await initializeDatabase();
-        
-        app.listen(PORT, () => {
-            console.log('================================');
-            console.log('Wound Care RT Supply Tracker');
-            console.log('================================');
-            console.log(`Server running on port ${PORT}`);
-            console.log('Default credentials: admin@system.com / admin123');
-            console.log('================================');
-        });
-    } catch (error) {
-        console.error('Failed to start server:', error);
-        process.exit(1);
-    }
-}
-
-startServer();
-
-module.exports = app;
+    </script>
+</body>
+</html>
