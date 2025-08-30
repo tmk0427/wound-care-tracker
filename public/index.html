@@ -873,27 +873,27 @@
             </div>
             <form id="addUserForm">
                 <div class="form-group">
-                    <label for="userName">Full Name</label>
-                    <input type="text" id="userName" class="form-control" required>
+                    <label for="addUserName">Full Name</label>
+                    <input type="text" id="addUserName" class="form-control" required>
                 </div>
                 <div class="form-group">
-                    <label for="userEmail">Email Address</label>
-                    <input type="email" id="userEmail" class="form-control" required>
+                    <label for="addUserEmail">Email Address</label>
+                    <input type="email" id="addUserEmail" class="form-control" required>
                 </div>
                 <div class="form-group">
-                    <label for="userPassword">Password</label>
-                    <input type="password" id="userPassword" class="form-control" required>
+                    <label for="addUserPassword">Password</label>
+                    <input type="password" id="addUserPassword" class="form-control" required>
                 </div>
                 <div class="form-group">
-                    <label for="userRole">Role</label>
-                    <select id="userRole" class="form-control" required>
+                    <label for="addUserRole">Role</label>
+                    <select id="addUserRole" class="form-control" required>
                         <option value="user">User</option>
                         <option value="admin">Admin</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="userFacility">Facility</label>
-                    <select id="userFacility" class="form-control">
+                    <label for="addUserFacility">Facility</label>
+                    <select id="addUserFacility" class="form-control">
                         <option value="">No Specific Facility</option>
                     </select>
                 </div>
@@ -1266,6 +1266,7 @@
             }
         }
 
+        // FIXED: Properly structured loadDashboardData function
         function loadDashboardData() {
             return apiCall('/api/dashboard/stats').then(function(data) {
                 if (data.success && data.stats) {
@@ -1274,34 +1275,17 @@
                     document.getElementById('totalSupplies').textContent = stats.totalSupplies || 0;
                     document.getElementById('monthlyTracking').textContent = stats.monthlyTracking || 0;
                     
+                    // Backend now returns total units for non-admin users in the totalCost field
                     if (currentUser.role === 'admin') {
                         document.getElementById('totalCost').textContent = '$' + (stats.totalCost || 0).toFixed(2);
                     } else {
-                        calculateTotalUnitsForUser().then(function(totalUnits) {
-                            document.getElementById('totalCost').textContent = totalUnits;
-                        });
+                        document.getElementById('totalCost').textContent = stats.totalCost || 0;
                     }
                 }
                 loadRecentActivity();
             }).catch(function(error) {
                 console.error('Failed to load dashboard stats:', error);
                 loadRecentActivity();
-            });
-        }
-
-        function calculateTotalUnitsForUser() {
-            return apiCall('/api/tracking').then(function(data) {
-                if (data.success && data.tracking) {
-                    var totalUnits = 0;
-                    data.tracking.forEach(function(record) {
-                        totalUnits += parseInt(record.quantity) || 0;
-                    });
-                    return totalUnits;
-                }
-                return 0;
-            }).catch(function(error) {
-                console.error('Failed to calculate total units:', error);
-                return 0;
             });
         }
 
@@ -1707,6 +1691,7 @@
             });
         }
 
+        // FIXED: Corrected function name reference
         function loadFacilityOptions(selectId) {
             var select = document.getElementById(selectId);
             if (!select) return;
@@ -1809,7 +1794,7 @@
                 });
                 
                 renderTrackingTable();
-                updateDashboardTotalCost();
+                loadDashboardData();
             }).catch(function(error) {
                 console.error('Failed to load tracking data:', error);
                 showMessage('Failed to load tracking data', 'error');
@@ -2042,7 +2027,7 @@
             }).then(function(response) {
                 if (response.success) {
                     updateSupplyTotals(supplyId);
-                    updateDashboardTotalCost();
+                    loadDashboardData();
                 } else {
                     console.error('Failed to save tracking data:', response.error);
                 }
@@ -2073,10 +2058,6 @@
                     }
                 }
             }
-        }
-
-        function updateDashboardTotalCost() {
-            loadDashboardData();
         }
 
         function saveAllTrackingData() {
@@ -2215,7 +2196,7 @@
 
         function showAddUserModal() {
             document.getElementById('addUserModal').style.display = 'block';
-            loadFacilityOptions('userFacility');
+            loadFacilityOptions('addUserFacility');
         }
 
         function editUser(userId) {
@@ -2571,15 +2552,17 @@
                     submitBtn.disabled = true;
                     submitBtn.textContent = 'Adding User...';
                     
-                    var nameField = document.getElementById('userName');
-                    var emailField = document.getElementById('userEmail');
-                    var passwordField = document.getElementById('userPassword');
-                    var roleField = document.getElementById('userRole');
-                    var facilityField = document.getElementById('userFacility');
+                    var nameField = document.getElementById('addUserName');
+                    var emailField = document.getElementById('addUserEmail');
+                    var passwordField = document.getElementById('addUserPassword');
+                    var roleField = document.getElementById('addUserRole');
+                    var facilityField = document.getElementById('addUserFacility');
 
                     if (!nameField || !emailField || !passwordField || !roleField || !facilityField) {
                         console.error('Form fields not found');
                         showMessage('Form error - please try again', 'error');
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = originalText;
                         return;
                     }
 
