@@ -981,6 +981,7 @@
         var allPatients = [];
         var currentTrackingPatient = null;
         var trackingData = {};
+        var csvFileData = null;
 
         function escapeHtml(unsafe) {
             if (!unsafe) return '';
@@ -1031,7 +1032,7 @@
                 body: options.body
             }).then(function(response) {
                 if (!response.ok) {
-                    throw new Error('HTTP error! status: ' + response.status);
+                    throw new Error('HTTP error! status: ' + response.status + ' - ' + response.statusText);
                 }
                 return response.json();
             });
@@ -1052,6 +1053,7 @@
                     }
 
                     var submitBtn = loginForm.querySelector('button[type="submit"]');
+                    var originalText = submitBtn.textContent;
                     submitBtn.disabled = true;
                     submitBtn.textContent = 'Signing In...';
 
@@ -1059,6 +1061,7 @@
                         method: 'POST',
                         body: JSON.stringify({ email: email, password: password })
                     }).then(function(data) {
+                        console.log('Login response:', data);
                         if (data.success) {
                             authToken = data.token;
                             currentUser = data.user;
@@ -1067,10 +1070,11 @@
                             showMessage(data.message || 'Login failed', 'error');
                         }
                     }).catch(function(error) {
-                        showMessage('Login failed. Please check your connection and try again.', 'error');
+                        console.error('Login error:', error);
+                        showMessage('Login failed. Please check your connection and try again. Error: ' + error.message, 'error');
                     }).finally(function() {
                         submitBtn.disabled = false;
-                        submitBtn.textContent = 'Sign In';
+                        submitBtn.textContent = originalText;
                     });
                 });
             }
@@ -1109,6 +1113,11 @@
             currentUser = null;
             document.getElementById('loginScreen').style.display = 'block';
             document.getElementById('mainApp').style.display = 'none';
+            
+            // Clear form fields
+            document.getElementById('email').value = '';
+            document.getElementById('password').value = '';
+            document.getElementById('loginMessage').innerHTML = '';
         }
 
         function showPanel(panelName) {
@@ -1158,12 +1167,10 @@
                     document.getElementById('totalSupplies').textContent = stats.totalSupplies || 0;
                     document.getElementById('monthlyTracking').textContent = stats.monthlyTracking || 0;
                     
-                    if (!currentTrackingPatient) {
-                        if (currentUser.role === 'admin') {
-                            document.getElementById('totalCost').textContent = '$' + (stats.totalCost || 0).toFixed(2);
-                        } else {
-                            document.getElementById('totalCost').textContent = stats.totalUnits || 0;
-                        }
+                    if (currentUser.role === 'admin') {
+                        document.getElementById('totalCost').textContent = '$' + (stats.totalCost || 0).toFixed(2);
+                    } else {
+                        document.getElementById('totalCost').textContent = stats.totalUnits || stats.totalCost || 0;
                     }
                 }
                 loadRecentActivity();
@@ -1240,7 +1247,7 @@
 
         function filterPatients() {
             var searchTerm = document.getElementById('patientSearch').value.toLowerCase();
-            var facilityFilter = document.getElementById('patientFacilityFilter').value;
+            var facilityFilter = document.getElementById('patientFacilityFilter') ? document.getElementById('patientFacilityFilter').value : '';
             var monthFilter = document.getElementById('patientMonthFilter').value;
             var sortBy = document.getElementById('patientSortBy').value;
             
@@ -1425,6 +1432,39 @@
             });
         }
 
+        function importExcel() {
+            var input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.xlsx,.xls';
+            input.onchange = function(e) {
+                var file = e.target.files[0];
+                if (!file) return;
+
+                var formData = new FormData();
+                formData.append('file', file);
+
+                fetch('/api/supplies/import', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + authToken
+                    },
+                    body: formData
+                }).then(function(response) {
+                    return response.json();
+                }).then(function(data) {
+                    if (data.success) {
+                        showMessage(data.message, 'success');
+                        loadSupplies();
+                    } else {
+                        showMessage('Import failed: ' + data.error, 'error');
+                    }
+                }).catch(function(error) {
+                    showMessage('Import failed: ' + error.message, 'error');
+                });
+            };
+            input.click();
+        }
+
         function loadFacilities() {
             return apiCall('/api/facilities').then(function(data) {
                 facilities = data.facilities || [];
@@ -1503,7 +1543,7 @@
         }
 
         function filterTrackingPatients() {
-            var facilityFilter = document.getElementById('trackingFacilityFilter').value;
+            var facilityFilter = document.getElementById('trackingFacilityFilter') ? document.getElementById('trackingFacilityFilter').value : '';
             var monthFilter = document.getElementById('trackingMonthFilter').value;
             var select = document.getElementById('trackingPatient');
             
@@ -1678,7 +1718,7 @@
         }
 
         function getFilteredSupplies() {
-            var searchTerm = document.getElementById('trackingSupplySearch').value.toLowerCase();
+            var searchTerm = document.getElementById('trackingSupplySearch') ? document.getElementById('trackingSupplySearch').value.toLowerCase() : '';
             
             if (!searchTerm) {
                 var suppliesWithData = [];
@@ -1723,4 +1763,425 @@
 
         function getWoundDxForSupply(supplyId) {
             for (var day = 1; day <= 31; day++) {
-                var key = supplyI
+                var key = supplyId + '_' + day;
+                var data = trackingData[key];
+                if (data && data.wound_dx) {
+                    return data.wound_dx;
+                }
+            }
+            return '';
+        }
+
+        function updateWoundDx(supplyId, woundDx) {
+            if (!currentTrackingPatient) return;
+            
+            // Find the first day with quantity data for this supply
+            for (var day = 1; day <= 31; day++) {
+                var key = supplyId + '_' + day;
+                var data = trackingData[key];
+                if (data && data.quantity > 0) {
+                    updateTrackingValue(supplyId, day, data.quantity, woundDx);
+                    break;
+                }
+            }
+        }
+
+        function updateTrackingValue(supplyId, day, quantity, woundDx) {
+            if (!currentTrackingPatient) return;
+            
+            quantity = parseInt(quantity) || 0;
+            
+            // Update local tracking data
+            var key = supplyId + '_' + day;
+            if (!trackingData[key]) {
+                trackingData[key] = {
+                    patient_id: parseInt(currentTrackingPatient),
+                    supply_id: supplyId,
+                    day_of_month: day,
+                    quantity: quantity,
+                    wound_dx: woundDx || null
+                };
+            } else {
+                trackingData[key].quantity = quantity;
+                if (woundDx !== undefined) {
+                    trackingData[key].wound_dx = woundDx;
+                }
+            }
+            
+            // Auto-save the change
+            apiCall('/api/tracking', {
+                method: 'POST',
+                body: JSON.stringify({
+                    patientId: parseInt(currentTrackingPatient),
+                    supplyId: supplyId,
+                    dayOfMonth: day,
+                    quantity: quantity,
+                    woundDx: woundDx
+                })
+            }).then(function(response) {
+                if (response.success) {
+                    // Update totals display
+                    updateSupplyTotals(supplyId);
+                    updateDashboardTotalCost();
+                } else {
+                    console.error('Failed to save tracking data:', response.error);
+                }
+            }).catch(function(error) {
+                console.error('Failed to save tracking data:', error);
+            });
+        }
+
+        function updateSupplyTotals(supplyId) {
+            var totalUnits = getTotalUnitsForSupply(supplyId);
+            var unitsElement = document.getElementById('total-units-' + supplyId);
+            if (unitsElement) {
+                if (currentUser.role === 'admin') {
+                    unitsElement.innerHTML = 'Units: ' + totalUnits;
+                } else {
+                    unitsElement.textContent = totalUnits;
+                }
+            }
+            
+            if (currentUser.role === 'admin') {
+                var supply = supplies.find(function(s) { return s.id == supplyId; });
+                if (supply) {
+                    var unitCost = parseFloat(supply.cost || 0);
+                    var totalCost = totalUnits * unitCost;
+                    var costElement = document.getElementById('total-cost-' + supplyId);
+                    if (costElement) {
+                        costElement.innerHTML = 'Total: $' + totalCost.toFixed(2);
+                    }
+                }
+            }
+        }
+
+        function updateDashboardTotalCost() {
+            // Recalculate total cost/units and update dashboard
+            loadDashboardData();
+        }
+
+        function saveAllTrackingData() {
+            if (!currentTrackingPatient) {
+                showMessage('Please select a patient first', 'info');
+                return;
+            }
+            
+            showMessage('All tracking data is automatically saved as you enter it!', 'success');
+        }
+
+        function exportTrackingReport() {
+            if (!currentTrackingPatient) {
+                showMessage('Please select a patient first', 'info');
+                return;
+            }
+            
+            // This would implement CSV export functionality
+            showMessage('Export functionality coming soon!', 'info');
+        }
+
+        function loadAdminData() {
+            Promise.all([
+                loadAdminUsers(),
+                loadAdminStats()
+            ]).catch(function(error) {
+                console.error('Error loading admin data:', error);
+            });
+        }
+
+        function loadAdminUsers() {
+            return apiCall('/api/admin/users').then(function(data) {
+                renderUsersTable(data.users || []);
+            }).catch(function(error) {
+                console.error('Failed to load users:', error);
+            });
+        }
+
+        function loadAdminStats() {
+            return apiCall('/api/admin/users').then(function(data) {
+                var users = data.users || [];
+                document.getElementById('totalUsers').textContent = users.length;
+                document.getElementById('pendingApprovals').textContent = users.filter(function(u) { return !u.is_approved; }).length;
+                document.getElementById('totalFacilities').textContent = facilities.length;
+            }).catch(function(error) {
+                console.error('Failed to load admin stats:', error);
+            });
+        }
+
+        function renderUsersTable(users) {
+            var tbody = document.getElementById('usersTable');
+            if (!tbody) return;
+            
+            if (users.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center">No users found</td></tr>';
+                return;
+            }
+
+            var html = '';
+            users.forEach(function(user) {
+                var status = user.is_approved ? 'Approved' : 'Pending';
+                var actions = '<button class="btn btn-warning btn-small" onclick="editUser(' + user.id + ')">Edit</button>';
+                if (!user.is_approved) {
+                    actions += ' <button class="btn btn-success btn-small" onclick="approveUser(' + user.id + ')">Approve</button>';
+                }
+                if (user.id !== currentUser.id) {
+                    actions += ' <button class="btn btn-danger btn-small" onclick="deleteUser(' + user.id + ')">Delete</button>';
+                }
+                
+                html += '<tr>' +
+                    '<td>' + escapeHtml(user.name) + '</td>' +
+                    '<td>' + escapeHtml(user.email) + '</td>' +
+                    '<td>' + escapeHtml(user.role.toUpperCase()) + '</td>' +
+                    '<td>' + escapeHtml(user.facility_name || 'All Facilities') + '</td>' +
+                    '<td>' + status + '</td>' +
+                    '<td>' + actions + '</td>' +
+                    '</tr>';
+            });
+            tbody.innerHTML = html;
+        }
+
+        function showAddUserModal() {
+            document.getElementById('addUserModal').style.display = 'block';
+            loadFacilityOptions('userFacility');
+        }
+
+        function editUser(userId) {
+            // Implementation for editing users
+            showMessage('Edit user functionality needs to be implemented', 'info');
+        }
+
+        function approveUser(userId) {
+            if (!confirm('Approve this user?')) return;
+            
+            apiCall('/api/admin/users/' + userId + '/approve', {
+                method: 'PUT'
+            }).then(function(response) {
+                if (response.success) {
+                    showMessage('User approved successfully!', 'success');
+                    loadAdminData();
+                } else {
+                    showMessage('Failed to approve user: ' + response.error, 'error');
+                }
+            }).catch(function(error) {
+                showMessage('Failed to approve user', 'error');
+            });
+        }
+
+        function deleteUser(userId) {
+            if (!confirm('Are you sure you want to delete this user?')) return;
+            
+            apiCall('/api/admin/users/' + userId, {
+                method: 'DELETE'
+            }).then(function(response) {
+                if (response.success) {
+                    showMessage('User deleted successfully!', 'success');
+                    loadAdminData();
+                } else {
+                    showMessage('Failed to delete user: ' + response.error, 'error');
+                }
+            }).catch(function(error) {
+                showMessage('Failed to delete user', 'error');
+            });
+        }
+
+        function showAddFacilityModal() {
+            document.getElementById('addFacilityModal').style.display = 'block';
+        }
+
+        function showBulkPatientUploadModal() {
+            document.getElementById('bulkPatientUploadModal').style.display = 'block';
+        }
+
+        // CSV Upload handlers
+        function dragOverHandler(ev) {
+            ev.preventDefault();
+            document.getElementById('csvUploadZone').classList.add('dragover');
+        }
+
+        function dragLeaveHandler(ev) {
+            ev.preventDefault();
+            document.getElementById('csvUploadZone').classList.remove('dragover');
+        }
+
+        function dropHandler(ev) {
+            ev.preventDefault();
+            document.getElementById('csvUploadZone').classList.remove('dragover');
+            
+            var files = ev.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        }
+
+        function handleFileSelect(event) {
+            var file = event.target.files[0];
+            if (file) {
+                handleFile(file);
+            }
+        }
+
+        function handleFile(file) {
+            if (!file.name.toLowerCase().endsWith('.csv')) {
+                showMessage('Please select a CSV file', 'error');
+                return;
+            }
+
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                var csv = e.target.result;
+                processCsvData(csv);
+            };
+            reader.readAsText(file);
+        }
+
+        function processCsvData(csv) {
+            var lines = csv.split('\n');
+            var headers = lines[0].split(',').map(function(h) { return h.trim(); });
+            
+            if (headers.join(',').toLowerCase() !== 'name,mrn,month,facility') {
+                showMessage('Invalid CSV format. Expected headers: Name,MRN,Month,Facility', 'error');
+                return;
+            }
+
+            var patients = [];
+            for (var i = 1; i < lines.length; i++) {
+                var line = lines[i].trim();
+                if (!line) continue;
+                
+                var cols = line.split(',');
+                if (cols.length >= 4) {
+                    patients.push({
+                        name: cols[0].trim(),
+                        mrn: cols[1].trim(),
+                        month: cols[2].trim(),
+                        facilityName: cols[3].trim()
+                    });
+                }
+            }
+
+            if (patients.length === 0) {
+                showMessage('No valid patient data found in CSV', 'error');
+                return;
+            }
+
+            uploadPatientsBulk(patients);
+        }
+
+        function uploadPatientsBulk(patients) {
+            document.getElementById('uploadProgress').style.display = 'block';
+            document.getElementById('uploadResults').innerHTML = '<p>Processing ' + patients.length + ' patients...</p>';
+
+            apiCall('/api/patients/bulk', {
+                method: 'POST',
+                body: JSON.stringify({ patients: patients })
+            }).then(function(response) {
+                if (response.success) {
+                    var html = '<h5>Upload Results:</h5>';
+                    html += '<p><strong>Successful:</strong> ' + response.successful + '</p>';
+                    html += '<p><strong>Failed:</strong> ' + response.failed.length + '</p>';
+                    
+                    if (response.failed.length > 0) {
+                        html += '<h6>Failed Entries:</h6><ul>';
+                        response.failed.forEach(function(failure) {
+                            html += '<li>' + escapeHtml(failure.name) + ': ' + escapeHtml(failure.error) + '</li>';
+                        });
+                        html += '</ul>';
+                    }
+                    
+                    document.getElementById('uploadResults').innerHTML = html;
+                    
+                    if (response.successful > 0) {
+                        loadPatients(); // Refresh patient list
+                        showMessage(response.message, 'success');
+                    }
+                } else {
+                    showMessage('Upload failed: ' + response.error, 'error');
+                }
+            }).catch(function(error) {
+                showMessage('Upload failed: ' + error.message, 'error');
+            });
+        }
+
+        // Form event listeners
+        function setupFormHandlers() {
+            // Patient forms
+            var addPatientForm = document.getElementById('addPatientForm');
+            if (addPatientForm) {
+                addPatientForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    var formData = {
+                        name: document.getElementById('patientName').value,
+                        mrn: document.getElementById('patientMRN').value,
+                        month: document.getElementById('patientMonth').value,
+                        facility_id: document.getElementById('patientFacility').value
+                    };
+
+                    apiCall('/api/patients', {
+                        method: 'POST',
+                        body: JSON.stringify(formData)
+                    }).then(function(response) {
+                        if (response.success) {
+                            closeModal('addPatientModal');
+                            showMessage('Patient added successfully!', 'success');
+                            loadPatients();
+                            addPatientForm.reset();
+                        } else {
+                            showMessage('Failed to add patient: ' + response.error, 'error');
+                        }
+                    }).catch(function(error) {
+                        showMessage('Failed to add patient: ' + error.message, 'error');
+                    });
+                });
+            }
+
+            // Similar handlers for other forms...
+            var editPatientForm = document.getElementById('editPatientForm');
+            if (editPatientForm) {
+                editPatientForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    var patientId = document.getElementById('editPatientId').value;
+                    var formData = {
+                        name: document.getElementById('editPatientName').value,
+                        mrn: document.getElementById('editPatientMRN').value,
+                        month: document.getElementById('editPatientMonth').value,
+                        facility_id: document.getElementById('editPatientFacility').value
+                    };
+
+                    apiCall('/api/patients/' + patientId, {
+                        method: 'PUT',
+                        body: JSON.stringify(formData)
+                    }).then(function(response) {
+                        if (response.success) {
+                            closeModal('editPatientModal');
+                            showMessage('Patient updated successfully!', 'success');
+                            loadPatients();
+                        } else {
+                            showMessage('Failed to update patient: ' + response.error, 'error');
+                        }
+                    }).catch(function(error) {
+                        showMessage('Failed to update patient: ' + error.message, 'error');
+                    });
+                });
+            }
+
+            // Add similar form handlers for supplies, users, and facilities
+        }
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', function() {
+            setupLoginForm();
+            setupFormHandlers();
+            
+            // Close modals when clicking outside
+            window.addEventListener('click', function(event) {
+                var modals = document.querySelectorAll('.modal');
+                modals.forEach(function(modal) {
+                    if (event.target === modal) {
+                        modal.style.display = 'none';
+                    }
+                });
+            });
+        });
+
+    </script>
+</body>
+</html>
