@@ -647,8 +647,12 @@
                 <div class="flex" style="justify-content: space-between; align-items: center; margin-bottom: 20px;">
                     <h2>📈 Supply Tracking</h2>
                     <div class="flex gap-10">
-                        <button class="btn btn-success admin-only" onclick="exportTrackingReport()" id="exportBtn" style="display: none;">📄 Export Report</button>
-                       
+                        <button class="btn btn-success admin-only" onclick="exportTrackingReport()" id="exportBtn" style="display: none;">
+                            📊 Export All Reports
+                        </button>
+                        <button class="btn btn-warning" onclick="exportIndividualPatientReport()" id="exportIndividualBtn" style="display: none;">
+                            📄 Export Current Patient
+                        </button>
                     </div>
                 </div>
 
@@ -669,6 +673,17 @@
                         </div>
                         <div class="search-box" id="supplySearchContainer" style="display: none;">
                             <input type="text" id="trackingSupplySearch" class="form-control" placeholder="🔍 Search by AR Code or Description..." oninput="filterTrackingTable()">
+                        </div>
+                    </div>
+                    
+                    <div id="exportInfoPanel" class="admin-only" style="display: none; margin-top: 15px; padding: 12px; background: linear-gradient(135deg, #10b981, #059669); color: white; border-radius: 8px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <strong>📊 Enhanced Export Features:</strong> Export comprehensive supply usage reports across all patients with facility and month filtering
+                            </div>
+                            <button class="btn" onclick="exportTrackingReport()" style="background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3);">
+                                🚀 Try Enhanced Export
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -700,8 +715,6 @@
                 <div class="flex gap-20 mb-20">
                     <button class="btn btn-primary" onclick="showAddUserModal()">+ Add User</button>
                     <button class="btn btn-primary" onclick="showAddFacilityModal()">+ Add Facility</button>
-                    <!-- Temporary debug button - remove after testing -->
-                    <button class="btn btn-warning" onclick="testAddUser()">🔧 Test Add User API</button>
                 </div>
 
                 <h3>User Management</h3>
@@ -1075,9 +1088,7 @@
             containerId = containerId || 'loginMessage';
             var container = document.getElementById(containerId);
             
-            // If no specific container provided, try to show in admin panel or create temporary alert
             if (!container && containerId === 'loginMessage') {
-                // Create a temporary alert div in the current panel
                 var activePanel = document.querySelector('.panel.active');
                 if (activePanel) {
                     var alertDiv = document.createElement('div');
@@ -1111,7 +1122,6 @@
                 }
             }
             
-            // Always log to console for debugging
             console.log('Message [' + type + ']:', message);
         }
 
@@ -1257,6 +1267,11 @@
                     break;
                 case 'tracking':
                     loadTrackingPatients();
+                    if (currentUser && currentUser.role === 'admin') {
+                        document.getElementById('exportBtn').style.display = 'block';
+                        document.getElementById('exportInfoPanel').style.display = 'block';
+                    }
+                    document.getElementById('exportIndividualBtn').style.display = currentTrackingPatient ? 'block' : 'none';
                     break;
                 case 'admin':
                     if (currentUser && currentUser.role === 'admin') {
@@ -1266,7 +1281,6 @@
             }
         }
 
-        // FIXED: Properly structured loadDashboardData function
         function loadDashboardData() {
             return apiCall('/api/dashboard/stats').then(function(data) {
                 if (data.success && data.stats) {
@@ -1275,7 +1289,6 @@
                     document.getElementById('totalSupplies').textContent = stats.totalSupplies || 0;
                     document.getElementById('monthlyTracking').textContent = stats.monthlyTracking || 0;
                     
-                    // Backend now returns total units for non-admin users in the totalCost field
                     if (currentUser.role === 'admin') {
                         document.getElementById('totalCost').textContent = '$' + (stats.totalCost || 0).toFixed(2);
                     } else {
@@ -1328,9 +1341,8 @@
             var monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
             if (currentUser && currentUser.role !== 'admin') {
-                // For non-admin users, limit to September 2025 onwards
                 for (var year = 2025; year <= 2027; year++) {
-                    var start = (year === 2025) ? 9 : 1; // Start from September 2025
+                    var start = (year === 2025) ? 9 : 1;
                     var end = 12;
                     
                     for (var month = start; month <= end; month++) {
@@ -1691,7 +1703,6 @@
             });
         }
 
-        // FIXED: Corrected function name reference
         function loadFacilityOptions(selectId) {
             var select = document.getElementById(selectId);
             if (!select) return;
@@ -1763,12 +1774,15 @@
             if (!patientId) {
                 document.getElementById('trackingInterface').style.display = 'none';
                 document.getElementById('supplySearchContainer').style.display = 'none';
+                document.getElementById('exportIndividualBtn').style.display = 'none';
+                currentTrackingPatient = null;
                 return;
             }
 
             currentTrackingPatient = patientId;
             document.getElementById('trackingInterface').style.display = 'block';
             document.getElementById('supplySearchContainer').style.display = 'block';
+            document.getElementById('exportIndividualBtn').style.display = 'block';
             
             var patient = (window.trackingPatients || []).find(function(p) { return p.id == patientId; });
             if (patient) {
@@ -2060,16 +2074,220 @@
             }
         }
 
-        function saveAllTrackingData() {
-            if (!currentTrackingPatient) {
-                showMessage('Please select a patient first', 'info');
-                return;
-            }
-            
-            showMessage('All tracking data is automatically saved as you enter it!', 'success');
+        // ENHANCED EXPORT FUNCTIONS
+        function exportTrackingReport() {
+            showExportModal();
         }
 
-        function exportTrackingReport() {
+        function showExportModal() {
+            if (!document.getElementById('exportReportModal')) {
+                createExportModal();
+            }
+            
+            loadExportFacilityOptions();
+            loadExportMonthOptions();
+            
+            document.getElementById('exportReportModal').style.display = 'block';
+        }
+
+        function createExportModal() {
+            var modalHTML = `
+                <div id="exportReportModal" class="modal">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h3>📄 Export Supply Usage Report</h3>
+                            <span class="close" onclick="closeModal('exportReportModal')">&times;</span>
+                        </div>
+                        
+                        <div style="margin-bottom: 20px; padding: 15px; background: #f0f9ff; border-radius: 8px; border-left: 4px solid #3b82f6;">
+                            <h4 style="margin: 0 0 10px 0; color: #1e40af;">📊 Report Details</h4>
+                            <p style="margin: 0; color: #1e40af;">This report shows all supply usage across patients with detailed breakdown by supply code, including quantity used, costs, and wound diagnosis information.</p>
+                        </div>
+
+                        <form id="exportReportForm">
+                            <div class="form-group">
+                                <label for="exportFacilityFilter">🏥 Facility Filter</label>
+                                <select id="exportFacilityFilter" class="form-control">
+                                    <option value="all">All Facilities</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="exportMonthFilter">📅 Month Filter</label>
+                                <select id="exportMonthFilter" class="form-control">
+                                    <option value="all">All Months</option>
+                                </select>
+                            </div>
+                            
+                            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                                <button type="button" class="btn btn-primary" onclick="generateExportReport()">
+                                    📄 Generate Report
+                                </button>
+                                <button type="button" class="btn" onclick="closeModal('exportReportModal')" style="background: #6b7280; color: white;">
+                                    Cancel
+                                </button>
+                            </div>
+                        </form>
+                        
+                        <div id="exportProgress" style="display: none; margin-top: 20px;">
+                            <div style="background: #f3f4f6; border-radius: 8px; padding: 20px;">
+                                <h4>📊 Generating Report...</h4>
+                                <div id="exportResults"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+        }
+
+        function loadExportFacilityOptions() {
+            var select = document.getElementById('exportFacilityFilter');
+            if (!select) return;
+            
+            select.innerHTML = '<option value="all">All Facilities</option>';
+            
+            if (currentUser.role !== 'admin' && currentUser.facility_id) {
+                var userFacility = facilities.find(function(f) { return f.id == currentUser.facility_id; });
+                if (userFacility) {
+                    var option = document.createElement('option');
+                    option.value = userFacility.id;
+                    option.textContent = userFacility.name;
+                    option.selected = true;
+                    select.appendChild(option);
+                }
+            } else if (currentUser.role === 'admin') {
+                facilities.forEach(function(facility) {
+                    var option = document.createElement('option');
+                    option.value = facility.id;
+                    option.textContent = facility.name;
+                    select.appendChild(option);
+                });
+            }
+        }
+
+        function loadExportMonthOptions() {
+            var select = document.getElementById('exportMonthFilter');
+            if (!select) return;
+            
+            select.innerHTML = '<option value="all">All Months</option>';
+            
+            var months = generateMonthOptions();
+            months.forEach(function(month) {
+                var option = document.createElement('option');
+                option.value = month.value;
+                option.textContent = month.label;
+                select.appendChild(option);
+            });
+        }
+
+        function generateExportReport() {
+            var facilityFilter = document.getElementById('exportFacilityFilter').value;
+            var monthFilter = document.getElementById('exportMonthFilter').value;
+            
+            document.getElementById('exportProgress').style.display = 'block';
+            document.getElementById('exportResults').innerHTML = '<p>🔄 Generating supply usage report...</p>';
+            
+            var generateBtn = document.querySelector('#exportReportForm button[onclick="generateExportReport()"]');
+            var originalText = generateBtn.textContent;
+            generateBtn.disabled = true;
+            generateBtn.textContent = '⏳ Generating...';
+            
+            var params = new URLSearchParams();
+            if (facilityFilter && facilityFilter !== 'all') {
+                params.append('facility_id', facilityFilter);
+            }
+            if (monthFilter && monthFilter !== 'all') {
+                params.append('month', monthFilter);
+            }
+            
+            apiCall('/api/export/supply-report?' + params.toString())
+                .then(function(response) {
+                    if (response.success) {
+                        if (!response.csvData || response.csvData.trim() === '') {
+                            document.getElementById('exportResults').innerHTML = 
+                                '<div class="alert alert-info">ℹ️ No supply usage data found for the selected filters.</div>';
+                            return;
+                        }
+                        
+                        var summary = response.summary || {};
+                        document.getElementById('exportResults').innerHTML = `
+                            <div class="alert alert-success">
+                                <h5>✅ Report Generated Successfully!</h5>
+                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 10px 0;">
+                                    <div><strong>Total Records:</strong> ${summary.totalRecords || 0}</div>
+                                    <div><strong>Unique Supplies:</strong> ${summary.uniqueSupplies || 0}</div>
+                                    <div><strong>Unique Patients:</strong> ${summary.uniquePatients || 0}</div>
+                                    <div><strong>Total Units:</strong> ${summary.totalUnits || 0}</div>
+                                    ${currentUser.role === 'admin' ? `<div><strong>Total Cost:</strong> $${summary.totalCost || '0.00'}</div>` : ''}
+                                </div>
+                                <button class="btn btn-success" onclick="downloadExportReport('${encodeURIComponent(response.csvData)}', '${facilityFilter}', '${monthFilter}')">
+                                    💾 Download CSV Report
+                                </button>
+                            </div>
+                        `;
+                    } else {
+                        document.getElementById('exportResults').innerHTML = 
+                            `<div class="alert alert-error">❌ Export failed: ${response.error}</div>`;
+                    }
+                })
+                .catch(function(error) {
+                    document.getElementById('exportResults').innerHTML = 
+                        `<div class="alert alert-error">❌ Export failed: ${error.message}</div>`;
+                })
+                .finally(function() {
+                    generateBtn.disabled = false;
+                    generateBtn.textContent = originalText;
+                });
+        }
+
+        function downloadExportReport(encodedCsvData, facilityFilter, monthFilter) {
+            try {
+                var csvData = decodeURIComponent(encodedCsvData);
+                
+                var filename = 'supply_usage_report';
+                
+                if (facilityFilter && facilityFilter !== 'all') {
+                    var facility = facilities.find(function(f) { return f.id == facilityFilter; });
+                    if (facility) {
+                        filename += '_' + facility.name.replace(/[^a-zA-Z0-9]/g, '_');
+                    }
+                }
+                
+                if (monthFilter && monthFilter !== 'all') {
+                    filename += '_' + monthFilter.replace('-', '_');
+                }
+                
+                filename += '_' + new Date().toISOString().split('T')[0] + '.csv';
+                
+                var blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
+                var link = document.createElement('a');
+                
+                if (link.download !== undefined) {
+                    var url = URL.createObjectURL(blob);
+                    link.setAttribute('href', url);
+                    link.setAttribute('download', filename);
+                    link.style.visibility = 'hidden';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    
+                    showMessage('Report downloaded successfully!', 'success');
+                    
+                    setTimeout(function() {
+                        closeModal('exportReportModal');
+                    }, 2000);
+                    
+                } else {
+                    showMessage('Download not supported in this browser', 'error');
+                }
+            } catch (error) {
+                showMessage('Failed to download report: ' + error.message, 'error');
+            }
+        }
+
+        function exportIndividualPatientReport() {
             if (!currentTrackingPatient) {
                 showMessage('Please select a patient first', 'info');
                 return;
@@ -2122,12 +2340,12 @@
             if (link.download !== undefined) {
                 var url = URL.createObjectURL(blob);
                 link.setAttribute('href', url);
-                link.setAttribute('download', 'tracking_report_' + patient.name.replace(/[^a-zA-Z0-9]/g, '_') + '_' + patient.month + '.csv');
+                link.setAttribute('download', 'patient_report_' + patient.name.replace(/[^a-zA-Z0-9]/g, '_') + '_' + patient.month + '.csv');
                 link.style.visibility = 'hidden';
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
-                showMessage('Report exported successfully!', 'success');
+                showMessage('Individual patient report exported successfully!', 'success');
             } else {
                 showMessage('Export not supported in this browser', 'error');
             }
@@ -2260,37 +2478,6 @@
 
         function showAddFacilityModal() {
             document.getElementById('addFacilityModal').style.display = 'block';
-        }
-
-        // Temporary debug function - remove after testing
-        function testAddUser() {
-            console.log('Testing Add User API directly...');
-            
-            var testUserData = {
-                name: 'Test User ' + Math.floor(Math.random() * 1000),
-                email: 'testuser' + Math.floor(Math.random() * 1000) + '@test.com',
-                password: 'testpassword123',
-                role: 'user',
-                facility_id: null
-            };
-            
-            console.log('Test data:', { ...testUserData, password: '[HIDDEN]' });
-            
-            apiCall('/api/admin/users', {
-                method: 'POST',
-                body: JSON.stringify(testUserData)
-            }).then(function(response) {
-                console.log('Test API response:', response);
-                if (response.success) {
-                    showMessage('Test user created successfully: ' + testUserData.name, 'success');
-                    loadAdminData();
-                } else {
-                    showMessage('Test failed: ' + (response.error || 'Unknown error'), 'error');
-                }
-            }).catch(function(error) {
-                console.error('Test API error:', error);
-                showMessage('Test API call failed: ' + error.message, 'error');
-            });
         }
 
         function showResetPasswordModal(userId, userName) {
@@ -2545,36 +2732,19 @@
             if (addUserForm) {
                 addUserForm.addEventListener('submit', function(e) {
                     e.preventDefault();
-                    console.log('Add user form submitted');
                     
                     var submitBtn = addUserForm.querySelector('button[type="submit"]');
                     var originalText = submitBtn.textContent;
                     submitBtn.disabled = true;
                     submitBtn.textContent = 'Adding User...';
                     
-                    var nameField = document.getElementById('addUserName');
-                    var emailField = document.getElementById('addUserEmail');
-                    var passwordField = document.getElementById('addUserPassword');
-                    var roleField = document.getElementById('addUserRole');
-                    var facilityField = document.getElementById('addUserFacility');
-
-                    if (!nameField || !emailField || !passwordField || !roleField || !facilityField) {
-                        console.error('Form fields not found');
-                        showMessage('Form error - please try again', 'error');
-                        submitBtn.disabled = false;
-                        submitBtn.textContent = originalText;
-                        return;
-                    }
-
                     var formData = {
-                        name: nameField.value ? nameField.value.trim() : '',
-                        email: emailField.value ? emailField.value.trim() : '',
-                        password: passwordField.value || '',
-                        role: roleField.value || 'user',
-                        facility_id: facilityField.value || null
+                        name: document.getElementById('addUserName').value.trim(),
+                        email: document.getElementById('addUserEmail').value.trim(),
+                        password: document.getElementById('addUserPassword').value,
+                        role: document.getElementById('addUserRole').value,
+                        facility_id: document.getElementById('addUserFacility').value || null
                     };
-
-                    console.log('Submitting user data:', { ...formData, password: '[HIDDEN]' });
 
                     if (!formData.name || !formData.email || !formData.password) {
                         showMessage('Please fill in all required fields', 'error');
@@ -2587,18 +2757,15 @@
                         method: 'POST',
                         body: JSON.stringify(formData)
                     }).then(function(response) {
-                        console.log('Add user response:', response);
                         if (response.success) {
                             closeModal('addUserModal');
                             showMessage('User added successfully!', 'success');
                             addUserForm.reset();
-                            // Reload the entire admin data to refresh everything
                             loadAdminData();
                         } else {
                             showMessage('Failed to add user: ' + (response.error || 'Unknown error'), 'error');
                         }
                     }).catch(function(error) {
-                        console.error('Add user error:', error);
                         showMessage('Failed to add user: ' + error.message, 'error');
                     }).finally(function() {
                         submitBtn.disabled = false;
@@ -2631,7 +2798,6 @@
                             showMessage('Failed to update user: ' + response.error, 'error');
                         }
                     }).catch(function(error) {
-                        console.error('Edit user error:', error);
                         showMessage('Failed to update user: ' + error.message, 'error');
                     });
                 });
@@ -2659,7 +2825,6 @@
                             showMessage('Failed to add facility: ' + response.error, 'error');
                         }
                     }).catch(function(error) {
-                        console.error('Add facility error:', error);
                         showMessage('Failed to add facility: ' + error.message, 'error');
                     });
                 });
@@ -2687,7 +2852,6 @@
                             showMessage('Failed to update facility: ' + response.error, 'error');
                         }
                     }).catch(function(error) {
-                        console.error('Edit facility error:', error);
                         showMessage('Failed to update facility: ' + error.message, 'error');
                     });
                 });
