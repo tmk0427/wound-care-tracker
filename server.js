@@ -115,7 +115,7 @@ async function initializeDatabase() {
             )
         `);
 
-        // Create patients table with MRN uniqueness (not name uniqueness)
+        // Create patients table with MRN uniqueness
         await safeQuery(`
             CREATE TABLE IF NOT EXISTS patients (
                 id SERIAL PRIMARY KEY,
@@ -260,69 +260,21 @@ app.get('/health', async (req, res) => {
     }
 });
 
-// DEBUG ROUTES
-app.get('/api/debug/patients', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const allPatients = await safeQuery(`
-            SELECT p.*, f.name as facility_name 
-            FROM patients p 
-            LEFT JOIN facilities f ON p.facility_id = f.id
-            ORDER BY p.month DESC, p.name
-        `);
-
-        const userInfo = await safeQuery(`
-            SELECT id, name, email, role, facility_id, f.name as facility_name
-            FROM users u
-            LEFT JOIN facilities f ON u.facility_id = f.id
-            WHERE u.role != 'admin'
-        `);
-
-        res.json({ 
-            success: true, 
-            allPatients: allPatients.rows,
-            nonAdminUsers: userInfo.rows,
-            patientCount: allPatients.rows.length
-        });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-app.post('/api/debug/clear-patients', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const trackingResult = await safeQuery('DELETE FROM tracking');
-        const patientsResult = await safeQuery('DELETE FROM patients');
-        
-        res.json({ 
-            success: true, 
-            message: `Cleared ${trackingResult.rowCount} tracking records and ${patientsResult.rowCount} patients`,
-            trackingDeleted: trackingResult.rowCount,
-            patientsDeleted: patientsResult.rowCount
-        });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
 // DASHBOARD
 app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
     try {
-        // Build consistent queries that match the patient filtering logic
         let patientQuery, patientParams = [];
         let trackingQuery, trackingParams = [];
 
         if (req.user.role === 'admin') {
-            // Admin sees all patients
             patientQuery = 'SELECT COUNT(*) as count FROM patients p';
             trackingQuery = 'SELECT COUNT(*) as count FROM tracking t JOIN patients p ON t.patient_id = p.id';
         } else if (req.user.facilityId) {
-            // Non-admin with facility sees only their facility's patients from Sept 2025+
             patientQuery = `SELECT COUNT(*) as count FROM patients p WHERE p.facility_id = $1 AND p.month >= '2025-09'`;
             patientParams = [req.user.facilityId];
             trackingQuery = `SELECT COUNT(*) as count FROM tracking t JOIN patients p ON t.patient_id = p.id WHERE p.facility_id = $1 AND p.month >= '2025-09'`;
             trackingParams = [req.user.facilityId];
         } else {
-            // Non-admin without facility sees nothing
             patientQuery = 'SELECT 0 as count';
             trackingQuery = 'SELECT 0 as count';
         }
@@ -333,7 +285,6 @@ app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
             safeQuery(trackingQuery, trackingParams)
         ]);
 
-        // Calculate total cost for admin, total units for non-admin
         let totalValue;
         if (req.user.role === 'admin') {
             const totalCostResult = await safeQuery(`
@@ -344,7 +295,6 @@ app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
             `);
             totalValue = parseFloat(totalCostResult.rows[0].total_cost) || 0;
         } else {
-            // For non-admin users, calculate total units used
             const totalUnitsResult = await safeQuery(`
                 SELECT COALESCE(SUM(t.quantity), 0) as total_units
                 FROM tracking t
@@ -369,12 +319,7 @@ app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
         res.status(500).json({ 
             success: false, 
             error: 'Failed to load dashboard statistics',
-            stats: {
-                totalPatients: 0,
-                totalSupplies: 0,
-                monthlyTracking: 0,
-                totalCost: 0
-            }
+            stats: { totalPatients: 0, totalSupplies: 0, monthlyTracking: 0, totalCost: 0 }
         });
     }
 });
@@ -583,7 +528,6 @@ app.delete('/api/supplies/:id', authenticateToken, requireAdmin, async (req, res
     try {
         const supplyId = req.params.id;
         
-        // Only allow deletion of custom supplies
         const supply = await safeQuery('SELECT is_custom FROM supplies WHERE id = $1', [supplyId]);
         if (supply.rows.length === 0) {
             return res.status(404).json({ success: false, error: 'Supply not found' });
@@ -658,7 +602,7 @@ app.post('/api/supplies/import', authenticateToken, requireAdmin, upload.single(
             success: true,
             message: `Successfully imported ${imported} supplies. ${errors.length} errors.`,
             imported: imported,
-            errors: errors.slice(0, 10) // Limit error details
+            errors: errors.slice(0, 10)
         });
 
     } catch (error) {
@@ -667,14 +611,10 @@ app.post('/api/supplies/import', authenticateToken, requireAdmin, upload.single(
     }
 });
 
-// PATIENTS - UPDATED WITH MRN UNIQUENESS
+// PATIENTS
 app.get('/api/patients', authenticateToken, async (req, res) => {
     try {
         const { facility_id, month } = req.query;
-        
-        console.log('=== PATIENT QUERY DEBUG ===');
-        console.log('User Role:', req.user.role);
-        console.log('User Facility ID:', req.user.facilityId);
         
         let query = `
             SELECT p.*, f.name as facility_name 
@@ -684,15 +624,12 @@ app.get('/api/patients', authenticateToken, async (req, res) => {
         let params = [];
         let conditions = [];
 
-        // STRICT FILTERING FOR NON-ADMIN USERS
         if (req.user.role !== 'admin') {
             if (req.user.facilityId) {
                 conditions.push('p.facility_id = $' + (params.length + 1));
                 params.push(req.user.facilityId);
-                conditions.push("p.month >= '2025-09'"); // September 2025 onwards only
-                console.log('Non-admin filters applied: facility =', req.user.facilityId, ', month >= 2025-09');
+                conditions.push("p.month >= '2025-09'");
             } else {
-                console.log('User has no facility - returning empty');
                 return res.json({ success: true, patients: [] });
             }
         } else if (facility_id) {
@@ -711,14 +648,7 @@ app.get('/api/patients', authenticateToken, async (req, res) => {
 
         query += ' ORDER BY p.name ASC';
 
-        console.log('Final query:', query);
-        console.log('Query params:', params);
-
         const result = await safeQuery(query, params);
-        
-        console.log('Query result count:', result.rows.length);
-        console.log('=== END DEBUG ===');
-
         res.json({ success: true, patients: result.rows });
 
     } catch (error) {
@@ -735,17 +665,14 @@ app.post('/api/patients', authenticateToken, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Name, month, and facility are required' });
         }
 
-        // Check permission for non-admin users
         if (req.user.role !== 'admin' && req.user.facilityId && req.user.facilityId != facility_id) {
             return res.status(403).json({ success: false, error: 'Cannot add patients to this facility' });
         }
 
-        // Month restriction for non-admin users
         if (req.user.role !== 'admin' && month < '2025-09') {
             return res.status(400).json({ success: false, error: 'Can only add patients for September 2025 onwards' });
         }
 
-        // Check for MRN duplicate
         if (mrn && mrn.trim()) {
             const duplicate = await checkMRNDuplicate(mrn.trim());
             if (duplicate) {
@@ -778,17 +705,14 @@ app.put('/api/patients/:id', authenticateToken, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Name, month, and facility are required' });
         }
 
-        // Check permission for non-admin users
         if (req.user.role !== 'admin' && req.user.facilityId && req.user.facilityId != facility_id) {
             return res.status(403).json({ success: false, error: 'Cannot modify patients from this facility' });
         }
 
-        // Month restriction for non-admin users
         if (req.user.role !== 'admin' && month < '2025-09') {
             return res.status(400).json({ success: false, error: 'Can only modify patients for September 2025 onwards' });
         }
 
-        // Check for MRN duplicate (excluding current patient)
         if (mrn && mrn.trim()) {
             const duplicate = await checkMRNDuplicate(mrn.trim(), parseInt(patientId));
             if (duplicate) {
@@ -820,7 +744,6 @@ app.delete('/api/patients/:id', authenticateToken, async (req, res) => {
     try {
         const patientId = req.params.id;
         
-        // Check if user has permission
         if (req.user.role !== 'admin') {
             const patient = await safeQuery('SELECT facility_id FROM patients WHERE id = $1', [patientId]);
             if (patient.rows.length === 0) {
@@ -844,7 +767,7 @@ app.delete('/api/patients/:id', authenticateToken, async (req, res) => {
     }
 });
 
-// BULK PATIENT UPLOAD - FIXED VERSION with better validation and debugging
+// BULK PATIENT UPLOAD
 app.post('/api/patients/bulk', authenticateToken, async (req, res) => {
     try {
         const { patients } = req.body;
@@ -854,27 +777,19 @@ app.post('/api/patients/bulk', authenticateToken, async (req, res) => {
         }
 
         console.log(`Starting bulk upload for ${patients.length} patients`);
-        console.log('User role:', req.user.role);
-        console.log('User facility ID:', req.user.facilityId);
 
-        // Load facilities for mapping
         const facilitiesResult = await safeQuery('SELECT id, name FROM facilities');
         const facilityMap = {};
         facilitiesResult.rows.forEach(facility => {
-            // Create multiple mappings for case-insensitive and trimmed matching
             const cleanName = facility.name.toLowerCase().trim();
             facilityMap[cleanName] = facility.id;
-            // Also map exact name for debugging
             facilityMap[facility.name] = facility.id;
         });
-
-        console.log('Available facilities:', Object.keys(facilityMap));
 
         const results = { successful: 0, failed: [] };
 
         for (let i = 0; i < patients.length; i++) {
             const patient = patients[i];
-            console.log(`Processing patient ${i + 1}/${patients.length}:`, patient);
             
             try {
                 const name = (patient.name || patient.Name || '').toString().trim();
@@ -882,105 +797,66 @@ app.post('/api/patients/bulk', authenticateToken, async (req, res) => {
                 const month = (patient.month || patient.Month || '').toString().trim();
                 const facilityName = (patient.facilityName || patient.Facility || patient.facility || '').toString().trim();
 
-                console.log(`Parsed data - Name: "${name}", MRN: "${mrn}", Month: "${month}", Facility: "${facilityName}"`);
-
-                // Basic validation
-                if (!name) {
+                if (!name || !month || !facilityName) {
                     results.failed.push({ 
-                        name: 'Row ' + (i + 1), 
-                        error: 'Missing patient name' 
+                        name: name || 'Row ' + (i + 1), 
+                        error: 'Missing required fields (Name, Month, Facility)' 
                     });
-                    console.log('Failed: Missing patient name');
                     continue;
                 }
 
-                if (!month) {
-                    results.failed.push({ 
-                        name: name, 
-                        error: 'Missing month' 
-                    });
-                    console.log('Failed: Missing month');
-                    continue;
-                }
-
-                if (!facilityName) {
-                    results.failed.push({ 
-                        name: name, 
-                        error: 'Missing facility name' 
-                    });
-                    console.log('Failed: Missing facility name');
-                    continue;
-                }
-
-                // Convert MM-YYYY to YYYY-MM format
                 let dbMonth = month;
                 if (month.match(/^\d{2}-\d{4}$/)) {
                     const parts = month.split('-');
                     dbMonth = `${parts[1]}-${parts[0]}`;
-                    console.log(`Converted month from ${month} to ${dbMonth}`);
                 }
 
-                // Month restriction for non-admin users (only check if user is not admin)
                 if (req.user.role !== 'admin' && dbMonth < '2025-09') {
                     results.failed.push({ 
                         name: name, 
                         error: `Month ${dbMonth} is before September 2025 (non-admin restriction)` 
                     });
-                    console.log(`Failed: Month restriction - ${dbMonth} < 2025-09`);
                     continue;
                 }
 
-                // Find facility ID with case-insensitive matching
                 const facilityKey = facilityName.toLowerCase().trim();
                 const facilityId = facilityMap[facilityKey];
-                
-                console.log(`Looking for facility "${facilityKey}", found ID: ${facilityId}`);
                 
                 if (!facilityId) {
                     results.failed.push({ 
                         name: name, 
-                        error: `Facility "${facilityName}" not found. Available: ${Object.keys(facilityMap).join(', ')}` 
+                        error: `Facility "${facilityName}" not found` 
                     });
-                    console.log('Failed: Facility not found');
                     continue;
                 }
 
-                // Permission check for non-admin users
                 if (req.user.role !== 'admin' && req.user.facilityId && req.user.facilityId != facilityId) {
                     results.failed.push({ 
                         name: name, 
                         error: 'No permission to add patients to this facility' 
                     });
-                    console.log('Failed: No permission for facility');
                     continue;
                 }
 
-                // Check for MRN duplicate only if MRN is provided and not empty
                 if (mrn && mrn.length > 0) {
-                    console.log(`Checking MRN duplicate for: "${mrn}"`);
                     const duplicate = await checkMRNDuplicate(mrn);
                     if (duplicate) {
                         results.failed.push({ 
                             name: name, 
                             error: `MRN "${mrn}" already exists for patient "${duplicate.name}"` 
                         });
-                        console.log('Failed: MRN duplicate');
                         continue;
                     }
                 }
 
-                // All validations passed - attempt database insert
-                console.log('All validations passed, inserting into database...');
                 await safeQuery(
                     'INSERT INTO patients (name, mrn, month, facility_id) VALUES ($1, $2, $3, $4)',
                     [name, mrn || null, dbMonth, facilityId]
                 );
 
                 results.successful++;
-                console.log(`Success! Patient "${name}" inserted. Total successful: ${results.successful}`);
 
             } catch (error) {
-                console.error('Database insert error:', error);
                 results.failed.push({ 
                     name: patient.name || patient.Name || ('Row ' + (i + 1)), 
                     error: 'Database error: ' + error.message 
@@ -988,13 +864,11 @@ app.post('/api/patients/bulk', authenticateToken, async (req, res) => {
             }
         }
 
-        console.log(`Bulk upload completed. Successful: ${results.successful}, Failed: ${results.failed.length}`);
-
         res.json({
             success: true,
             message: `Upload completed. ${results.successful} successful, ${results.failed.length} failed.`,
             successful: results.successful,
-            failed: results.failed.slice(0, 20) // Limit to first 20 failures for display
+            failed: results.failed.slice(0, 20)
         });
 
     } catch (error) {
@@ -1008,7 +882,6 @@ app.get('/api/tracking/:patientId', authenticateToken, async (req, res) => {
     try {
         const patientId = req.params.patientId;
         
-        // Check permission
         const patientCheck = await safeQuery('SELECT * FROM patients WHERE id = $1', [patientId]);
         if (patientCheck.rows.length === 0) {
             return res.status(404).json({ success: false, error: 'Patient not found' });
@@ -1042,7 +915,6 @@ app.post('/api/tracking', authenticateToken, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Patient ID, supply ID, and day are required' });
         }
 
-        // Check permission
         const patientCheck = await safeQuery('SELECT * FROM patients WHERE id = $1', [patientId]);
         if (patientCheck.rows.length === 0) {
             return res.status(404).json({ success: false, error: 'Patient not found' });
@@ -1064,6 +936,149 @@ app.post('/api/tracking', authenticateToken, async (req, res) => {
         res.json({ success: true, message: 'Tracking data saved successfully' });
     } catch (error) {
         res.status(500).json({ success: false, error: 'Failed to save tracking data' });
+    }
+});
+
+// ENHANCED EXPORT REPORT
+app.get('/api/export/supply-report', authenticateToken, async (req, res) => {
+    try {
+        const { facility_id, month } = req.query;
+        
+        let conditions = ['t.quantity > 0'];
+        let params = [];
+        
+        if (req.user.role !== 'admin') {
+            if (req.user.facilityId) {
+                conditions.push('p.facility_id = $' + (params.length + 1));
+                params.push(req.user.facilityId);
+                conditions.push("p.month >= '2025-09'");
+            } else {
+                return res.status(403).json({ success: false, error: 'No facility access' });
+            }
+        }
+        
+        if (facility_id && facility_id !== 'all') {
+            if (req.user.role !== 'admin' && req.user.facilityId && req.user.facilityId != facility_id) {
+                return res.status(403).json({ success: false, error: 'No access to this facility' });
+            }
+            conditions.push('p.facility_id = $' + (params.length + 1));
+            params.push(facility_id);
+        }
+        
+        if (month && month !== 'all') {
+            conditions.push('p.month = $' + (params.length + 1));
+            params.push(month);
+        }
+
+        const query = `
+            SELECT 
+                s.code,
+                s.description,
+                s.hcpcs,
+                s.cost,
+                p.name as patient_name,
+                p.mrn,
+                p.month,
+                f.name as facility_name,
+                t.day_of_month,
+                t.quantity,
+                t.wound_dx,
+                (t.quantity * s.cost) as total_cost
+            FROM tracking t
+            JOIN supplies s ON t.supply_id = s.id
+            JOIN patients p ON t.patient_id = p.id
+            JOIN facilities f ON p.facility_id = f.id
+            WHERE ${conditions.join(' AND ')}
+            ORDER BY s.code ASC, p.name ASC, t.day_of_month ASC
+        `;
+
+        const result = await safeQuery(query, params);
+        
+        if (result.rows.length === 0) {
+            return res.json({
+                success: true,
+                message: 'No supply usage data found for the selected criteria',
+                csvData: ''
+            });
+        }
+
+        const groupedData = {};
+        result.rows.forEach(row => {
+            const key = row.code;
+            if (!groupedData[key]) {
+                groupedData[key] = {
+                    supply: {
+                        code: row.code,
+                        description: row.description,
+                        hcpcs: row.hcpcs,
+                        cost: parseFloat(row.cost || 0)
+                    },
+                    usage: []
+                };
+            }
+            groupedData[key].usage.push(row);
+        });
+
+        let csvContent = 'Supply Code,Supply Description,HCPCS,Unit Cost,Patient Name,MRN,Month,Facility,Day,Quantity,Total Cost,Wound DX\n';
+        
+        const escapeCsv = (val) => {
+            if (!val && val !== 0) return '';
+            val = String(val);
+            if (val.includes(',') || val.includes('"') || val.includes('\n')) {
+                val = '"' + val.replace(/"/g, '""') + '"';
+            }
+            return val;
+        };
+
+        Object.keys(groupedData)
+            .sort((a, b) => parseInt(a) - parseInt(b))
+            .forEach(code => {
+                const supply = groupedData[code].supply;
+                const usageData = groupedData[code].usage;
+                
+                usageData.forEach(usage => {
+                    const row = [
+                        escapeCsv(supply.code),
+                        escapeCsv(supply.description),
+                        escapeCsv(supply.hcpcs || 'N/A'),
+                        supply.cost.toFixed(2),
+                        escapeCsv(usage.patient_name),
+                        escapeCsv(usage.mrn || 'N/A'),
+                        escapeCsv(usage.month),
+                        escapeCsv(usage.facility_name),
+                        usage.day_of_month,
+                        usage.quantity,
+                        parseFloat(usage.total_cost || 0).toFixed(2),
+                        escapeCsv(usage.wound_dx || '')
+                    ].join(',');
+                    
+                    csvContent += row + '\n';
+                });
+            });
+
+        const totalUnits = result.rows.reduce((sum, row) => sum + parseInt(row.quantity || 0), 0);
+        const totalCost = result.rows.reduce((sum, row) => sum + parseFloat(row.total_cost || 0), 0);
+        const uniqueSupplies = Object.keys(groupedData).length;
+        const uniquePatients = [...new Set(result.rows.map(row => row.patient_name))].length;
+        
+        res.json({
+            success: true,
+            csvData: csvContent,
+            summary: {
+                totalRecords: result.rows.length,
+                uniqueSupplies: uniqueSupplies,
+                uniquePatients: uniquePatients,
+                totalUnits: totalUnits,
+                totalCost: totalCost.toFixed(2)
+            }
+        });
+
+    } catch (error) {
+        console.error('Export error:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to generate export report: ' + error.message 
+        });
     }
 });
 
@@ -1225,7 +1240,6 @@ app.use((err, req, res, next) => {
     res.status(500).json({ success: false, error: 'Internal server error' });
 });
 
-// 404 handler
 app.use((req, res) => {
     res.status(404).json({ error: 'Route not found' });
 });
@@ -1242,7 +1256,7 @@ async function startServer() {
             console.log(`Server running on port ${PORT}`);
             console.log('Default credentials: admin@system.com / admin123');
             console.log('MRN uniqueness validation enabled');
-            console.log('Bulk upload debugging enabled');
+            console.log('Enhanced export reporting enabled');
             console.log('================================');
         });
     } catch (error) {
