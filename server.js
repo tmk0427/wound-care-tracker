@@ -52,6 +52,24 @@ async function safeQuery(query, params = []) {
     }
 }
 
+// Helper function to check for MRN duplicates
+async function checkMRNDuplicate(mrn, excludePatientId = null) {
+    if (!mrn || mrn.trim() === '') {
+        return false; // Empty MRNs are allowed
+    }
+    
+    let query = 'SELECT id, name FROM patients WHERE TRIM(mrn) = TRIM($1)';
+    let params = [mrn];
+    
+    if (excludePatientId) {
+        query += ' AND id != $2';
+        params.push(excludePatientId);
+    }
+    
+    const result = await safeQuery(query, params);
+    return result.rows.length > 0 ? result.rows[0] : false;
+}
+
 // Database initialization
 async function initializeDatabase() {
     try {
@@ -201,24 +219,6 @@ async function initializeDefaultData() {
         console.error('Failed to initialize default data:', error);
         throw error;
     }
-}
-
-// Helper function to check for MRN duplicates
-async function checkMRNDuplicate(mrn, excludePatientId = null) {
-    if (!mrn || mrn.trim() === '') {
-        return false; // Empty MRNs are allowed
-    }
-    
-    let query = 'SELECT id, name FROM patients WHERE TRIM(mrn) = TRIM($1)';
-    let params = [mrn];
-    
-    if (excludePatientId) {
-        query += ' AND id != $2';
-        params.push(excludePatientId);
-    }
-    
-    const result = await safeQuery(query, params);
-    return result.rows.length > 0 ? result.rows[0] : false;
 }
 
 // AUTHENTICATION MIDDLEWARE
@@ -844,7 +844,7 @@ app.delete('/api/patients/:id', authenticateToken, async (req, res) => {
     }
 });
 
-// BULK PATIENT UPLOAD - UPDATED WITH MRN UNIQUENESS CHECK
+// BULK PATIENT UPLOAD - FIXED VERSION with better validation and debugging
 app.post('/api/patients/bulk', authenticateToken, async (req, res) => {
     try {
         const { patients } = req.body;
@@ -853,52 +853,95 @@ app.post('/api/patients/bulk', authenticateToken, async (req, res) => {
             return res.status(400).json({ success: false, error: 'No patient data provided' });
         }
 
+        console.log(`Starting bulk upload for ${patients.length} patients`);
+        console.log('User role:', req.user.role);
+        console.log('User facility ID:', req.user.facilityId);
+
         // Load facilities for mapping
         const facilitiesResult = await safeQuery('SELECT id, name FROM facilities');
         const facilityMap = {};
         facilitiesResult.rows.forEach(facility => {
-            facilityMap[facility.name.toLowerCase()] = facility.id;
+            // Create multiple mappings for case-insensitive and trimmed matching
+            const cleanName = facility.name.toLowerCase().trim();
+            facilityMap[cleanName] = facility.id;
+            // Also map exact name for debugging
+            facilityMap[facility.name] = facility.id;
         });
+
+        console.log('Available facilities:', Object.keys(facilityMap));
 
         const results = { successful: 0, failed: [] };
 
-        for (const patient of patients) {
+        for (let i = 0; i < patients.length; i++) {
+            const patient = patients[i];
+            console.log(`Processing patient ${i + 1}/${patients.length}:`, patient);
+            
             try {
-                const name = (patient.name || '').toString().trim();
-                const mrn = (patient.mrn || '').toString().trim();
-                const month = (patient.month || '').toString().trim();
-                const facilityName = (patient.facilityName || '').toString().trim();
+                const name = (patient.name || patient.Name || '').toString().trim();
+                const mrn = (patient.mrn || patient.MRN || '').toString().trim();
+                const month = (patient.month || patient.Month || '').toString().trim();
+                const facilityName = (patient.facilityName || patient.Facility || patient.facility || '').toString().trim();
 
-                if (!name || !month || !facilityName) {
+                console.log(`Parsed data - Name: "${name}", MRN: "${mrn}", Month: "${month}", Facility: "${facilityName}"`);
+
+                // Basic validation
+                if (!name) {
                     results.failed.push({ 
-                        name: name || 'Unknown', 
-                        error: 'Missing required fields (Name, Month, Facility)' 
+                        name: 'Row ' + (i + 1), 
+                        error: 'Missing patient name' 
                     });
+                    console.log('Failed: Missing patient name');
                     continue;
                 }
 
-                // Convert MM-YYYY to YYYY-MM
+                if (!month) {
+                    results.failed.push({ 
+                        name: name, 
+                        error: 'Missing month' 
+                    });
+                    console.log('Failed: Missing month');
+                    continue;
+                }
+
+                if (!facilityName) {
+                    results.failed.push({ 
+                        name: name, 
+                        error: 'Missing facility name' 
+                    });
+                    console.log('Failed: Missing facility name');
+                    continue;
+                }
+
+                // Convert MM-YYYY to YYYY-MM format
                 let dbMonth = month;
                 if (month.match(/^\d{2}-\d{4}$/)) {
                     const parts = month.split('-');
                     dbMonth = `${parts[1]}-${parts[0]}`;
+                    console.log(`Converted month from ${month} to ${dbMonth}`);
                 }
 
-                // Month restriction for non-admin users
+                // Month restriction for non-admin users (only check if user is not admin)
                 if (req.user.role !== 'admin' && dbMonth < '2025-09') {
                     results.failed.push({ 
                         name: name, 
-                        error: 'Can only add patients for September 2025 onwards' 
+                        error: `Month ${dbMonth} is before September 2025 (non-admin restriction)` 
                     });
+                    console.log(`Failed: Month restriction - ${dbMonth} < 2025-09`);
                     continue;
                 }
 
-                const facilityId = facilityMap[facilityName.toLowerCase()];
+                // Find facility ID with case-insensitive matching
+                const facilityKey = facilityName.toLowerCase().trim();
+                const facilityId = facilityMap[facilityKey];
+                
+                console.log(`Looking for facility "${facilityKey}", found ID: ${facilityId}`);
+                
                 if (!facilityId) {
                     results.failed.push({ 
                         name: name, 
-                        error: `Facility "${facilityName}" not found` 
+                        error: `Facility "${facilityName}" not found. Available: ${Object.keys(facilityMap).join(', ')}` 
                     });
+                    console.log('Failed: Facility not found');
                     continue;
                 }
 
@@ -908,46 +951,55 @@ app.post('/api/patients/bulk', authenticateToken, async (req, res) => {
                         name: name, 
                         error: 'No permission to add patients to this facility' 
                     });
+                    console.log('Failed: No permission for facility');
                     continue;
                 }
 
-                // Check for MRN duplicate
-                if (mrn) {
+                // Check for MRN duplicate only if MRN is provided and not empty
+                if (mrn && mrn.length > 0) {
+                    console.log(`Checking MRN duplicate for: "${mrn}"`);
                     const duplicate = await checkMRNDuplicate(mrn);
                     if (duplicate) {
                         results.failed.push({ 
                             name: name, 
                             error: `MRN "${mrn}" already exists for patient "${duplicate.name}"` 
                         });
+                        console.log('Failed: MRN duplicate');
                         continue;
                     }
                 }
 
+                // All validations passed - attempt database insert
+                console.log('All validations passed, inserting into database...');
                 await safeQuery(
                     'INSERT INTO patients (name, mrn, month, facility_id) VALUES ($1, $2, $3, $4)',
                     [name, mrn || null, dbMonth, facilityId]
                 );
 
                 results.successful++;
+                console.log(`Success! Patient "${name}" inserted. Total successful: ${results.successful}`);
 
             } catch (error) {
+                console.error('Database insert error:', error);
                 results.failed.push({ 
-                    name: patient.name || 'Unknown', 
-                    error: error.message 
+                    name: patient.name || patient.Name || ('Row ' + (i + 1)), 
+                    error: 'Database error: ' + error.message 
                 });
             }
         }
+
+        console.log(`Bulk upload completed. Successful: ${results.successful}, Failed: ${results.failed.length}`);
 
         res.json({
             success: true,
             message: `Upload completed. ${results.successful} successful, ${results.failed.length} failed.`,
             successful: results.successful,
-            failed: results.failed
+            failed: results.failed.slice(0, 20) // Limit to first 20 failures for display
         });
 
     } catch (error) {
         console.error('Bulk upload error:', error);
-        res.status(500).json({ success: false, error: 'Server error during bulk upload' });
+        res.status(500).json({ success: false, error: 'Server error during bulk upload: ' + error.message });
     }
 });
 
@@ -1190,6 +1242,7 @@ async function startServer() {
             console.log(`Server running on port ${PORT}`);
             console.log('Default credentials: admin@system.com / admin123');
             console.log('MRN uniqueness validation enabled');
+            console.log('Bulk upload debugging enabled');
             console.log('================================');
         });
     } catch (error) {
