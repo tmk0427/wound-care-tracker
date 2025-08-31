@@ -97,7 +97,7 @@ async function initializeDatabase() {
             )
         `);
 
-        // Create patients table
+        // Create patients table with MRN uniqueness (not name uniqueness)
         await safeQuery(`
             CREATE TABLE IF NOT EXISTS patients (
                 id SERIAL PRIMARY KEY,
@@ -110,29 +110,17 @@ async function initializeDatabase() {
             )
         `);
 
-        // Drop old unique constraint if it exists and add new MRN-based constraint
+        // Remove old unique constraint on (name, month, facility_id) if it exists
         await safeQuery(`
-            DO $ 
-            BEGIN
-                -- Drop old constraint if exists
-                IF EXISTS (
-                    SELECT 1 FROM information_schema.table_constraints 
-                    WHERE constraint_name = 'patients_name_month_facility_id_key'
-                    AND table_name = 'patients'
-                ) THEN
-                    ALTER TABLE patients DROP CONSTRAINT patients_name_month_facility_id_key;
-                END IF;
-                
-                -- Add new unique constraint for MRN per facility (only when MRN is not null)
-                IF NOT EXISTS (
-                    SELECT 1 FROM information_schema.table_constraints 
-                    WHERE constraint_name = 'patients_mrn_facility_unique'
-                    AND table_name = 'patients'
-                ) THEN
-                    CREATE UNIQUE INDEX patients_mrn_facility_unique ON patients (mrn, facility_id) WHERE mrn IS NOT NULL AND mrn != '';
-                END IF;
-            END $;
-        `);
+            ALTER TABLE patients DROP CONSTRAINT IF EXISTS patients_name_month_facility_id_key
+        `).catch(e => console.log('Old constraint already removed or never existed'));
+
+        // Add unique constraint on MRN (only when MRN is not null and not empty)
+        await safeQuery(`
+            CREATE UNIQUE INDEX IF NOT EXISTS patients_mrn_unique 
+            ON patients(mrn) 
+            WHERE mrn IS NOT NULL AND TRIM(mrn) != ''
+        `).catch(e => console.log('MRN unique index already exists'));
 
         // Create tracking table
         await safeQuery(`
@@ -215,6 +203,24 @@ async function initializeDefaultData() {
     }
 }
 
+// Helper function to check for MRN duplicates
+async function checkMRNDuplicate(mrn, excludePatientId = null) {
+    if (!mrn || mrn.trim() === '') {
+        return false; // Empty MRNs are allowed
+    }
+    
+    let query = 'SELECT id, name FROM patients WHERE TRIM(mrn) = TRIM($1)';
+    let params = [mrn];
+    
+    if (excludePatientId) {
+        query += ' AND id != $2';
+        params.push(excludePatientId);
+    }
+    
+    const result = await safeQuery(query, params);
+    return result.rows.length > 0 ? result.rows[0] : false;
+}
+
 // AUTHENTICATION MIDDLEWARE
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
@@ -242,7 +248,7 @@ const requireAdmin = (req, res, next) => {
 
 // BASIC ROUTES
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 app.get('/health', async (req, res) => {
@@ -661,7 +667,7 @@ app.post('/api/supplies/import', authenticateToken, requireAdmin, upload.single(
     }
 });
 
-// PATIENTS - FIXED WITH STRICT FILTERING
+// PATIENTS - UPDATED WITH MRN UNIQUENESS
 app.get('/api/patients', authenticateToken, async (req, res) => {
     try {
         const { facility_id, month } = req.query;
@@ -739,17 +745,13 @@ app.post('/api/patients', authenticateToken, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Can only add patients for September 2025 onwards' });
         }
 
-        // PRIMARY CHECK: MRN uniqueness within facility (if MRN provided)
+        // Check for MRN duplicate
         if (mrn && mrn.trim()) {
-            const existingMrn = await safeQuery(
-                'SELECT id, name FROM patients WHERE mrn = $1 AND facility_id = $2',
-                [mrn.trim(), facility_id]
-            );
-            
-            if (existingMrn.rows.length > 0) {
+            const duplicate = await checkMRNDuplicate(mrn.trim());
+            if (duplicate) {
                 return res.status(400).json({ 
                     success: false, 
-                    error: `MRN "${mrn.trim()}" already exists for patient "${existingMrn.rows[0].name}" in this facility` 
+                    error: `MRN "${mrn.trim()}" already exists for patient "${duplicate.name}"` 
                 });
             }
         }
@@ -762,10 +764,6 @@ app.post('/api/patients', authenticateToken, async (req, res) => {
         res.json({ success: true, patient: result.rows[0] });
 
     } catch (error) {
-        // Override the old constraint error message since we're handling MRN validation manually
-        if (error.code === '23505') {
-            return res.status(400).json({ success: false, error: 'Unable to create patient - data conflict detected' });
-        }
         console.error('Error creating patient:', error);
         res.status(500).json({ success: false, error: 'Failed to create patient' });
     }
@@ -790,17 +788,13 @@ app.put('/api/patients/:id', authenticateToken, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Can only modify patients for September 2025 onwards' });
         }
 
-        // Check for duplicate MRN in the same facility if MRN is provided (excluding current patient)
+        // Check for MRN duplicate (excluding current patient)
         if (mrn && mrn.trim()) {
-            const existingPatient = await safeQuery(
-                'SELECT id, name FROM patients WHERE mrn = $1 AND facility_id = $2 AND id != $3',
-                [mrn.trim(), facility_id, patientId]
-            );
-            
-            if (existingPatient.rows.length > 0) {
+            const duplicate = await checkMRNDuplicate(mrn.trim(), parseInt(patientId));
+            if (duplicate) {
                 return res.status(400).json({ 
                     success: false, 
-                    error: `MRN "${mrn.trim()}" already exists for patient "${existingPatient.rows[0].name}" in this facility` 
+                    error: `MRN "${mrn.trim()}" already exists for patient "${duplicate.name}"` 
                 });
             }
         }
@@ -817,9 +811,6 @@ app.put('/api/patients/:id', authenticateToken, async (req, res) => {
         res.json({ success: true, patient: result.rows[0] });
 
     } catch (error) {
-        if (error.code === '23505' && error.constraint === 'patients_mrn_facility_unique') {
-            return res.status(400).json({ success: false, error: 'MRN already exists in this facility' });
-        }
         console.error('Error updating patient:', error);
         res.status(500).json({ success: false, error: 'Failed to update patient' });
     }
@@ -853,7 +844,7 @@ app.delete('/api/patients/:id', authenticateToken, async (req, res) => {
     }
 });
 
-// BULK PATIENT UPLOAD - FIXED TO HANDLE JSON DATA
+// BULK PATIENT UPLOAD - UPDATED WITH MRN UNIQUENESS CHECK
 app.post('/api/patients/bulk', authenticateToken, async (req, res) => {
     try {
         const { patients } = req.body;
@@ -920,17 +911,13 @@ app.post('/api/patients/bulk', authenticateToken, async (req, res) => {
                     continue;
                 }
 
-                // PRIMARY CHECK: MRN uniqueness within facility (if MRN provided)
-                if (mrn && mrn.trim()) {
-                    const existingMrn = await safeQuery(
-                        'SELECT id, name FROM patients WHERE mrn = $1 AND facility_id = $2',
-                        [mrn.trim(), facilityId]
-                    );
-                    
-                    if (existingMrn.rows.length > 0) {
+                // Check for MRN duplicate
+                if (mrn) {
+                    const duplicate = await checkMRNDuplicate(mrn);
+                    if (duplicate) {
                         results.failed.push({ 
                             name: name, 
-                            error: `MRN "${mrn.trim()}" already exists for patient "${existingMrn.rows[0].name}"` 
+                            error: `MRN "${mrn}" already exists for patient "${duplicate.name}"` 
                         });
                         continue;
                     }
@@ -938,7 +925,7 @@ app.post('/api/patients/bulk', authenticateToken, async (req, res) => {
 
                 await safeQuery(
                     'INSERT INTO patients (name, mrn, month, facility_id) VALUES ($1, $2, $3, $4)',
-                    [name, mrn && mrn.trim() ? mrn.trim() : null, dbMonth, facilityId]
+                    [name, mrn || null, dbMonth, facilityId]
                 );
 
                 results.successful++;
@@ -1202,6 +1189,7 @@ async function startServer() {
             console.log('================================');
             console.log(`Server running on port ${PORT}`);
             console.log('Default credentials: admin@system.com / admin123');
+            console.log('MRN uniqueness validation enabled');
             console.log('================================');
         });
     } catch (error) {
