@@ -650,7 +650,7 @@
                         <button class="btn btn-success admin-only" onclick="exportTrackingReport()" id="exportBtn" style="display: none;">
                             📊 Export All Reports
                         </button>
-                        <button class="btn btn-warning" onclick="exportIndividualPatientReport()" id="exportIndividualBtn" style="display: none;">
+                        <button class="btn btn-warning admin-only" onclick="exportIndividualPatientReport()" id="exportIndividualBtn" style="display: none;">
                             📄 Export Current Patient
                         </button>
                     </div>
@@ -1270,8 +1270,8 @@
                     if (currentUser && currentUser.role === 'admin') {
                         document.getElementById('exportBtn').style.display = 'block';
                         document.getElementById('exportInfoPanel').style.display = 'block';
+                        document.getElementById('exportIndividualBtn').style.display = currentTrackingPatient ? 'block' : 'none';
                     }
-                    document.getElementById('exportIndividualBtn').style.display = currentTrackingPatient ? 'block' : 'none';
                     break;
                 case 'admin':
                     if (currentUser && currentUser.role === 'admin') {
@@ -1774,7 +1774,9 @@
             if (!patientId) {
                 document.getElementById('trackingInterface').style.display = 'none';
                 document.getElementById('supplySearchContainer').style.display = 'none';
-                document.getElementById('exportIndividualBtn').style.display = 'none';
+                if (currentUser.role === 'admin') {
+                    document.getElementById('exportIndividualBtn').style.display = 'none';
+                }
                 currentTrackingPatient = null;
                 return;
             }
@@ -1782,7 +1784,9 @@
             currentTrackingPatient = patientId;
             document.getElementById('trackingInterface').style.display = 'block';
             document.getElementById('supplySearchContainer').style.display = 'block';
-            document.getElementById('exportIndividualBtn').style.display = 'block';
+            if (currentUser.role === 'admin') {
+                document.getElementById('exportIndividualBtn').style.display = 'block';
+            }
             
             var patient = (window.trackingPatients || []).find(function(p) { return p.id == patientId; });
             if (patient) {
