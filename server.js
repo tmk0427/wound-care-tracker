@@ -106,9 +106,32 @@ async function initializeDatabase() {
                 mrn VARCHAR(50),
                 facility_id INTEGER NOT NULL REFERENCES facilities(id) ON DELETE CASCADE,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(name, month, facility_id)
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             )
+        `);
+
+        // Drop old unique constraint if it exists and add new MRN-based constraint
+        await safeQuery(`
+            DO $ 
+            BEGIN
+                -- Drop old constraint if exists
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.table_constraints 
+                    WHERE constraint_name = 'patients_name_month_facility_id_key'
+                    AND table_name = 'patients'
+                ) THEN
+                    ALTER TABLE patients DROP CONSTRAINT patients_name_month_facility_id_key;
+                END IF;
+                
+                -- Add new unique constraint for MRN per facility (only when MRN is not null)
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.table_constraints 
+                    WHERE constraint_name = 'patients_mrn_facility_unique'
+                    AND table_name = 'patients'
+                ) THEN
+                    CREATE UNIQUE INDEX patients_mrn_facility_unique ON patients (mrn, facility_id) WHERE mrn IS NOT NULL AND mrn != '';
+                END IF;
+            END $;
         `);
 
         // Create tracking table
@@ -716,6 +739,21 @@ app.post('/api/patients', authenticateToken, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Can only add patients for September 2025 onwards' });
         }
 
+        // Check for duplicate MRN in the same facility if MRN is provided
+        if (mrn && mrn.trim()) {
+            const existingPatient = await safeQuery(
+                'SELECT id, name FROM patients WHERE mrn = $1 AND facility_id = $2',
+                [mrn.trim(), facility_id]
+            );
+            
+            if (existingPatient.rows.length > 0) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: `MRN "${mrn.trim()}" already exists for patient "${existingPatient.rows[0].name}" in this facility` 
+                });
+            }
+        }
+
         const result = await safeQuery(
             'INSERT INTO patients (name, month, mrn, facility_id) VALUES ($1, $2, $3, $4) RETURNING *',
             [name, month, mrn ? mrn.trim() : null, facility_id]
@@ -724,9 +762,10 @@ app.post('/api/patients', authenticateToken, async (req, res) => {
         res.json({ success: true, patient: result.rows[0] });
 
     } catch (error) {
-        if (error.code === '23505') {
-            return res.status(400).json({ success: false, error: 'Patient already exists for this month and facility' });
+        if (error.code === '23505' && error.constraint === 'patients_mrn_facility_unique') {
+            return res.status(400).json({ success: false, error: 'MRN already exists in this facility' });
         }
+        console.error('Error creating patient:', error);
         res.status(500).json({ success: false, error: 'Failed to create patient' });
     }
 });
@@ -750,6 +789,21 @@ app.put('/api/patients/:id', authenticateToken, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Can only modify patients for September 2025 onwards' });
         }
 
+        // Check for duplicate MRN in the same facility if MRN is provided (excluding current patient)
+        if (mrn && mrn.trim()) {
+            const existingPatient = await safeQuery(
+                'SELECT id, name FROM patients WHERE mrn = $1 AND facility_id = $2 AND id != $3',
+                [mrn.trim(), facility_id, patientId]
+            );
+            
+            if (existingPatient.rows.length > 0) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: `MRN "${mrn.trim()}" already exists for patient "${existingPatient.rows[0].name}" in this facility` 
+                });
+            }
+        }
+
         const result = await safeQuery(
             'UPDATE patients SET name = $1, month = $2, mrn = $3, facility_id = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5 RETURNING *',
             [name, month, mrn ? mrn.trim() : null, facility_id, patientId]
@@ -762,9 +816,10 @@ app.put('/api/patients/:id', authenticateToken, async (req, res) => {
         res.json({ success: true, patient: result.rows[0] });
 
     } catch (error) {
-        if (error.code === '23505') {
-            return res.status(400).json({ success: false, error: 'Patient already exists for this month and facility' });
+        if (error.code === '23505' && error.constraint === 'patients_mrn_facility_unique') {
+            return res.status(400).json({ success: false, error: 'MRN already exists in this facility' });
         }
+        console.error('Error updating patient:', error);
         res.status(500).json({ success: false, error: 'Failed to update patient' });
     }
 });
@@ -864,9 +919,25 @@ app.post('/api/patients/bulk', authenticateToken, async (req, res) => {
                     continue;
                 }
 
+                // Check for duplicate MRN in the same facility if MRN is provided
+                if (mrn && mrn.trim()) {
+                    const existingPatient = await safeQuery(
+                        'SELECT id, name FROM patients WHERE mrn = $1 AND facility_id = $2',
+                        [mrn.trim(), facilityId]
+                    );
+                    
+                    if (existingPatient.rows.length > 0) {
+                        results.failed.push({ 
+                            name: name, 
+                            error: `MRN "${mrn.trim()}" already exists for patient "${existingPatient.rows[0].name}"` 
+                        });
+                        continue;
+                    }
+                }
+
                 await safeQuery(
                     'INSERT INTO patients (name, mrn, month, facility_id) VALUES ($1, $2, $3, $4)',
-                    [name, mrn || null, dbMonth, facilityId]
+                    [name, mrn && mrn.trim() ? mrn.trim() : null, dbMonth, facilityId]
                 );
 
                 results.successful++;
