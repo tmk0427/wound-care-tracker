@@ -739,17 +739,17 @@ app.post('/api/patients', authenticateToken, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Can only add patients for September 2025 onwards' });
         }
 
-        // Check for duplicate MRN in the same facility if MRN is provided
+        // PRIMARY CHECK: MRN uniqueness within facility (if MRN provided)
         if (mrn && mrn.trim()) {
-            const existingPatient = await safeQuery(
+            const existingMrn = await safeQuery(
                 'SELECT id, name FROM patients WHERE mrn = $1 AND facility_id = $2',
                 [mrn.trim(), facility_id]
             );
             
-            if (existingPatient.rows.length > 0) {
+            if (existingMrn.rows.length > 0) {
                 return res.status(400).json({ 
                     success: false, 
-                    error: `MRN "${mrn.trim()}" already exists for patient "${existingPatient.rows[0].name}" in this facility` 
+                    error: `MRN "${mrn.trim()}" already exists for patient "${existingMrn.rows[0].name}" in this facility` 
                 });
             }
         }
@@ -762,8 +762,9 @@ app.post('/api/patients', authenticateToken, async (req, res) => {
         res.json({ success: true, patient: result.rows[0] });
 
     } catch (error) {
-        if (error.code === '23505' && error.constraint === 'patients_mrn_facility_unique') {
-            return res.status(400).json({ success: false, error: 'MRN already exists in this facility' });
+        // Override the old constraint error message since we're handling MRN validation manually
+        if (error.code === '23505') {
+            return res.status(400).json({ success: false, error: 'Unable to create patient - data conflict detected' });
         }
         console.error('Error creating patient:', error);
         res.status(500).json({ success: false, error: 'Failed to create patient' });
@@ -919,17 +920,17 @@ app.post('/api/patients/bulk', authenticateToken, async (req, res) => {
                     continue;
                 }
 
-                // Check for duplicate MRN in the same facility if MRN is provided
+                // PRIMARY CHECK: MRN uniqueness within facility (if MRN provided)
                 if (mrn && mrn.trim()) {
-                    const existingPatient = await safeQuery(
+                    const existingMrn = await safeQuery(
                         'SELECT id, name FROM patients WHERE mrn = $1 AND facility_id = $2',
                         [mrn.trim(), facilityId]
                     );
                     
-                    if (existingPatient.rows.length > 0) {
+                    if (existingMrn.rows.length > 0) {
                         results.failed.push({ 
                             name: name, 
-                            error: `MRN "${mrn.trim()}" already exists for patient "${existingPatient.rows[0].name}"` 
+                            error: `MRN "${mrn.trim()}" already exists for patient "${existingMrn.rows[0].name}"` 
                         });
                         continue;
                     }
