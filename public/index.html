@@ -676,19 +676,7 @@
                         </div>
                     </div>
                     
-                    <div id="exportInfoPanel" class="admin-only" style="display: none; margin-top: 15px; padding: 12px; background: linear-gradient(135deg, #10b981, #059669); color: white; border-radius: 8px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <div>
-                                <strong>📊 Enhanced Export Features:</strong> Export comprehensive supply usage reports across all patients with facility and month filtering
-                            </div>
-                            <button class="btn" onclick="showExportModal()" style="background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3);">
-                                🚀 Try Enhanced Export
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="trackingInterface" style="display: none;">
+                    <div id="trackingInterface" style="display: none;">
                     <div id="patientInfo" style="background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px;"></div>
                     <div id="trackingContent"></div>
                 </div>
@@ -1315,7 +1303,6 @@
                     loadTrackingPatients();
                     if (currentUser && currentUser.role === 'admin') {
                         document.getElementById('exportBtn').style.display = 'block';
-                        document.getElementById('exportInfoPanel').style.display = 'block';
                         document.getElementById('exportIndividualBtn').style.display = currentTrackingPatient ? 'block' : 'none';
                     }
                     break;
@@ -2931,3 +2918,4 @@
     </script>
 </body>
 </html>
+
