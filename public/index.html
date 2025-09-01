@@ -2135,7 +2135,9 @@
             }
         }
 
-        // SIMPLIFIED EXPORT FUNCTIONS
+        // FIXED EXPORT FUNCTIONS - Store CSV data globally to avoid string literal issues
+        var currentExportData = null;
+        
         function showExportModal() {
             updateFacilityFilters();
             initializeMonthDropdowns();
@@ -2171,6 +2173,13 @@
                             return;
                         }
                         
+                        // Store CSV data globally to avoid string literal issues
+                        currentExportData = {
+                            csvData: response.csvData,
+                            facilityFilter: facilityFilter,
+                            monthFilter: monthFilter
+                        };
+                        
                         var summary = response.summary || {};
                         document.getElementById('exportResults').innerHTML = `
                             <div class="alert alert-success">
@@ -2180,9 +2189,9 @@
                                     <div><strong>Unique Supplies:</strong> ${summary.uniqueSupplies || 0}</div>
                                     <div><strong>Unique Patients:</strong> ${summary.uniquePatients || 0}</div>
                                     <div><strong>Total Units:</strong> ${summary.totalUnits || 0}</div>
-                                    ${currentUser.role === 'admin' ? `<div><strong>Total Cost:</strong> $${summary.totalCost || '0.00'}</div>` : ''}
+                                    ${currentUser.role === 'admin' ? `<div><strong>Total Cost:</strong> ${summary.totalCost || '0.00'}</div>` : ''}
                                 </div>
-                                <button class="btn btn-success" onclick="downloadCsvReport('${response.csvData.replace(/'/g, "\\'")}', '${facilityFilter}', '${monthFilter}')">
+                                <button class="btn btn-success" onclick="downloadCurrentExport()">
                                     💾 Download CSV Report
                                 </button>
                             </div>
@@ -2200,6 +2209,15 @@
                     generateBtn.disabled = false;
                     generateBtn.textContent = originalText;
                 });
+        }
+
+        // FIXED: Use stored data instead of passing as parameter
+        function downloadCurrentExport() {
+            if (!currentExportData) {
+                showMessage('No export data available. Please generate a report first.', 'error');
+                return;
+            }
+            downloadCsvReport(currentExportData.csvData, currentExportData.facilityFilter, currentExportData.monthFilter);
         }
 
         // SIMPLIFIED CSV DOWNLOAD
