@@ -23,6 +23,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <title>Wound Care RT Supply Tracker</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
@@ -360,14 +361,14 @@
             <p>Professional Healthcare Supply Management</p>
         </div>
         
-        <form id="loginForm">
+        <form id="loginForm" method="post" action="#">
             <div class="form-group">
                 <label for="email">Email Address</label>
-                <input type="email" id="email" class="form-control" required>
+                <input type="email" id="email" name="email" class="form-control" required>
             </div>
             <div class="form-group">
                 <label for="password">Password</label>
-                <input type="password" id="password" class="form-control" required>
+                <input type="password" id="password" name="password" class="form-control" required>
             </div>
             <button type="submit" class="btn btn-primary" style="width: 100%;">Sign In</button>
             
@@ -398,12 +399,12 @@
                 </div>
             </div>
 
-            <div class="nav-tabs">
+            <div class="nav-tabs" style="display: flex;">
                 <button class="tab-btn active" onclick="showPanel('dashboard')">📊 Dashboard</button>
                 <button class="tab-btn" onclick="showPanel('patients')">👤 Patients</button>
-                <button class="tab-btn admin-only" onclick="showPanel('supplies')">📦 Supply Management</button>
+                <button class="tab-btn admin-only" onclick="showPanel('supplies')" style="display: block;">📦 Supply Management</button>
                 <button class="tab-btn" onclick="showPanel('tracking')">📈 Supply Tracking</button>
-                <button class="tab-btn admin-only" onclick="showPanel('admin')">⚙️ Admin</button>
+                <button class="tab-btn admin-only" onclick="showPanel('admin')" style="display: block;">⚙️ Admin</button>
             </div>
 
             <div id="dashboardPanel" class="panel active">
@@ -768,6 +769,9 @@
                 adminElements[i].style.display = currentUser.role === 'admin' ? 'block' : 'none';
             }
             
+            // Initialize month dropdowns
+            initializeMonthDropdowns();
+            
             // Ensure dashboard is visible by default
             showPanel('dashboard');
             
@@ -776,6 +780,60 @@
                 .catch(function(error) {
                     console.error('Error loading initial data:', error);
                 });
+        }
+
+        function initializeMonthDropdowns() {
+            var months = generateMonthOptions();
+            var dropdowns = ['patientMonthFilter', 'trackingMonthFilter', 'patientMonth', 'editPatientMonth'];
+            
+            for (var j = 0; j < dropdowns.length; j++) {
+                var dropdown = document.getElementById(dropdowns[j]);
+                if (dropdown) {
+                    var currentValue = dropdown.value;
+                    dropdown.innerHTML = (dropdowns[j] === 'patientMonth' || dropdowns[j] === 'editPatientMonth') ? 
+                        '<option value="">Select Month</option>' : '<option value="">All Months</option>';
+                    
+                    for (var i = 0; i < months.length; i++) {
+                        var option = document.createElement('option');
+                        option.value = months[i].value;
+                        option.textContent = months[i].label;
+                        dropdown.appendChild(option);
+                    }
+                    
+                    if (currentValue) dropdown.value = currentValue;
+                }
+            }
+        }
+
+        function generateMonthOptions() {
+            var months = [];
+            var monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+            if (currentUser && currentUser.role !== 'admin') {
+                for (var year = 2025; year <= 2027; year++) {
+                    var start = (year === 2025) ? 9 : 1;
+                    var end = 12;
+                    
+                    for (var month = start; month <= end; month++) {
+                        var value = year + '-' + (month < 10 ? '0' + month : month);
+                        var label = monthNames[month - 1] + ' ' + year;
+                        months.push({ value: value, label: label });
+                    }
+                }
+            } else {
+                for (var year = 2024; year <= 2027; year++) {
+                    var start = (year === 2024) ? 7 : 1;
+                    var end = 12;
+                    
+                    for (var month = start; month <= end; month++) {
+                        var value = year + '-' + (month < 10 ? '0' + month : month);
+                        var label = monthNames[month - 1] + ' ' + year;
+                        months.push({ value: value, label: label });
+                    }
+                }
+            }
+            
+            return months;
         }
 
         function logout() {
@@ -885,12 +943,25 @@
             if (currentUser.role !== 'admin' && currentUser.facility_id) {
                 queryParams = '?facility_id=' + currentUser.facility_id;
             }
+            
+            console.log('Loading patients with query:', queryParams);
+            
             return apiCall('/api/patients' + queryParams).then(function(data) {
+                console.log('Patients API response:', data);
                 allPatients = data.patients || [];
                 patients = allPatients.slice();
+                console.log('Loaded ' + allPatients.length + ' patients total');
                 renderPatientsTable();
+                
+                // Update the patients panel to show it's loaded
+                var patientsPanel = document.getElementById('patientsPanel');
+                if (patientsPanel && allPatients.length > 0) {
+                    console.log('Patients data loaded successfully - ' + allPatients.length + ' patients found');
+                    showMessage('Loaded ' + allPatients.length + ' patients from database', 'success');
+                }
             }).catch(function(error) {
                 console.error('Failed to load patients:', error);
+                showMessage('Failed to load patients: ' + error.message, 'error');
             });
         }
 
@@ -915,13 +986,20 @@
 
         function renderPatientsTable() {
             var tbody = document.getElementById('patientsTable');
-            if (!tbody) return;
+            if (!tbody) {
+                console.log('Patient table body not found');
+                return;
+            }
+            
+            console.log('Rendering patients table with ' + patients.length + ' patients');
+            
             if (patients.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="5" class="text-center">No patients found</td></tr>';
                 return;
             }
+            
             var rows = [];
-            for (var i = 0; i < patients.length; i++) {
+            for (var i = 0; i < Math.min(patients.length, 100); i++) { // Limit to first 100 for performance
                 var patient = patients[i];
                 var actions = '';
                 if (currentUser.role === 'admin' || currentUser.facility_id == patient.facility_id) {
@@ -933,14 +1011,20 @@
                     actions = '<span style="color: #666;">No Access</span>';
                 }
                 rows.push('<tr>');
-                rows.push('<td>' + escapeHtml(patient.name) + '</td>');
+                rows.push('<td>' + escapeHtml(patient.name || 'N/A') + '</td>');
                 rows.push('<td>' + escapeHtml(patient.mrn || 'N/A') + '</td>');
-                rows.push('<td>' + escapeHtml(patient.month) + '</td>');
+                rows.push('<td>' + escapeHtml(patient.month || 'N/A') + '</td>');
                 rows.push('<td>' + escapeHtml(patient.facility_name || 'N/A') + '</td>');
                 rows.push('<td>' + actions + '</td>');
                 rows.push('</tr>');
             }
+            
+            if (patients.length > 100) {
+                rows.push('<tr><td colspan="5" class="text-center"><strong>Showing first 100 of ' + patients.length + ' patients. Use search to filter.</strong></td></tr>');
+            }
+            
             tbody.innerHTML = rows.join('');
+            console.log('Patient table rendered with ' + Math.min(patients.length, 100) + ' rows');
         }
 
         function renderSuppliesTable() {
