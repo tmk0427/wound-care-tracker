@@ -986,10 +986,10 @@ app.post('/api/tracking', authenticateToken, async (req, res) => {
     }
 });
 
-// EXCEL EXPORT ENDPOINT - No more MRN apostrophe issues
+// SIMPLE CSV EXPORT ENDPOINT
 app.get('/api/export/supply-report', authenticateToken, async (req, res) => {
     try {
-        console.log('Excel export request received with params:', req.query);
+        console.log('Export request received with params:', req.query);
         const { facility_id, month } = req.query;
         
         let conditions = ['t.quantity > 0'];
@@ -998,196 +998,7 @@ app.get('/api/export/supply-report', authenticateToken, async (req, res) => {
         // Handle user permissions
         if (req.user.role !== 'admin') {
             if (req.user.facilityId) {
-                conditions.push('p.facility_id = 
-
-// ADMIN USERS
-app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const result = await safeQuery(`
-            SELECT u.*, f.name as facility_name 
-            FROM users u 
-            LEFT JOIN facilities f ON u.facility_id = f.id 
-            ORDER BY u.name ASC
-        `);
-        res.json({ success: true, users: result.rows });
-    } catch (error) {
-        res.status(500).json({ success: false, error: 'Failed to fetch users' });
-    }
-});
-
-app.post('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const { name, email, password, role, facility_id } = req.body;
-        
-        if (!name || !email || !password) {
-            return res.status(400).json({ success: false, error: 'Name, email, and password are required' });
-        }
-
-        const existingUser = await safeQuery('SELECT id FROM users WHERE email = $1', [email]);
-        if (existingUser.rows.length > 0) {
-            return res.status(400).json({ success: false, error: 'Email already exists' });
-        }
-
-        const hashedPassword = await bcrypt.hash(password, 12);
-        
-        const result = await safeQuery(
-            'INSERT INTO users (name, email, password, role, facility_id, is_approved, email_verified) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-            [name, email, hashedPassword, role || 'user', facility_id || null, true, true]
-        );
-
-        res.json({ success: true, user: result.rows[0] });
-
-    } catch (error) {
-        console.error('Error creating user:', error);
-        res.status(500).json({ success: false, error: 'Failed to create user' });
-    }
-});
-
-app.put('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const userId = req.params.id;
-        const { name, email, role, facility_id } = req.body;
-        
-        if (!name || !email || !role) {
-            return res.status(400).json({ success: false, error: 'Name, email, and role are required' });
-        }
-
-        const existingUser = await safeQuery('SELECT id FROM users WHERE email = $1 AND id != $2', [email, userId]);
-        if (existingUser.rows.length > 0) {
-            return res.status(400).json({ success: false, error: 'Email already exists' });
-        }
-
-        const result = await safeQuery(
-            'UPDATE users SET name = $1, email = $2, role = $3, facility_id = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5',
-            [name, email, role, facility_id || null, userId]
-        );
-
-        if (result.rowCount === 0) {
-            return res.status(404).json({ success: false, error: 'User not found' });
-        }
-
-        res.json({ success: true, message: 'User updated successfully' });
-
-    } catch (error) {
-        res.status(500).json({ success: false, error: 'Failed to update user' });
-    }
-});
-
-app.put('/api/admin/users/:id/approve', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const userId = req.params.id;
-        
-        const result = await safeQuery(
-            'UPDATE users SET is_approved = true, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
-            [userId]
-        );
-
-        if (result.rowCount === 0) {
-            return res.status(404).json({ success: false, error: 'User not found' });
-        }
-
-        res.json({ success: true, message: 'User approved successfully' });
-
-    } catch (error) {
-        res.status(500).json({ success: false, error: 'Failed to approve user' });
-    }
-});
-
-app.put('/api/admin/users/:id/reset-password', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const userId = req.params.id;
-        const { newPassword } = req.body;
-        
-        if (!newPassword || newPassword.length < 8) {
-            return res.status(400).json({ success: false, error: 'Password must be at least 8 characters long' });
-        }
-        
-        const userCheck = await safeQuery('SELECT id, email, name FROM users WHERE id = $1', [userId]);
-        if (userCheck.rows.length === 0) {
-            return res.status(404).json({ success: false, error: 'User not found' });
-        }
-        
-        const hashedPassword = await bcrypt.hash(newPassword, 12);
-        
-        const result = await safeQuery(
-            'UPDATE users SET password = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-            [hashedPassword, userId]
-        );
-        
-        if (result.rowCount === 0) {
-            return res.status(404).json({ success: false, error: 'Failed to update password' });
-        }
-        
-        const user = userCheck.rows[0];
-        res.json({ 
-            success: true, 
-            message: 'Password reset successfully for ' + user.name,
-            userEmail: user.email
-        });
-
-    } catch (error) {
-        console.error('Error resetting password:', error);
-        res.status(500).json({ success: false, error: 'Failed to reset password' });
-    }
-});
-
-app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const { id } = req.params;
-        
-        if (parseInt(id) === req.user.id) {
-            return res.status(400).json({ success: false, error: 'Cannot delete your own account' });
-        }
-        
-        const result = await safeQuery('DELETE FROM users WHERE id = $1', [id]);
-
-        if (result.rowCount === 0) {
-            return res.status(404).json({ success: false, error: 'User not found' });
-        }
-
-        res.json({ success: true, message: 'User deleted successfully' });
-
-    } catch (error) {
-        res.status(500).json({ success: false, error: 'Failed to delete user' });
-    }
-});
-
-// ERROR HANDLING
-app.use((err, req, res, next) => {
-    console.error('Unhandled error:', err);
-    res.status(500).json({ success: false, error: 'Internal server error' });
-});
-
-app.use((req, res) => {
-    res.status(404).json({ error: 'Route not found' });
-});
-
-// SERVER STARTUP
-async function startServer() {
-    try {
-        await initializeDatabase();
-        
-        app.listen(PORT, () => {
-            console.log('================================');
-            console.log('Wound Care RT Supply Tracker');
-            console.log('================================');
-            console.log(`Server running on port ${PORT}`);
-            console.log('Default credentials: admin@system.com / admin123');
-            console.log('FIXED: CSV export with proper MRN formatting');
-            console.log('FIXED: Simplified download mechanism');
-            console.log('FIXED: Enhanced month format conversion');
-            console.log('FIXED: Same MRN allowed across different months');
-            console.log('================================');
-        });
-    } catch (error) {
-        console.error('Failed to start server:', error);
-        process.exit(1);
-    }
-}
-
-startServer();
-
-module.exports = app; + (params.length + 1));
+                conditions.push('p.facility_id = $' + (params.length + 1));
                 params.push(req.user.facilityId);
                 conditions.push("p.month >= '2025-09'");
             } else {
@@ -1200,391 +1011,13 @@ module.exports = app; + (params.length + 1));
             if (req.user.role !== 'admin' && req.user.facilityId && req.user.facilityId != facility_id) {
                 return res.status(403).json({ success: false, error: 'No access to this facility' });
             }
-            conditions.push('p.facility_id = 
-
-// ADMIN USERS
-app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const result = await safeQuery(`
-            SELECT u.*, f.name as facility_name 
-            FROM users u 
-            LEFT JOIN facilities f ON u.facility_id = f.id 
-            ORDER BY u.name ASC
-        `);
-        res.json({ success: true, users: result.rows });
-    } catch (error) {
-        res.status(500).json({ success: false, error: 'Failed to fetch users' });
-    }
-});
-
-app.post('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const { name, email, password, role, facility_id } = req.body;
-        
-        if (!name || !email || !password) {
-            return res.status(400).json({ success: false, error: 'Name, email, and password are required' });
-        }
-
-        const existingUser = await safeQuery('SELECT id FROM users WHERE email = $1', [email]);
-        if (existingUser.rows.length > 0) {
-            return res.status(400).json({ success: false, error: 'Email already exists' });
-        }
-
-        const hashedPassword = await bcrypt.hash(password, 12);
-        
-        const result = await safeQuery(
-            'INSERT INTO users (name, email, password, role, facility_id, is_approved, email_verified) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-            [name, email, hashedPassword, role || 'user', facility_id || null, true, true]
-        );
-
-        res.json({ success: true, user: result.rows[0] });
-
-    } catch (error) {
-        console.error('Error creating user:', error);
-        res.status(500).json({ success: false, error: 'Failed to create user' });
-    }
-});
-
-app.put('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const userId = req.params.id;
-        const { name, email, role, facility_id } = req.body;
-        
-        if (!name || !email || !role) {
-            return res.status(400).json({ success: false, error: 'Name, email, and role are required' });
-        }
-
-        const existingUser = await safeQuery('SELECT id FROM users WHERE email = $1 AND id != $2', [email, userId]);
-        if (existingUser.rows.length > 0) {
-            return res.status(400).json({ success: false, error: 'Email already exists' });
-        }
-
-        const result = await safeQuery(
-            'UPDATE users SET name = $1, email = $2, role = $3, facility_id = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5',
-            [name, email, role, facility_id || null, userId]
-        );
-
-        if (result.rowCount === 0) {
-            return res.status(404).json({ success: false, error: 'User not found' });
-        }
-
-        res.json({ success: true, message: 'User updated successfully' });
-
-    } catch (error) {
-        res.status(500).json({ success: false, error: 'Failed to update user' });
-    }
-});
-
-app.put('/api/admin/users/:id/approve', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const userId = req.params.id;
-        
-        const result = await safeQuery(
-            'UPDATE users SET is_approved = true, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
-            [userId]
-        );
-
-        if (result.rowCount === 0) {
-            return res.status(404).json({ success: false, error: 'User not found' });
-        }
-
-        res.json({ success: true, message: 'User approved successfully' });
-
-    } catch (error) {
-        res.status(500).json({ success: false, error: 'Failed to approve user' });
-    }
-});
-
-app.put('/api/admin/users/:id/reset-password', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const userId = req.params.id;
-        const { newPassword } = req.body;
-        
-        if (!newPassword || newPassword.length < 8) {
-            return res.status(400).json({ success: false, error: 'Password must be at least 8 characters long' });
-        }
-        
-        const userCheck = await safeQuery('SELECT id, email, name FROM users WHERE id = $1', [userId]);
-        if (userCheck.rows.length === 0) {
-            return res.status(404).json({ success: false, error: 'User not found' });
-        }
-        
-        const hashedPassword = await bcrypt.hash(newPassword, 12);
-        
-        const result = await safeQuery(
-            'UPDATE users SET password = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-            [hashedPassword, userId]
-        );
-        
-        if (result.rowCount === 0) {
-            return res.status(404).json({ success: false, error: 'Failed to update password' });
-        }
-        
-        const user = userCheck.rows[0];
-        res.json({ 
-            success: true, 
-            message: 'Password reset successfully for ' + user.name,
-            userEmail: user.email
-        });
-
-    } catch (error) {
-        console.error('Error resetting password:', error);
-        res.status(500).json({ success: false, error: 'Failed to reset password' });
-    }
-});
-
-app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const { id } = req.params;
-        
-        if (parseInt(id) === req.user.id) {
-            return res.status(400).json({ success: false, error: 'Cannot delete your own account' });
-        }
-        
-        const result = await safeQuery('DELETE FROM users WHERE id = $1', [id]);
-
-        if (result.rowCount === 0) {
-            return res.status(404).json({ success: false, error: 'User not found' });
-        }
-
-        res.json({ success: true, message: 'User deleted successfully' });
-
-    } catch (error) {
-        res.status(500).json({ success: false, error: 'Failed to delete user' });
-    }
-});
-
-// ERROR HANDLING
-app.use((err, req, res, next) => {
-    console.error('Unhandled error:', err);
-    res.status(500).json({ success: false, error: 'Internal server error' });
-});
-
-app.use((req, res) => {
-    res.status(404).json({ error: 'Route not found' });
-});
-
-// SERVER STARTUP
-async function startServer() {
-    try {
-        await initializeDatabase();
-        
-        app.listen(PORT, () => {
-            console.log('================================');
-            console.log('Wound Care RT Supply Tracker');
-            console.log('================================');
-            console.log(`Server running on port ${PORT}`);
-            console.log('Default credentials: admin@system.com / admin123');
-            console.log('FIXED: CSV export with proper MRN formatting');
-            console.log('FIXED: Simplified download mechanism');
-            console.log('FIXED: Enhanced month format conversion');
-            console.log('FIXED: Same MRN allowed across different months');
-            console.log('================================');
-        });
-    } catch (error) {
-        console.error('Failed to start server:', error);
-        process.exit(1);
-    }
-}
-
-startServer();
-
-module.exports = app; + (params.length + 1));
+            conditions.push('p.facility_id = $' + (params.length + 1));
             params.push(facility_id);
         }
         
         // Handle month filter
         if (month && month !== 'all') {
-            conditions.push('p.month = 
-
-// ADMIN USERS
-app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const result = await safeQuery(`
-            SELECT u.*, f.name as facility_name 
-            FROM users u 
-            LEFT JOIN facilities f ON u.facility_id = f.id 
-            ORDER BY u.name ASC
-        `);
-        res.json({ success: true, users: result.rows });
-    } catch (error) {
-        res.status(500).json({ success: false, error: 'Failed to fetch users' });
-    }
-});
-
-app.post('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const { name, email, password, role, facility_id } = req.body;
-        
-        if (!name || !email || !password) {
-            return res.status(400).json({ success: false, error: 'Name, email, and password are required' });
-        }
-
-        const existingUser = await safeQuery('SELECT id FROM users WHERE email = $1', [email]);
-        if (existingUser.rows.length > 0) {
-            return res.status(400).json({ success: false, error: 'Email already exists' });
-        }
-
-        const hashedPassword = await bcrypt.hash(password, 12);
-        
-        const result = await safeQuery(
-            'INSERT INTO users (name, email, password, role, facility_id, is_approved, email_verified) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-            [name, email, hashedPassword, role || 'user', facility_id || null, true, true]
-        );
-
-        res.json({ success: true, user: result.rows[0] });
-
-    } catch (error) {
-        console.error('Error creating user:', error);
-        res.status(500).json({ success: false, error: 'Failed to create user' });
-    }
-});
-
-app.put('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const userId = req.params.id;
-        const { name, email, role, facility_id } = req.body;
-        
-        if (!name || !email || !role) {
-            return res.status(400).json({ success: false, error: 'Name, email, and role are required' });
-        }
-
-        const existingUser = await safeQuery('SELECT id FROM users WHERE email = $1 AND id != $2', [email, userId]);
-        if (existingUser.rows.length > 0) {
-            return res.status(400).json({ success: false, error: 'Email already exists' });
-        }
-
-        const result = await safeQuery(
-            'UPDATE users SET name = $1, email = $2, role = $3, facility_id = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5',
-            [name, email, role, facility_id || null, userId]
-        );
-
-        if (result.rowCount === 0) {
-            return res.status(404).json({ success: false, error: 'User not found' });
-        }
-
-        res.json({ success: true, message: 'User updated successfully' });
-
-    } catch (error) {
-        res.status(500).json({ success: false, error: 'Failed to update user' });
-    }
-});
-
-app.put('/api/admin/users/:id/approve', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const userId = req.params.id;
-        
-        const result = await safeQuery(
-            'UPDATE users SET is_approved = true, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
-            [userId]
-        );
-
-        if (result.rowCount === 0) {
-            return res.status(404).json({ success: false, error: 'User not found' });
-        }
-
-        res.json({ success: true, message: 'User approved successfully' });
-
-    } catch (error) {
-        res.status(500).json({ success: false, error: 'Failed to approve user' });
-    }
-});
-
-app.put('/api/admin/users/:id/reset-password', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const userId = req.params.id;
-        const { newPassword } = req.body;
-        
-        if (!newPassword || newPassword.length < 8) {
-            return res.status(400).json({ success: false, error: 'Password must be at least 8 characters long' });
-        }
-        
-        const userCheck = await safeQuery('SELECT id, email, name FROM users WHERE id = $1', [userId]);
-        if (userCheck.rows.length === 0) {
-            return res.status(404).json({ success: false, error: 'User not found' });
-        }
-        
-        const hashedPassword = await bcrypt.hash(newPassword, 12);
-        
-        const result = await safeQuery(
-            'UPDATE users SET password = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-            [hashedPassword, userId]
-        );
-        
-        if (result.rowCount === 0) {
-            return res.status(404).json({ success: false, error: 'Failed to update password' });
-        }
-        
-        const user = userCheck.rows[0];
-        res.json({ 
-            success: true, 
-            message: 'Password reset successfully for ' + user.name,
-            userEmail: user.email
-        });
-
-    } catch (error) {
-        console.error('Error resetting password:', error);
-        res.status(500).json({ success: false, error: 'Failed to reset password' });
-    }
-});
-
-app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        const { id } = req.params;
-        
-        if (parseInt(id) === req.user.id) {
-            return res.status(400).json({ success: false, error: 'Cannot delete your own account' });
-        }
-        
-        const result = await safeQuery('DELETE FROM users WHERE id = $1', [id]);
-
-        if (result.rowCount === 0) {
-            return res.status(404).json({ success: false, error: 'User not found' });
-        }
-
-        res.json({ success: true, message: 'User deleted successfully' });
-
-    } catch (error) {
-        res.status(500).json({ success: false, error: 'Failed to delete user' });
-    }
-});
-
-// ERROR HANDLING
-app.use((err, req, res, next) => {
-    console.error('Unhandled error:', err);
-    res.status(500).json({ success: false, error: 'Internal server error' });
-});
-
-app.use((req, res) => {
-    res.status(404).json({ error: 'Route not found' });
-});
-
-// SERVER STARTUP
-async function startServer() {
-    try {
-        await initializeDatabase();
-        
-        app.listen(PORT, () => {
-            console.log('================================');
-            console.log('Wound Care RT Supply Tracker');
-            console.log('================================');
-            console.log(`Server running on port ${PORT}`);
-            console.log('Default credentials: admin@system.com / admin123');
-            console.log('FIXED: CSV export with proper MRN formatting');
-            console.log('FIXED: Simplified download mechanism');
-            console.log('FIXED: Enhanced month format conversion');
-            console.log('FIXED: Same MRN allowed across different months');
-            console.log('================================');
-        });
-    } catch (error) {
-        console.error('Failed to start server:', error);
-        process.exit(1);
-    }
-}
-
-startServer();
-
-module.exports = app; + (params.length + 1));
+            conditions.push('p.month = $' + (params.length + 1));
             params.push(month);
         }
 
@@ -1618,7 +1051,7 @@ module.exports = app; + (params.length + 1));
             return res.json({
                 success: true,
                 message: 'No supply usage data found for the selected criteria',
-                hasData: false,
+                csvData: '',
                 summary: {
                     totalRecords: 0,
                     uniqueSupplies: 0,
@@ -1629,36 +1062,30 @@ module.exports = app; + (params.length + 1));
             });
         }
 
-        // Create Excel workbook
-        const workbook = XLSX.utils.book_new();
+        // Build CSV content
+        let csvContent = 'Supply Code,Supply Description,HCPCS,Unit Cost,Patient Name,MRN,Month,Facility,Day,Quantity,Total Cost,Wound DX\n';
         
-        // Prepare data for Excel
-        const excelData = [];
-        
-        // Add header row
-        excelData.push([
-            'Supply Code',
-            'Supply Description', 
-            'HCPCS',
-            'Unit Cost',
-            'Patient Name',
-            'MRN',
-            'Month',
-            'Facility',
-            'Day',
-            'Quantity', 
-            'Total Cost',
-            'Wound DX'
-        ]);
+        // CSV escaping function - NO apostrophe for MRN
+        function escapeCsv(val) {
+            if (val === null || val === undefined) return '';
+            
+            let strVal = String(val);
+            
+            // Standard CSV escaping only
+            if (strVal.includes(',') || strVal.includes('"') || strVal.includes('\n') || strVal.includes('\r')) {
+                strVal = '"' + strVal.replace(/"/g, '""') + '"';
+            }
+            
+            return strVal;
+        }
 
-        // Calculate summary statistics
+        // Process data and build CSV
         let totalUnits = 0;
         let totalCost = 0;
         const uniqueSupplies = new Set();
         const uniquePatients = new Set();
 
-        // Add data rows
-        result.rows.forEach(row => {
+        result.rows.forEach(function(row) {
             const quantity = parseInt(row.quantity) || 0;
             const cost = parseFloat(row.total_cost) || 0;
             
@@ -1667,89 +1094,23 @@ module.exports = app; + (params.length + 1));
             uniqueSupplies.add(row.code);
             uniquePatients.add(row.patient_name);
             
-            excelData.push([
-                row.code,
-                row.description,
-                row.hcpcs || 'N/A',
-                parseFloat(row.cost || 0),
-                row.patient_name,
-                row.mrn || 'N/A', // No apostrophe needed in Excel!
-                row.month,
-                row.facility_name,
+            const csvRow = [
+                escapeCsv(row.code),
+                escapeCsv(row.description),
+                escapeCsv(row.hcpcs || 'N/A'),
+                parseFloat(row.cost || 0).toFixed(2),
+                escapeCsv(row.patient_name),
+                escapeCsv(row.mrn || 'N/A'),
+                escapeCsv(row.month),
+                escapeCsv(row.facility_name),
                 row.day_of_month,
                 quantity,
-                cost,
-                row.wound_dx || ''
-            ]);
-        });
-
-        // Create worksheet
-        const worksheet = XLSX.utils.aoa_to_sheet(excelData);
-        
-        // Set column widths
-        worksheet['!cols'] = [
-            { width: 12 }, // Supply Code
-            { width: 30 }, // Description  
-            { width: 10 }, // HCPCS
-            { width: 12 }, // Unit Cost
-            { width: 20 }, // Patient Name
-            { width: 12 }, // MRN
-            { width: 10 }, // Month
-            { width: 20 }, // Facility
-            { width: 8 },  // Day
-            { width: 10 }, // Quantity
-            { width: 12 }, // Total Cost
-            { width: 15 }  // Wound DX
-        ];
-
-        // Format specific columns
-        const range = XLSX.utils.decode_range(worksheet['!ref']);
-        
-        // Format MRN column as text (column F, index 5)
-        for (let row = 1; row <= range.e.r; row++) {
-            const cellAddress = XLSX.utils.encode_cell({ r: row, c: 5 });
-            if (worksheet[cellAddress]) {
-                worksheet[cellAddress].t = 's'; // Force text type
-            }
-        }
-
-        // Format cost columns as currency (columns D and K, indices 3 and 10)
-        for (let row = 1; row <= range.e.r; row++) {
-            // Unit Cost column
-            const unitCostAddress = XLSX.utils.encode_cell({ r: row, c: 3 });
-            if (worksheet[unitCostAddress] && typeof worksheet[unitCostAddress].v === 'number') {
-                worksheet[unitCostAddress].z = '$#,##0.00';
-            }
+                cost.toFixed(2),
+                escapeCsv(row.wound_dx || '')
+            ].join(',');
             
-            // Total Cost column  
-            const totalCostAddress = XLSX.utils.encode_cell({ r: row, c: 10 });
-            if (worksheet[totalCostAddress] && typeof worksheet[totalCostAddress].v === 'number') {
-                worksheet[totalCostAddress].z = '$#,##0.00';
-            }
-        }
-
-        // Add worksheet to workbook
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'Supply Usage Report');
-
-        // Generate Excel buffer
-        const excelBuffer = XLSX.write(workbook, { 
-            type: 'buffer', 
-            bookType: 'xlsx',
-            compression: true
+            csvContent += csvRow + '\n';
         });
-
-        // Generate filename
-        let filename = 'supply_usage_report';
-        if (facility_id && facility_id !== 'all') {
-            const facilitiesResult = await safeQuery('SELECT name FROM facilities WHERE id = $1', [facility_id]);
-            if (facilitiesResult.rows.length > 0) {
-                filename += '_' + facilitiesResult.rows[0].name.replace(/[^a-zA-Z0-9]/g, '_');
-            }
-        }
-        if (month && month !== 'all') {
-            filename += '_' + month.replace('-', '_');
-        }
-        filename += '_' + new Date().toISOString().split('T')[0] + '.xlsx';
 
         const summary = {
             totalRecords: result.rows.length,
@@ -1759,21 +1120,19 @@ module.exports = app; + (params.length + 1));
             totalCost: totalCost.toFixed(2)
         };
 
-        console.log('Excel export completed successfully. Summary:', summary);
-
-        // Set headers for Excel download
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.setHeader('Content-Disposition', 'attachment; filename="' + filename + '"');
-        res.setHeader('Content-Length', excelBuffer.length);
-
-        // Send Excel file
-        res.send(excelBuffer);
+        console.log('Export completed successfully. Summary:', summary);
+        
+        res.json({
+            success: true,
+            csvData: csvContent,
+            summary: summary
+        });
 
     } catch (error) {
-        console.error('Excel export error:', error);
+        console.error('Export error:', error);
         res.status(500).json({ 
             success: false, 
-            error: 'Failed to generate Excel export: ' + error.message 
+            error: 'Failed to generate export report: ' + error.message 
         });
     }
 });
@@ -1951,10 +1310,9 @@ async function startServer() {
             console.log('================================');
             console.log(`Server running on port ${PORT}`);
             console.log('Default credentials: admin@system.com / admin123');
-            console.log('FIXED: CSV export with proper MRN formatting');
-            console.log('FIXED: Simplified download mechanism');
-            console.log('FIXED: Enhanced month format conversion');
-            console.log('FIXED: Same MRN allowed across different months');
+            console.log('CLEAN: CSV export without MRN apostrophes');
+            console.log('FIXED: Syntax errors resolved');
+            console.log('STABLE: Back to working baseline');
             console.log('================================');
         });
     } catch (error) {
