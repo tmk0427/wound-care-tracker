@@ -52,7 +52,42 @@ async function safeQuery(query, params = []) {
     }
 }
 
-// FIXED: Updated helper function to check for MRN duplicates within the same month
+// FIXED: Enhanced month format conversion with debugging
+function convertMonthFormat(monthInput) {
+    if (!monthInput) return null;
+    
+    const month = monthInput.toString().trim();
+    console.log('Converting month format:', month);
+    
+    // Handle different month formats
+    if (month.match(/^\d{4}-\d{2}$/)) {
+        // Already in YYYY-MM format
+        console.log('Month already in YYYY-MM format:', month);
+        return month;
+    }
+    
+    if (month.match(/^\d{2}-\d{4}$/)) {
+        // MM-YYYY format, convert to YYYY-MM
+        const parts = month.split('-');
+        const converted = `${parts[1]}-${parts[0]}`;
+        console.log('Converted MM-YYYY to YYYY-MM:', month, '->', converted);
+        return converted;
+    }
+    
+    if (month.match(/^\d{1,2}\/\d{4}$/)) {
+        // M/YYYY or MM/YYYY format
+        const parts = month.split('/');
+        const monthNum = parts[0].padStart(2, '0');
+        const converted = `${parts[1]}-${monthNum}`;
+        console.log('Converted M/YYYY to YYYY-MM:', month, '->', converted);
+        return converted;
+    }
+    
+    console.log('WARNING: Unrecognized month format:', month);
+    return month; // Return as-is if format not recognized
+}
+
+// Updated helper function to check for MRN duplicates within the same month
 async function checkMRNDuplicate(mrn, month, facility_id, excludePatientId = null) {
     if (!mrn || mrn.trim() === '') {
         return false; // Empty MRNs are allowed
@@ -139,12 +174,17 @@ async function initializeDatabase() {
             ALTER TABLE patients DROP CONSTRAINT IF EXISTS patients_name_month_facility_id_key
         `).catch(e => console.log('Old constraint already removed or never existed'));
 
-        // Add unique constraint on MRN (only when MRN is not null and not empty)
+        // Remove the problematic global MRN unique index
         await safeQuery(`
-            CREATE UNIQUE INDEX IF NOT EXISTS patients_mrn_unique 
-            ON patients(mrn) 
+            DROP INDEX IF EXISTS patients_mrn_unique
+        `).catch(e => console.log('Global MRN index already removed'));
+
+        // Add proper MRN constraint that allows same MRN across different months
+        await safeQuery(`
+            CREATE UNIQUE INDEX IF NOT EXISTS patients_mrn_month_facility_unique 
+            ON patients(mrn, month, facility_id) 
             WHERE mrn IS NOT NULL AND TRIM(mrn) != ''
-        `).catch(e => console.log('MRN unique index already exists'));
+        `).catch(e => console.log('MRN month facility index already exists'));
 
         // Create tracking table
         await safeQuery(`
@@ -617,7 +657,7 @@ app.post('/api/supplies/import', authenticateToken, requireAdmin, upload.single(
     }
 });
 
-// PATIENTS - FIXED
+// PATIENTS
 app.get('/api/patients', authenticateToken, async (req, res) => {
     try {
         const { facility_id, month } = req.query;
@@ -679,7 +719,7 @@ app.post('/api/patients', authenticateToken, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Can only add patients for September 2025 onwards' });
         }
 
-        // FIXED: Check for MRN duplicate within the same month and facility
+        // Check for MRN duplicate within the same month and facility
         if (mrn && mrn.trim()) {
             const duplicate = await checkMRNDuplicate(mrn.trim(), month, facility_id);
             if (duplicate) {
@@ -720,7 +760,7 @@ app.put('/api/patients/:id', authenticateToken, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Can only modify patients for September 2025 onwards' });
         }
 
-        // FIXED: Check for MRN duplicate within the same month and facility (excluding current patient)
+        // Check for MRN duplicate within the same month and facility (excluding current patient)
         if (mrn && mrn.trim()) {
             const duplicate = await checkMRNDuplicate(mrn.trim(), month, facility_id, parseInt(patientId));
             if (duplicate) {
@@ -775,7 +815,7 @@ app.delete('/api/patients/:id', authenticateToken, async (req, res) => {
     }
 });
 
-// BULK PATIENT UPLOAD - FIXED
+// FIXED: BULK PATIENT UPLOAD with enhanced month conversion and debugging
 app.post('/api/patients/bulk', authenticateToken, async (req, res) => {
     try {
         const { patients } = req.body;
@@ -794,6 +834,8 @@ app.post('/api/patients/bulk', authenticateToken, async (req, res) => {
             facilityMap[facility.name] = facility.id;
         });
 
+        console.log('Facility mapping:', facilityMap);
+
         const results = { successful: 0, failed: [] };
 
         for (let i = 0; i < patients.length; i++) {
@@ -805,6 +847,8 @@ app.post('/api/patients/bulk', authenticateToken, async (req, res) => {
                 const month = (patient.month || patient.Month || '').toString().trim();
                 const facilityName = (patient.facilityName || patient.Facility || patient.facility || '').toString().trim();
 
+                console.log(`Processing patient ${i + 1}:`, { name, mrn, month: month, facility: facilityName });
+
                 if (!name || !month || !facilityName) {
                     results.failed.push({ 
                         name: name || 'Row ' + (i + 1), 
@@ -813,10 +857,14 @@ app.post('/api/patients/bulk', authenticateToken, async (req, res) => {
                     continue;
                 }
 
-                let dbMonth = month;
-                if (month.match(/^\d{2}-\d{4}$/)) {
-                    const parts = month.split('-');
-                    dbMonth = `${parts[1]}-${parts[0]}`;
+                // FIXED: Enhanced month format conversion
+                const dbMonth = convertMonthFormat(month);
+                if (!dbMonth) {
+                    results.failed.push({ 
+                        name: name, 
+                        error: `Invalid month format: "${month}"` 
+                    });
+                    continue;
                 }
 
                 if (req.user.role !== 'admin' && dbMonth < '2025-09') {
@@ -833,7 +881,7 @@ app.post('/api/patients/bulk', authenticateToken, async (req, res) => {
                 if (!facilityId) {
                     results.failed.push({ 
                         name: name, 
-                        error: `Facility "${facilityName}" not found` 
+                        error: `Facility "${facilityName}" not found. Available facilities: ${Object.keys(facilityMap).join(', ')}` 
                     });
                     continue;
                 }
@@ -846,7 +894,7 @@ app.post('/api/patients/bulk', authenticateToken, async (req, res) => {
                     continue;
                 }
 
-                // FIXED: Updated MRN validation - only check within the same month and facility
+                // Check MRN duplicate within the same month and facility
                 if (mrn && mrn.length > 0) {
                     const duplicate = await checkMRNDuplicate(mrn, dbMonth, facilityId);
                     if (duplicate) {
@@ -858,20 +906,26 @@ app.post('/api/patients/bulk', authenticateToken, async (req, res) => {
                     }
                 }
 
+                console.log(`Inserting patient: ${name}, MRN: ${mrn}, Month: ${dbMonth}, Facility: ${facilityId}`);
+
                 await safeQuery(
                     'INSERT INTO patients (name, mrn, month, facility_id) VALUES ($1, $2, $3, $4)',
                     [name, mrn || null, dbMonth, facilityId]
                 );
 
                 results.successful++;
+                console.log(`Successfully added patient: ${name} in ${dbMonth}`);
 
             } catch (error) {
+                console.error(`Error processing patient ${i + 1}:`, error);
                 results.failed.push({ 
                     name: patient.name || patient.Name || ('Row ' + (i + 1)), 
                     error: 'Database error: ' + error.message 
                 });
             }
         }
+
+        console.log(`Bulk upload completed: ${results.successful} successful, ${results.failed.length} failed`);
 
         res.json({
             success: true,
@@ -948,7 +1002,7 @@ app.post('/api/tracking', authenticateToken, async (req, res) => {
     }
 });
 
-// ENHANCED EXPORT REPORT
+// FIXED: ENHANCED EXPORT REPORT with proper MRN number formatting
 app.get('/api/export/supply-report', authenticateToken, async (req, res) => {
     try {
         const { facility_id, month } = req.query;
@@ -1030,12 +1084,23 @@ app.get('/api/export/supply-report', authenticateToken, async (req, res) => {
 
         let csvContent = 'Supply Code,Supply Description,HCPCS,Unit Cost,Patient Name,MRN,Month,Facility,Day,Quantity,Total Cost,Wound DX\n';
         
-        const escapeCsv = (val) => {
+        // FIXED: Enhanced CSV escaping function with special MRN formatting
+        const escapeCsv = (val, isMRN = false) => {
             if (!val && val !== 0) return '';
+            
             val = String(val);
+            
+            // SPECIAL HANDLING FOR MRN: Force Excel to treat as text to avoid scientific notation
+            if (isMRN && val && val.trim() !== '' && val.trim() !== 'N/A') {
+                // Method: Add leading apostrophe to force text format
+                val = "'" + val.trim();
+            }
+            
+            // Standard CSV escaping
             if (val.includes(',') || val.includes('"') || val.includes('\n')) {
                 val = '"' + val.replace(/"/g, '""') + '"';
             }
+            
             return val;
         };
 
@@ -1052,7 +1117,7 @@ app.get('/api/export/supply-report', authenticateToken, async (req, res) => {
                         escapeCsv(supply.hcpcs || 'N/A'),
                         supply.cost.toFixed(2),
                         escapeCsv(usage.patient_name),
-                        escapeCsv(usage.mrn || 'N/A'),
+                        escapeCsv(usage.mrn || 'N/A', true), // TRUE flag for MRN formatting
                         escapeCsv(usage.month),
                         escapeCsv(usage.facility_name),
                         usage.day_of_month,
@@ -1264,9 +1329,10 @@ async function startServer() {
             console.log('================================');
             console.log(`Server running on port ${PORT}`);
             console.log('Default credentials: admin@system.com / admin123');
-            console.log('FIXED: MRN validation allows same MRN across different months');
-            console.log('FIXED: Edit button works properly for patient updates');
-            console.log('Enhanced export reporting enabled');
+            console.log('FIXED: MRN export formatting prevents scientific notation');
+            console.log('FIXED: Enhanced month format conversion for bulk upload');
+            console.log('FIXED: Same MRN allowed across different months');
+            console.log('Enhanced debugging for bulk upload operations');
             console.log('================================');
         });
     } catch (error) {
