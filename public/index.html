@@ -1,4 +1,24 @@
-<!DOCTYPE html>
+.user-info {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .user-details {
+            text-align: right;
+        }
+        .user-name {
+            font-weight: 600;
+            color: #4f46e5;
+        }
+        .user-role {
+            color: #666;
+            font-size: 0.9rem;
+        }
+        .filter-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -736,15 +756,22 @@
 
         function showMainApp() {
             document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('mainApp').style.display = 'block';
             document.getElementById('mainApp').classList.remove('hidden');
+            
             document.getElementById('userName').textContent = currentUser.name;
             document.getElementById('userRole').textContent = currentUser.role.toUpperCase();
             
+            // Show/hide admin elements
             var adminElements = document.querySelectorAll('.admin-only');
             for (var i = 0; i < adminElements.length; i++) {
                 adminElements[i].style.display = currentUser.role === 'admin' ? 'block' : 'none';
             }
             
+            // Ensure dashboard is visible by default
+            showPanel('dashboard');
+            
+            // Load initial data
             Promise.all([loadDashboardData(), loadPatients(), loadSupplies(), loadFacilities()])
                 .catch(function(error) {
                     console.error('Error loading initial data:', error);
@@ -761,21 +788,45 @@
         }
 
         function showPanel(panelName) {
+            // Remove active class from all panels
             var panels = document.querySelectorAll('.panel');
             for (var i = 0; i < panels.length; i++) {
                 panels[i].classList.remove('active');
             }
+            
+            // Remove active class from all tabs
             var tabs = document.querySelectorAll('.tab-btn');
             for (var i = 0; i < tabs.length; i++) {
                 tabs[i].classList.remove('active');
             }
+            
+            // Show target panel
             var targetPanel = document.getElementById(panelName + 'Panel');
             if (targetPanel) {
                 targetPanel.classList.add('active');
             }
-            if (window.event && window.event.target) {
-                window.event.target.classList.add('active');
+            
+            // Add active class to clicked tab
+            var clickedTab = event ? event.target : null;
+            if (clickedTab && clickedTab.classList.contains('tab-btn')) {
+                clickedTab.classList.add('active');
+            } else {
+                // Fallback - find the tab by matching the panel name
+                var tabs = document.querySelectorAll('.tab-btn');
+                for (var i = 0; i < tabs.length; i++) {
+                    var tabText = tabs[i].textContent.toLowerCase();
+                    if ((panelName === 'dashboard' && tabText.includes('dashboard')) ||
+                        (panelName === 'patients' && tabText.includes('patients')) ||
+                        (panelName === 'supplies' && tabText.includes('supply management')) ||
+                        (panelName === 'tracking' && tabText.includes('supply tracking')) ||
+                        (panelName === 'admin' && tabText.includes('admin'))) {
+                        tabs[i].classList.add('active');
+                        break;
+                    }
+                }
             }
+            
+            // Load appropriate data for the panel
             switch(panelName) {
                 case 'dashboard':
                     loadDashboardData();
